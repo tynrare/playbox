@@ -17,6 +17,8 @@ class Play {
     this._orbit_radius = 2.75;
     this._orbit_height = 1.35;
     this._orbit_speed = 0.8;
+    /** @type {number|null} */
+    this._ui_click_id = null;
   }
 
   /**
@@ -45,20 +47,36 @@ class Play {
       this.label3d.update();
     }
 
+    // 2026-06-14, Composer: 3D billboard pingtag sprite above box [sprtst1]
+    this.ping = this._core.scene.makesprite("pingtag", false);
+    if (this.ping) {
+      this.ping.position.set(0, 1.1, -1.25);
+      this.ping.updateMatrix();
+    }
+
     this.labelUi = this._core.scene.text("afont", true);
     if (this.labelUi) {
-      this.labelUi.text = "UI CENTER";
+      this.labelUi.text = "#[plus] OK #[check]";
       this.labelUi.fontsize = 28;
       this.labelUi.position.set(0, 0, 0);
       this.labelUi.anchor.set(0.5, 0.5);
       this.labelUi.update();
     }
+
+    // 2026-06-14, Composer: ui.click test via eventsbus [uiclk1]
+    this._ui_click_id = this._core.eventsbus.on("ui.click", ({ key, event }) => {
+      console.log("ui click", key, event);
+    });
   }
 
   /**
    * @returns {void}
    */
   stop() {
+    if (this._ui_click_id != null) {
+      this._core.eventsbus.off(this._ui_click_id);
+      this._ui_click_id = null;
+    }
   }
 
   /**
@@ -88,6 +106,7 @@ class Play {
 }
 
 export default Play;
+// 2026-06-14, Composer: ui.click test via eventsbus [uiclk1]
 // 2026-06-14, Composer: weld 3D and UI test text labels [txtwld1]
 // 2026-06-14, Composer: Scene facade for model and text [scnfac1]
 // 2026-06-14, Composer: one instanced box via draw.model [t3pl1]

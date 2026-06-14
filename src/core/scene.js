@@ -2,6 +2,15 @@
 import * as THREE from "three";
 import logger from "../logger.js";
 import { TyntextCore } from "./tyntext.js";
+import { cache, v3up } from "../math.js";
+import { DitheredOpacity } from "../render/materials/DitheredOpacity.js";
+import { ExtendedMaterial } from "../render/materials/ExtendedMaterial.js";
+import {
+  MeshSpritesheetMaterial,
+  SpriteMaterialExtension,
+} from "../render/materials/sprite.js";
+
+const _billboardMatrix = new THREE.Matrix4();
 
 // 2026-06-14, Composer: Scene facade for model and text [scnfac1]
 /**
@@ -19,6 +28,8 @@ class Scene {
     this._db = db;
     this._assets = assets;
     this.tyntext = new TyntextCore(draw, db, assets);
+    /** @type {Record<string, import("@three.ez/instanced-mesh").InstancedEntity>} */
+    this._billboards = {};
   }
 
   /**
@@ -27,7 +38,117 @@ class Scene {
    * @returns {import("./tyntext.js").Tyntext|null}
    */
   text(fontkey, ui = true) {
-    return this.tyntext.maketext(fontkey, ui);
+    const text = this.tyntext.maketext(fontkey, ui);
+    // 2026-06-14, Composer: wire Tyntext inline #[sprite] tokens [sprfac1]
+    text?.setspritefactory((name, asUi) => this.makesprite(name, asUi), ui);
+    return text;
+  }
+
+  /**
+   * @param {string} name
+   * @param {boolean} [ui]
+   * @returns {import("@three.ez/instanced-mesh").InstancedEntity|null}
+   */
+  sprite(name, ui = false) {
+    return this.makesprite(name, ui);
+  }
+
+  /**
+   * @param {string} name
+   * @param {boolean} [ui]
+   * @returns {import("@three.ez/instanced-mesh").InstancedEntity|null}
+   */
+  makesprite(name, ui = false) {
+    const drawcore = this._draw.core;
+    if (!drawcore) {
+      logger.error(`Scene::makesprite drawcore not ready`);
+      return null;
+    }
+
+    const spriteconf = this._db.get("sprites")?.getconfig(name);
+    if (!spriteconf) {
+      logger.error(
+        `Scene::makesprite "${name}" error: no sprite "${name}" declared`,
+      );
+      return null;
+    }
+
+    const sourcekey = spriteconf["source"];
+    const sourceconf = this._db.get("files")?.getconfig(sourcekey);
+    const file = this._assets.file(sourcekey);
+    if (!file) {
+      logger.error(
+        `Scene::makesprite "${name}" error: no source "${sourcekey}" preloaded`,
+      );
+      return null;
+    }
+
+    const key = `sprite-${sourcekey}-tasset${ui ? "-ui" : ""}`;
+
+    let imesh = drawcore.getimesh(key);
+    if (!imesh) {
+      const material = new ExtendedMaterial(
+        MeshSpritesheetMaterial,
+        [SpriteMaterialExtension, DitheredOpacity],
+        {
+          map: file,
+          emissiveMap: file,
+          emissive: 0xffffff,
+          alphaTest: 0.2,
+          emissiveIntensity: 0,
+          color: 0xffffff,
+          opacity: 1,
+        },
+      );
+      material.side = THREE.DoubleSide;
+      const geometry = new THREE.PlaneGeometry();
+      imesh = drawcore.initimesh(
+        key,
+        geometry,
+        material,
+        {
+          castShadow: false,
+          culling: !ui,
+        },
+        ui ? this._draw.sceneui : this._draw.scene,
+      );
+      drawcore.inituniforms(key, {
+        color: "vec3",
+        emissive: "vec3",
+        opacity: "float",
+        frames: "float",
+        frame: "float",
+        cells_w: "float",
+        cells_h: "float",
+      });
+      logger.log(`Scene::makesprite. Made ${key} instance`);
+    }
+
+    const mesh = drawcore.makemesh(key);
+    if (!mesh) {
+      return null;
+    }
+
+    imesh.setColorAt(mesh.id, cache.color0.setHex(0xffffff));
+    mesh.setUniform(
+      "emissive",
+      cache.color0.setHex(0xffffff).multiplyScalar(1),
+    );
+    mesh.setUniform("opacity", 0.7);
+    mesh.setUniform("frames", sourceconf?.["frames"] ?? 1);
+    mesh.setUniform("frame", spriteconf["index"] ?? 0);
+    mesh.setUniform("cells_w", sourceconf?.["w"] ?? 1);
+    mesh.setUniform("cells_h", sourceconf?.["h"] ?? 1);
+
+    const scale = spriteconf["size"] ?? 1;
+    mesh.scale.setScalar(scale);
+    mesh.updateMatrix();
+
+    if (spriteconf["billboard"]) {
+      this._billboards[key + mesh.id] = mesh;
+    }
+
+    return mesh;
   }
 
   /**
@@ -101,8 +222,25 @@ class Scene {
    */
   step(dt) {
     this.tyntext.step(dt);
+
+    // 2026-06-14, Composer: billboard sprites face render camera [sprfac1]
+    const camera = this._draw._render?.camera;
+    if (!camera) {
+      return;
+    }
+
+    for (const k in this._billboards) {
+      const b = this._billboards[k];
+      _billboardMatrix.compose(b.position, b.quaternion, b.scale);
+      _billboardMatrix.lookAt(camera.position, b.position, v3up);
+      b.position.setFromMatrixPosition(_billboardMatrix);
+      b.quaternion.setFromRotationMatrix(_billboardMatrix);
+      b.updateMatrix();
+    }
   }
 }
 
 export default Scene;
 // 2026-06-14, Composer: Scene facade for model and text [scnfac1]
+// 2026-06-14, Composer: wire Tyntext inline #[sprite] tokens [sprfac1]
+// 2026-06-14, Composer: billboard sprites face render camera [sprfac1]

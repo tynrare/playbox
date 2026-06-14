@@ -3,6 +3,11 @@ db#db_pb_files(name="files")
    d(name="afont"             path="fonts/simplestfont-msdf.png"     preload="1" pixelate="false")
    d(name="afont-config"      path="fonts/simplestfont-msdf.json"    preload="1")
    d(name="timber_square_clay"    path="textures/timber_square_clay.png"  preload="2")
+   //- 2026-06-14, Composer: coinmania and gameicons sprite atlases [sprdb1]
+   d(name="coinmania"         path="sprites/coinmania.png"      preload="1" pixelate="false"
+                                    frames="255" w="21" h="13")
+   d(name="gameicons"         path="sprites/gameicons.png"      preload="1" pixelate="false"
+                                    frames="106" w="11" h="10")
 
 db#db_pb_fonts(name="fonts")
    d(name="afont" id="1" source="afont" config="afont-config" msdf="true" boldness="0.2")
@@ -12,4 +17,19 @@ db#db_pb_models(name="models")
 
 db#db_pb_models_instanced(name="models_instanced")
    d(name="box_instanced"         type="box" w="1" h="1" d="1")
+
+//- 2026-06-14, Composer: MVP sprite subset from booling atlases [sprdb1]
+db#db_pb_sprites(name="sprites")
+   d(name="pingtag"         id="0" source="coinmania"   index="27"  billboard="true" size="0.5")
+   d(name="circletag"       id="2"  source="coinmania" index="34" billboard="true" size="0.6")
+   d(name="loading"         id="5"  source="coinmania" index="186" size="1.0")
+   d(name="plus"            id="6"  source="gameicons" index="68"  size="1.0")
+   d(name="minus"           id="7"  source="gameicons" index="58"  size="1.0")
+   d(name="block"           id="8"  source="gameicons" index="88"  size="1.0")
+   d(name="cross"           id="9"  source="gameicons" index="25"  size="1.0")
+   d(name="play"            id="10" source="gameicons" index="74"  size="1.0")
+   d(name="check"           id="12" source="gameicons" index="23"  size="1.0")
+   d(name="cm_heart"        id="311" source="coinmania" index="28"  size="1.0")
 //- 2026-06-14, Composer: Three.js db wipe texture arrays [t3db1]
+//- 2026-06-14, Composer: coinmania and gameicons sprite atlases [sprdb1]
+//- 2026-06-14, Composer: MVP sprite subset from booling atlases [sprdb1]
