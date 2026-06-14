@@ -1,0 +1,15 @@
+//- 2026-06-14, Composer: Three.js db wipe texture arrays [t3db1]
+db#db_pb_files(name="files")
+   d(name="afont"             path="fonts/simplestfont-msdf.png"     preload="1" pixelate="false")
+   d(name="afont-config"      path="fonts/simplestfont-msdf.json"    preload="1")
+   d(name="timber_square_clay"    path="textures/timber_square_clay.png"  preload="2")
+
+db#db_pb_fonts(name="fonts")
+   d(name="afont" id="1" source="afont" config="afont-config" msdf="true" boldness="0.2")
+
+db#db_pb_models(name="models")
+   d(name="box_timber"            instanceof="box_instanced"              texture="timber_square_clay")
+
+db#db_pb_models_instanced(name="models_instanced")
+   d(name="box_instanced"         type="box" w="1" h="1" d="1")
+//- 2026-06-14, Composer: Three.js db wipe texture arrays [t3db1]

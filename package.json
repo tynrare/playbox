@@ -1,0 +1,29 @@
+{
+  "name": "playbox",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "tynrart",
+  "main": "index.html",
+  "scripts": {
+    "start": "vite --host",
+    "build": "vite build",
+    "doc": "jsdoc src -d dist/docs -R README.md",
+    "build-n-doc": "npm run build && (npm run doc || true)"
+  },
+  "devDependencies": {
+    "@vitejs/devtools": "^0.1.13",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "@vitejs/plugin-legacy": "^8.0.1",
+    "jsdoc": "^4.0.5",
+    "less": "^4.6.4",
+    "vite": "^8.0.7",
+    "vite-plugin-pug": "^0.4.1"
+  },
+  "dependencies": {
+    "@three.ez/instanced-mesh": "^0.3.15",
+    "n8ao": "^1.10.1",
+    "postprocessing": "^6.38.0",
+    "three": "^0.184.0"
+  }
+}

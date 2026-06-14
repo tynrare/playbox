@@ -1,0 +1,29 @@
+
+body.active #app {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: clip;
+}
+
+#app > header {
+  display: none;
+}
+
+#app.active > header {
+  display: flex;
+  margin: auto;
+  font-size: 25vh;
+}
+
+#app.active.ready > header {
+  display: none;
+}
+
+// 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]
+#app.active.ready > canvas#canvas_pb {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+// 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]

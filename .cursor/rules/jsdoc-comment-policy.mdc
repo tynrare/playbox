@@ -1,0 +1,16 @@
+---
+description: JSDoc: @brief, typed @param, typed @returns on JS functions
+globs:
+  - "**/*.js"
+  - "**/*.mjs"
+  - "**/*.cjs"
+alwaysApply: false
+---
+
+# JSDoc (minimal)
+
+**Scope:** doc comments on functions, methods, exported arrow fns in matched files.
+
+**Block (directly above symbol):** `@brief` (one line: behavior) · `@param {Type} name - …` (every arg) · `@returns {Type} …` or `{void}` (`@return` OK).
+
+**Shapes:** `@typedef` / `@property` → each `@property {Type} name - …`.

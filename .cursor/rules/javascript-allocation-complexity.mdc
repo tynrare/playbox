@@ -1,0 +1,12 @@
+---
+description: JavaScript — avoid hot-path allocations (prefer caches) and keep cyclomatic complexity low
+globs:
+  - "**/*.js"
+alwaysApply: false
+---
+
+# JS: hot paths & complexity
+
+**Allocations (loops, ticks, handlers):** cache stable stuff at module/class scope; reuse pools/scratch, not new `[]`/`{}`/`.map`/`.filter`/`.slice` every call; indexed loops; less string churn. Skip for rare/init code.
+
+**Complexity:** early returns / guards; small helpers; flatten nesting; tables/maps over long if-chains; less branching in hot paths.

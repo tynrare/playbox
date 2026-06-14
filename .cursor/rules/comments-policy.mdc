@@ -1,0 +1,26 @@
+---
+description: Enforce required metadata comments on agent code edits
+globs:
+  - "**/*.js"
+  - "**/*.pug"
+alwaysApply: true
+---
+
+# Comment Policy (Auto-Applied)
+
+- When editing a file, add at least one short metadata comment near the changed logic.
+- Metadata comment format must include:
+  - date
+  - agent model
+  - short scope description
+  - short hash token
+- Use comment syntax that matches the file type:
+  - JavaScript: `// YYYY-MM-DD, <model>: <scope> [<hash>]`
+  - Pug: `//- YYYY-MM-DD, <model>: <scope> [<hash>]`
+- *Pug line comments not allowed in expression (Inside brackets)
+- Always duplicate metadata comments at the bottom of the same file, with these constraints:
+  - The bottom block must contain the exact same metadata comment lines used near changed logic (character-for-character match).
+  - The duplicated lines must appear as one contiguous block (no blank lines or non-metadata lines between them).
+  - The first line of this bottom block must start no more than three lines after the final non-comment code line in the file.
+- If the file is newly created by the agent, include one brief header comment at the top explaining purpose.
+- Keep comments concise and factual; do not add verbose process logs.
