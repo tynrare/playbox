@@ -42,6 +42,11 @@ export default defineConfig({
     },
   },
   devtools: false,
-  //...
+  // 2026-06-14, Composer: vitest node env for toybox stress tests [tbxst1]
+  test: {
+    environment: "node",
+    include: ["tests/**/*.test.js"],
+  },
 });
 // 2026-06-14, Composer: rename pureplay to playbox [r7n2p4]
+// 2026-06-14, Composer: vitest node env for toybox stress tests [tbxst1]

@@ -9,7 +9,9 @@
     "start": "vite --host",
     "build": "vite build",
     "doc": "jsdoc src -d dist/docs -R README.md",
-    "build-n-doc": "npm run build && (npm run doc || true)"
+    "build-n-doc": "npm run build && (npm run doc || true)",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@vitejs/devtools": "^0.1.13",
@@ -18,7 +20,8 @@
     "jsdoc": "^4.0.5",
     "less": "^4.6.4",
     "vite": "^8.0.7",
-    "vite-plugin-pug": "^0.4.1"
+    "vite-plugin-pug": "^0.4.1",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "@three.ez/instanced-mesh": "^0.3.15",

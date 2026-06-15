@@ -1,5 +1,6 @@
 /** @namespace ty */
 // 2026-06-14, Composer: itembox mempool data worker eventbus [itmbx1]
+// 2026-06-14, Composer: despawn before init advances to DISPOSED_L2 [itmds1]
 import logger from "../logger.js";
 import Mempool, { VAR_FLAGS_A, VAR_FLAG_ACTIVE } from "../core/mempool.js";
 
@@ -165,6 +166,12 @@ class Itembox {
 			return;
 		}
 
+		// 2026-06-14, Composer: despawn before init advances to DISPOSED_L2 [itmds1]
+		if (!initialized && disposed) {
+			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, true);
+			return;
+		}
+
 		this._eventsbus.emit("item.update", { index });
 	}
 
@@ -191,3 +198,4 @@ export {
 	VAR_BODY_ID,
 };
 // 2026-06-14, Composer: itembox mempool data worker eventbus [itmbx1]
+// 2026-06-14, Composer: despawn before init advances to DISPOSED_L2 [itmds1]

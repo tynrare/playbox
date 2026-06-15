@@ -20,6 +20,7 @@
 //
 // invariants: toy row ≠ item row; floor/items-only have no toy slot; playbox dt is seconds;
 //   module configure runs after init_modules; lifespan converts dt to ms internally
+//   despawn before toy init: !initialized && disposed → item despawn → DISPOSED_L2 (no toy.dispose)
 //
 // tbx-lifecycle flow:
 // 1) spawn(toy_key) → allocate toy slot; itembox.spawn(conf.item); VAR_TOY_DB_ID, VAR_ITEM_INDEX, module flags; no bb yet
@@ -274,6 +275,14 @@ class Toybox {
 			return;
 		}
 
+		// 2026-06-14, Composer: despawn before init still cascades item [tbxds1]
+		if (!initialized && disposed) {
+			const item_index = this.get_item_index(index);
+			this._itembox.despawn(item_index);
+			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, true);
+			return;
+		}
+
 		this._eventsbus.emit("toy.update", { index });
 		// tbx-lifecycle step 4)
 		this.modulebox.update(dt, index);
@@ -305,3 +314,4 @@ export {
 // 2026-06-14, Composer: toybox mempool item link blackboard [tbxbb1]
 // 2026-06-14, Composer: modules blackboard after item initialized [tbxit1]
 // 2026-06-14, Composer: toy-scope root gateway playbook [tbxgw1]
+// 2026-06-14, Composer: despawn before init still cascades item [tbxds1]
