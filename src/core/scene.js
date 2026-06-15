@@ -61,11 +61,12 @@ class Scene {
     // 2026-06-14, Composer: environment start uses config only [scnenv2]
     this.environment.start();
     // 2026-06-14, Composer: item init dispose via eventbus listeners [itmbx1]
-    this._on_item_init = this._eventsbus.on("item.initialize", ({ index }) => {
+    // 2026-06-14, Composer: item events pass index scalar [itmhp1]
+    this._on_item_init = this._eventsbus.on("item.initialize", (index) => {
       // tbx-lifecycle step 2) itm-scene-sidefx touchpoint
       this.spawn_item(index);
     });
-    this._on_item_dis = this._eventsbus.on("item.dispose", ({ index }) => {
+    this._on_item_dis = this._eventsbus.on("item.dispose", (index) => {
       this.despawn_item(index);
     });
   }
@@ -582,4 +583,5 @@ export default Scene;
 // 2026-06-14, Composer: refresh bounds for culled instanced meshes [scnbs1]
 // 2026-06-14, Composer: billboard sprites face render camera [sprfac1]
 // 2026-06-14, Composer: item init dispose via eventbus listeners [itmbx1]
+// 2026-06-14, Composer: item events pass index scalar [itmhp1]
 // 2026-06-14, Composer: snake_case scene method names [snkcs1]

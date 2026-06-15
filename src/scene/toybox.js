@@ -21,6 +21,8 @@
 // invariants: toy row ≠ item row; floor/items-only have no toy slot; playbox dt is seconds;
 //   module configure runs after init_modules; lifespan converts dt to ms internally
 //   despawn before toy init: !initialized && disposed → item despawn → DISPOSED_L2 (no toy.dispose)
+//   bulk spawn/despawn: omit immediate; one itembox.step + toybox.step per frame drains pipeline
+//   toy.* / item.* events pass index scalar; toy.update gated via eventsbus.has
 //
 // tbx-lifecycle flow:
 // 1) spawn(toy_key) → allocate toy slot; itembox.spawn(conf.item); VAR_TOY_DB_ID, VAR_ITEM_INDEX, module flags; no bb yet
@@ -171,24 +173,53 @@ class Toybox {
 	 * @returns {number|null}
 	 */
 	spawn(key, immediate = false) {
-		// tbx-lifecycle step 1)
 		const conf = this._db.get("toys")?.getconfig(key);
 		if (!conf) {
 			logger.error(`Toybox::spawn "${key}" error: no toy declared`);
 			return null;
 		}
+		return this.spawn_conf(conf, immediate);
+	}
+
+	/**
+	 * @param {number} id
+	 * @param {boolean} [immediate]
+	 * @returns {number|null}
+	 */
+	spawn_id(id, immediate = false) {
+		const conf = this._toy_by_id[id];
+		if (!conf) {
+			logger.error(`Toybox::spawn_id ${id} error: no toy declared`);
+			return null;
+		}
+		return this.spawn_conf(conf, immediate);
+	}
+
+	/**
+	 * @param {Record<string, any>} conf
+	 * @param {boolean} [immediate]
+	 * @returns {number|null}
+	 */
+	spawn_conf(conf, immediate = false) {
+		// tbx-lifecycle step 1)
 		if (!conf.item) {
-			logger.error(`Toybox::spawn "${key}" error: no item declared`);
+			logger.error(`Toybox::spawn_conf error: no item declared`);
+			return null;
+		}
+
+		const item_conf = this._itembox.get_itemconf_by_key(conf.item);
+		if (!item_conf) {
+			logger.error(`Toybox::spawn_conf error: no item "${conf.item}" declared`);
 			return null;
 		}
 
 		const index = this.mempool.allocate();
 		if (index == null) {
-			logger.error(`Toybox::spawn "${key}" error: pool out of bounds`);
+			logger.error(`Toybox::spawn_conf error: pool out of bounds`);
 			return null;
 		}
 
-		const item_index = this._itembox.spawn(conf.item, immediate);
+		const item_index = this._itembox.spawn_conf(item_conf, immediate);
 		if (item_index == null) {
 			this.mempool.free(index);
 			return null;
@@ -248,7 +279,9 @@ class Toybox {
 
 		if (initialized && disposed) {
 			// tbx-lifecycle step 5)
-			this._eventsbus.emit("toy.dispose", { index });
+			if (this._eventsbus.has("toy.dispose")) {
+				this._eventsbus.emit("toy.dispose", index);
+			}
 			const item_index = this.get_item_index(index);
 			this._itembox.despawn(item_index);
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED, false);
@@ -264,7 +297,7 @@ class Toybox {
 			if (!this._is_item_initialized(item_index)) {
 				return;
 			}
-			this._eventsbus.emit("toy.initialize", { index });
+			this._eventsbus.emit("toy.initialize", index);
 			this.blackboard.ensure_root(index);
 			this.modulebox.init_modules(index);
 			const conf = this.get_toyconf(index);
@@ -276,6 +309,7 @@ class Toybox {
 		}
 
 		// 2026-06-14, Composer: despawn before init still cascades item [tbxds1]
+// 2026-06-14, Composer: spawn_conf scalar events gated toy.update [tbxhp1]
 		if (!initialized && disposed) {
 			const item_index = this.get_item_index(index);
 			this._itembox.despawn(item_index);
@@ -283,7 +317,9 @@ class Toybox {
 			return;
 		}
 
-		this._eventsbus.emit("toy.update", { index });
+		if (this._eventsbus.has("toy.update")) {
+			this._eventsbus.emit("toy.update", index);
+		}
 		// tbx-lifecycle step 4)
 		this.modulebox.update(dt, index);
 	}
@@ -315,3 +351,4 @@ export {
 // 2026-06-14, Composer: modules blackboard after item initialized [tbxit1]
 // 2026-06-14, Composer: toy-scope root gateway playbook [tbxgw1]
 // 2026-06-14, Composer: despawn before init still cascades item [tbxds1]
+// 2026-06-14, Composer: spawn_conf scalar events gated toy.update [tbxhp1]

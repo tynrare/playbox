@@ -41,6 +41,15 @@ class EventsBus {
 		this._events.off(id);
 	}
 
+  /**
+   * @param {string} channel
+   * @returns {boolean}
+   */
+  has(channel) {
+    // 2026-06-14, Composer: has channel for gated hot-path emits [evbhp1]
+    return this._events.has(channel);
+  }
+
 	/**
 	 * @param {string} channel
 	 * @param {any} [detail]
@@ -80,3 +89,4 @@ class EventsBus {
 
 export default EventsBus;
 // 2026-06-14, Composer: hub bridge inputs to namespaced channels [evbs1]
+// 2026-06-14, Composer: has channel for gated hot-path emits [evbhp1]

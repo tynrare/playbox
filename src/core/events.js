@@ -68,6 +68,16 @@ class Events {
 
   /**
    * @param {string} name
+   * @returns {boolean}
+   */
+  has(name) {
+    // 2026-06-14, Composer: has channel for gated hot-path emits [evbhp1]
+    const list = this.list[name];
+    return list != null && Object.keys(list).length > 0;
+  }
+
+  /**
+   * @param {string} name
    * @param {any} [detail]
    * @returns {void}
    */
@@ -95,3 +105,4 @@ class Events {
 
 export default Events;
 // 2026-06-14, Composer: port booling event bus for inputs [evtb1]
+// 2026-06-14, Composer: has channel for gated hot-path emits [evbhp1]

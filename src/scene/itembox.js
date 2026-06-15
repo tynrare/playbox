@@ -1,6 +1,7 @@
 /** @namespace ty */
 // 2026-06-14, Composer: itembox mempool data worker eventbus [itmbx1]
 // 2026-06-14, Composer: despawn before init advances to DISPOSED_L2 [itmds1]
+// 2026-06-14, Composer: spawn_conf scalar item events no item.update [itmhp1]
 import logger from "../logger.js";
 import Mempool, { VAR_FLAGS_A, VAR_FLAG_ACTIVE } from "../core/mempool.js";
 
@@ -27,6 +28,8 @@ class Itembox {
 		this.mempool = new Mempool();
 		/** @type {Record<number, Record<string, any>>} */
 		this._item_by_id = {};
+		/** @type {Record<string, Record<string, any>>} */
+		this._item_by_key = {};
 	}
 
 	start() {
@@ -49,16 +52,26 @@ class Itembox {
 	 */
 	_build_item_by_id() {
 		this._item_by_id = {};
+		this._item_by_key = {};
 		const entry = this._db.get("items");
 		if (!entry) {
 			return;
 		}
 		for (const key of entry.getkeys()) {
 			const conf = entry.getconfig(key);
+			this._item_by_key[key] = conf;
 			if (conf?.id != null) {
 				this._item_by_id[conf.id] = conf;
 			}
 		}
+	}
+
+	/**
+	 * @param {string} key
+	 * @returns {Record<string, any>|undefined}
+	 */
+	get_itemconf_by_key(key) {
+		return this._item_by_key[key];
 	}
 
 	/**
@@ -88,19 +101,42 @@ class Itembox {
 	 * @returns {number|null}
 	 */
 	spawn(key, immediate = false) {
-		const conf = this._db.get("items")?.getconfig(key);
+		const conf = this.get_itemconf_by_key(key);
 		if (!conf) {
 			logger.error(`Itembox::spawn "${key}" error: no item declared`);
 			return null;
 		}
+		return this.spawn_conf(conf, immediate);
+	}
+
+	/**
+	 * @param {number} id
+	 * @param {boolean} [immediate]
+	 * @returns {number|null}
+	 */
+	spawn_id(id, immediate = false) {
+		const conf = this._item_by_id[id];
+		if (!conf) {
+			logger.error(`Itembox::spawn_id ${id} error: no item declared`);
+			return null;
+		}
+		return this.spawn_conf(conf, immediate);
+	}
+
+	/**
+	 * @param {Record<string, any>} conf
+	 * @param {boolean} [immediate]
+	 * @returns {number|null}
+	 */
+	spawn_conf(conf, immediate = false) {
 		if (!conf.body) {
-			logger.error(`Itembox::spawn "${key}" error: no body declared`);
+			logger.error(`Itembox::spawn_conf error: no body declared`);
 			return null;
 		}
 
 		const index = this.mempool.allocate();
 		if (index == null) {
-			logger.error(`Itembox::spawn "${key}" error: pool out of bounds`);
+			logger.error(`Itembox::spawn_conf error: pool out of bounds`);
 			return null;
 		}
 
@@ -152,7 +188,7 @@ class Itembox {
 		const disposed = mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED);
 
 		if (initialized && disposed) {
-			this._eventsbus.emit("item.dispose", { index });
+			this._eventsbus.emit("item.dispose", index);
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED, false);
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED, true);
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, true);
@@ -161,7 +197,7 @@ class Itembox {
 
 		if (!initialized && !disposed) {
 			// tbx-lifecycle step 2) item.initialize gate for toy init
-			this._eventsbus.emit("item.initialize", { index });
+			this._eventsbus.emit("item.initialize", index);
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED, true);
 			return;
 		}
@@ -171,8 +207,6 @@ class Itembox {
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, true);
 			return;
 		}
-
-		this._eventsbus.emit("item.update", { index });
 	}
 
 	/**
@@ -199,3 +233,4 @@ export {
 };
 // 2026-06-14, Composer: itembox mempool data worker eventbus [itmbx1]
 // 2026-06-14, Composer: despawn before init advances to DISPOSED_L2 [itmds1]
+// 2026-06-14, Composer: spawn_conf scalar item events no item.update [itmhp1]
