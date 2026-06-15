@@ -1,5 +1,10 @@
+db#db_pb_items(name="items")
+   //- 2026-06-14, Composer: mesh-less floor collision item [flit1]
+   d(name="floor_item"               id="0" body="floor")
+   d(name="box_test_item"            id="1" body="box" mesh="box_timber")
+
 db#db_pb_toys(name="toys")
-   //- 2026-06-14, Composer: mesh-less floor collision toy [flty1]
-   d(name="floor_toy"               id="0" body="floor")
-   d(name="box_test_toy"            id="1" body="box" mesh="box_timber")
-//- 2026-06-14, Composer: mesh-less floor collision toy [flty1]
+   d(name="box_test_toy"            id="1" item="box_test_item"
+      modules="[lifespan]" lifespan="10")
+
+//- 2026-06-14, Composer: mesh-less floor collision item [flit1]

@@ -55,4 +55,15 @@ export function v3(x, y, z, out = cachev3.v0) {
   return out.set(x, y, z);
 }
 
+/**
+ * @param {number} min
+ * @param {number} max
+ * @param {number} v
+ * @returns {number}
+ */
+export function clamp(min, max, v) {
+  // 2026-06-14, Composer: clamp helper for mempool writes [memp1]
+  return Math.max(min, Math.min(max, v));
+}
+
 // 2026-06-14, Composer: replace glmatrix with THREE math types [thmth1]

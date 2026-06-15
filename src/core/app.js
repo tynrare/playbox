@@ -50,6 +50,7 @@ class App {
     this.active = true;
     await this.core.assets.preload(1);
     this.core.start();
+    this.play.splashscreen(true);
     await this.core.assets.preload(2);
     this.play.start();
     this.ready = true;

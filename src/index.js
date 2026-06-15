@@ -2,11 +2,13 @@
 import App from "./core/app.js";
 import logger from "./logger.js";
 
+const DT_MAX = 100;
+
 /**
  * @param {App} app
  */
 function update(app, dt) {
-  return app.step(dt * 1e-3);
+  return app.step(Math.min(dt, DT_MAX) * 1e-3);
 }
 
 /**

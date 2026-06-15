@@ -586,7 +586,7 @@ class Ui {
       colorb: conf.colorb ?? 0xffffff,
       glow: conf.glow ?? 1,
       opacity: conf.opacity ?? 1,
-      corner: conf.corner ?? 50,
+      corner: conf.corner ?? 0.5,
       // 2026-06-14, Composer: db attrs lowercase in pug [uidom2]
       pillDome: conf.pilldome ?? RoundedboxShaderDefaults.pillDome,
       edgeSharp: conf.edgesharp ?? RoundedboxShaderDefaults.edgeSharp,
@@ -873,7 +873,8 @@ class Ui {
     m.scale.set(fullW, fullH, 1);
     m.setUniform("rbSize", _rbSize.set(hw, hh));
     m.setUniform("rbRef", wmin);
-    m.setUniform("corner", this._pct(element.corner));
+    // 2026-06-14, Composer: corner db 0-1 not layout pct [uicrn2]
+    m.setUniform("corner", element.corner);
     m.visible = this._element_shown(element) && element.opacity > 1e-3;
   }
 
@@ -1038,6 +1039,7 @@ export default Ui;
 // 2026-06-14, Composer: default pill uses shader defaults, second pill tuned [uidb2]
 // 2026-06-14, Composer: color mat, emissive colorb light [rbmix1]
 // 2026-06-14, Composer: scale corner by panel aspect like booling [uicrn1]
+// 2026-06-14, Composer: corner db 0-1 not layout pct [uicrn2]
 // 2026-06-14, Composer: minimal panel UI from ui_tests db [uicls1]
 // 2026-06-14, Composer: sync sprite opacity uniform on state [uiop1]
 // 2026-06-14, Composer: hide elements until active state refs them [uivis1]

@@ -19,7 +19,10 @@ class Play {
     this._orbit_height = 1.35;
     this._orbit_speed = 0.8;
     /** @type {number|null} */
-    this._ui_click_id = null;
+    this._floor_index = null;
+    /** @type {number|null} */
+    this._toy_index = null;
+    this._toy_positions_applied = false;
     // 2026-06-14, Composer: settings dev_debug_state persistence [stgs1]
     this.settings = new Settings(core.datawork);
   }
@@ -31,24 +34,26 @@ class Play {
     return this;
   }
 
+  splashscreen(visible) {
+    if (visible) {
+      this._core.ui.setstate("ui_loading");
+    } else {
+      this._core.ui.delstate("ui_loading");
+    }
+  }
+
   /**
    * @returns {void}
    */
   start() {
+    this.splashscreen(false);
     // 2026-06-14, Composer: floor tex0 via environment floorstyle [plflr1]
     this._core.scene.environment.floorstyle("floor", 0xffffff);
 
-    // 2026-06-14, Composer: floor collision via mesh-less floor_toy [flty1]
-    this.floor = this._core.toybox.spawn("floor_toy");
-    if (this.floor) {
-      this.floor.setPosition(0, -0.05, 0);
-    }
-
-    // 2026-06-14, Composer: spawn box_test_toy via toybox [pltoy1]
-    this.toy = this._core.toybox.spawn("box_test_toy");
-    if (this.toy) {
-      this.toy.setPosition(0, 2, -1.25);
-    }
+    // 2026-06-14, Composer: floor via itembox toy via toybox [tbxbb1]
+    this._floor_index = this._core.itembox.spawn("floor_item");
+    this._toy_index = this._core.toybox.spawn("box_test_toy");
+    this._toy_positions_applied = false;
 
     // 2026-06-14, Composer: weld 3D and UI test text labels [txtwld1]
     this.label3d = this._core.scene.text("afont", false);
@@ -82,7 +87,7 @@ class Play {
         return;
       }
       console.log("ui click", key, event);
-      this._core.toybox._despawn(this.toy);
+      this._core.toybox.despawn(this._toy_index);
     });
   }
 
@@ -101,6 +106,8 @@ class Play {
    * @returns {void}
    */
   step(dt) {
+    // 2026-06-14, Composer: index-based toy spawn despawn [tbxdw1]
+    this._apply_toy_positions();
     this._update_camera_orbit(dt);
     this._sync_toy_decor();
   }
@@ -108,8 +115,28 @@ class Play {
   /**
    * @returns {void}
    */
+  _apply_toy_positions() {
+    if (this._toy_positions_applied || this._toy_index == null) {
+      return;
+    }
+    const item_index = this._core.toybox.get_item_index(this._toy_index);
+    const entity = this._core.scene.get_itementity(item_index);
+    if (!entity) {
+      return;
+    }
+    if (this._floor_index != null) {
+      this._core.scene.set_itemposition(this._floor_index, 0, -0.05, 0);
+    }
+    this._core.scene.set_itemposition(item_index, 0, 2, -1.25);
+    this._toy_positions_applied = true;
+  }
+
+  /**
+   * @returns {void}
+   */
   _sync_toy_decor() {
-    const entity = this.toy?.entity;
+    const item_index = this._core.toybox.get_item_index(this._toy_index);
+    const entity = this._core.scene.get_itementity(item_index);
     if (!entity) {
       return;
     }
@@ -146,8 +173,8 @@ class Play {
 export default Play;
 // 2026-06-14, Composer: ui_dev state shows dev panel elements [uivis1]
 // 2026-06-14, Composer: settings dev_debug_state persistence [stgs1]
-// 2026-06-14, Composer: floor collision via mesh-less floor_toy [flty1]
-// 2026-06-14, Composer: spawn box_test_toy via toybox [pltoy1]
+// 2026-06-14, Composer: floor collision via mesh-less floor_item [flit1]
+// 2026-06-14, Composer: floor via itembox toy via toybox [tbxbb1]
 // 2026-06-14, Composer: floor tex0 via environment floorstyle [plflr1]
 // 2026-06-14, Composer: db text label via scene.text in Ui [uidb6]
 // 2026-06-14, Composer: ui.click test via eventsbus [uiclk1]
@@ -156,3 +183,4 @@ export default Play;
 // 2026-06-14, Composer: one instanced box via draw.model [t3pl1]
 // 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]
 // 2026-06-14, Composer: import core from src/core [g7c9e3]
+// 2026-06-14, Composer: index-based toy spawn despawn [tbxdw1]

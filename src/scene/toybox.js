@@ -1,36 +1,51 @@
+// Toy-scope root gateway: gameplay entity lifecycle over item link + blackboard/modules.
+// Scope in: toys db spawn, per-frame step, despawn, module-driven dispose.
+// Scope out: item physics/scene side effects (itembox/scene), module storage internals (modulebox/blackboard).
+// Related: itembox.js, blackboard.js, modulebox.js, core.js, play.js, db_toys.pug
+// Gateway role: index | Scope id: toy-scope | Flow id: tbx-lifecycle
+// Downstream gateways: itembox.js (itm-lifecycle), modulebox.js (tbx-module), blackboard.js (tbx-bb-chunks)
+// Related gateways: scene.js (itm-scene-sidefx, item.* listeners only)
+//
+// toy-scope patterns:
+//   tbx-lifecycle     → toybox.js (this file) — toy mempool state machine, toy.* events
+//   itm-lifecycle     → itembox.js — item mempool; touchpoint before toy init
+//   itm-scene-sidefx  → scene.js — item.initialize/dispose → spawn_item/despawn_item
+//   tbx-module        → modulebox.js + toys/* — module tick; storage via blackboard
+//   tbx-bb-chunks     → blackboard.js — merged chunk pool; root via VAR_ENTITY_BB_ROOT
+//
+// touchpoints (core.step order): itembox.step → toybox.step → physics.step
+//   spawn: toybox spawns item via itembox; stores VAR_ITEM_INDEX
+//   init gate: toy init waits linked item INITIALIZED (item.initialize frame)
+//   dispose cascade: toy.dispose → itembox.despawn(linked item)
+//
+// invariants: toy row ≠ item row; floor/items-only have no toy slot; playbox dt is seconds;
+//   module configure runs after init_modules; lifespan converts dt to ms internally
+//
+// tbx-lifecycle flow:
+// 1) spawn(toy_key) → allocate toy slot; itembox.spawn(conf.item); VAR_TOY_DB_ID, VAR_ITEM_INDEX, module flags; no bb yet
+// 2) itembox.step → linked item item.initialize → scene.spawn_item (itm-scene-sidefx); toy still !initialized
+// 3) toyupdate !initialized → wait item INITIALIZED → toy.initialize → ensure_root → init_modules → configure
+// 4) toyupdate active → toy.update → modulebox.update(dt); modules may set toy DISPOSED (e.g. lifespan)
+// 5) despawn(immediate?) → DISPOSED; next toyupdate: toy.dispose → itembox.despawn(item_index) → DISPOSED_L2
+// 6) toyupdate DISPOSED_L2 → blackboard.dispose_entity → mempool.free toy slot
+// Branches: immediate spawn/despawn runs toyupdate(0) same call; stop() despawn(all, immediate=true)
 /** @namespace ty */
-// 2026-06-14, Composer: toybox spawn body mesh weld pipeline [tbx1]
+// 2026-06-14, Composer: toy-scope root gateway playbook [tbxgw1]
+// 2026-06-14, Composer: toybox mempool item link blackboard [tbxbb1]
+// 2026-06-14, Composer: modules blackboard after item initialized [tbxit1]
 import logger from "../logger.js";
+import Mempool, { VAR_FLAGS_A, VAR_FLAG_ACTIVE } from "../core/mempool.js";
+import Blackboard, { BB_INVALID } from "./blackboard.js";
+import Modulebox, { VAR_FLAGS_MODULES, modulenames } from "./modulebox.js";
 
-/**
- * @class Toy
- * @memberof pb.scene
- */
-export class Toy {
-	/**
-	 * @param {string} key
-	 * @param {string} bodyKey
-	 * @param {oimo.dynamics.rigidbody.RigidBody} body
-	 * @param {import("@three.ez/instanced-mesh").InstancedEntity|null} entity
-	 * @param {import("../core/scene.js").default} scene
-	 */
-	constructor(key, bodyKey, body, entity, scene) {
-		this.key = key;
-		this.bodyKey = bodyKey;
-		this.body = body;
-		this.entity = entity;
-		this._scene = scene;
-	}
-
-	/**
-	 * @param {number} x
-	 * @param {number} y
-	 * @param {number} z
-	 */
-	setPosition(x, y, z) {
-		this._scene.setBodyPosition(this.body, x, y, z);
-	}
-}
+const TOY_ENTITY_BYTES = 16;
+const TOY_POOL_SIZE = 256;
+const VAR_TOY_DB_ID = 3;
+const VAR_ITEM_INDEX = 4;
+const VAR_ENTITY_BB_ROOT = 6;
+const VAR_FLAG_INITIALIZED = 1;
+const VAR_FLAG_DISPOSED = 3;
+const VAR_FLAG_DISPOSED_L2 = 4;
 
 /**
  * @class Toybox
@@ -38,84 +53,255 @@ export class Toy {
  */
 class Toybox {
 	/**
-	 * @param {import("../core/scene.js").default} scene
 	 * @param {import("../core/db.js").default} db
+	 * @param {import("../core/eventsbus.js").default} eventsbus
+	 * @param {import("./itembox.js").default} itembox
 	 */
-	constructor(scene, db) {
-		this._scene = scene;
+	constructor(db, eventsbus, itembox) {
 		this._db = db;
-		/** @type {Toy[]} */
-		this._toys = [];
+		this._eventsbus = eventsbus;
+		this._itembox = itembox;
+		this.mempool = new Mempool();
+		this.blackboard = new Blackboard(this.mempool, VAR_ENTITY_BB_ROOT);
+		this.modulebox = new Modulebox(this.blackboard, this.mempool);
+		/** @type {Record<number, Record<string, any>>} */
+		this._toy_by_id = {};
 	}
 
-	start() {}
+	start() {
+		this.mempool.init(TOY_ENTITY_BYTES * 2, TOY_POOL_SIZE);
+		this.blackboard.ensure();
+		this._build_toy_by_id();
+	}
 
 	stop() {
-		for (const toy of this._toys) {
-			this._despawn(toy);
+		const mempool = this.mempool;
+		for (let i = 0; i < mempool.chunk_size; i++) {
+			if (mempool.read_flag(i, VAR_FLAGS_A, VAR_FLAG_ACTIVE)) {
+				this.despawn(i, true);
+			}
 		}
-		this._toys.length = 0;
+		this.blackboard.stop();
+		this.mempool.dispose();
+	}
+
+	/**
+	 * @returns {void}
+	 */
+	_build_toy_by_id() {
+		this._toy_by_id = {};
+		const entry = this._db.get("toys");
+		if (!entry) {
+			return;
+		}
+		for (const key of entry.getkeys()) {
+			const conf = entry.getconfig(key);
+			if (conf?.id != null) {
+				this._toy_by_id[conf.id] = conf;
+			}
+		}
+	}
+
+	/**
+	 * @param {number} index
+	 * @returns {Record<string, any>|undefined}
+	 */
+	get_toyconf(index) {
+		const id = this.mempool.read_ui16(index, VAR_TOY_DB_ID);
+		return this._toy_by_id[id];
+	}
+
+	/**
+	 * @param {number} index
+	 * @returns {number}
+	 */
+	get_item_index(index) {
+		return this.mempool.read_ui16(index, VAR_ITEM_INDEX);
+	}
+
+	/**
+	 * @param {number} index
+	 * @returns {void}
+	 */
+	_init_slot(index) {
+		const mempool = this.mempool;
+		mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_ACTIVE, true);
+		mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED, false);
+		mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED, false);
+		mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, false);
+		mempool.write(index, VAR_FLAGS_MODULES, 0);
+		mempool.write_ui16(index, VAR_ENTITY_BB_ROOT, BB_INVALID);
+	}
+
+	/**
+	 * @param {number} index
+	 * @param {Record<string, any>} conf
+	 * @returns {void}
+	 */
+	_enable_modules(index, conf) {
+		const modules = conf.modules;
+		if (!modules) {
+			return;
+		}
+		for (const i in modules) {
+			const name = modules[i];
+			const flag = modulenames[name];
+			if (flag != null) {
+				this.mempool.write_flag(index, VAR_FLAGS_MODULES, flag, true);
+			}
+		}
+	}
+
+	/**
+	 * @param {number} item_index
+	 * @returns {boolean}
+	 */
+	_is_item_initialized(item_index) {
+		const item_pool = this._itembox.mempool;
+		if (!item_pool.read_flag(item_index, VAR_FLAGS_A, VAR_FLAG_ACTIVE)) {
+			return false;
+		}
+		return item_pool.read_flag(item_index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED);
 	}
 
 	/**
 	 * @param {string} key
-	 * @returns {Toy|null}
+	 * @param {boolean} [immediate]
+	 * @returns {number|null}
 	 */
-	spawn(key) {
+	spawn(key, immediate = false) {
+		// tbx-lifecycle step 1)
 		const conf = this._db.get("toys")?.getconfig(key);
 		if (!conf) {
 			logger.error(`Toybox::spawn "${key}" error: no toy declared`);
 			return null;
 		}
-
-		const meshKey = conf.mesh;
-		const bodyKey = conf.body;
-		if (!bodyKey) {
-			logger.error(`Toybox::spawn "${key}" error: no body declared`);
+		if (!conf.item) {
+			logger.error(`Toybox::spawn "${key}" error: no item declared`);
 			return null;
 		}
 
-		// 2026-06-14, Composer: mesh-less spawn body only no weld [flty1]
-		let entity = null;
-		if (meshKey) {
-			entity = this._scene.model(meshKey);
-			if (!entity) {
-				logger.error(
-					`Toybox::spawn "${key}" error: mesh "${meshKey}" failed`,
-				);
-				return null;
-			}
-		}
-
-		// 2026-06-14, Composer: scene owns body pool and physics weld [scnbd2]
-		const body = this._scene.makebody(bodyKey);
-		if (!body) {
+		const index = this.mempool.allocate();
+		if (index == null) {
+			logger.error(`Toybox::spawn "${key}" error: pool out of bounds`);
 			return null;
 		}
 
-		if (entity) {
-			this._scene.weldbody(body, entity, { allow_rotate: true });
+		const item_index = this._itembox.spawn(conf.item, immediate);
+		if (item_index == null) {
+			this.mempool.free(index);
+			return null;
 		}
 
-		const toy = new Toy(key, bodyKey, body, entity, this._scene);
-		this._toys.push(toy);
-		return toy;
+		this.mempool.write_ui16(index, VAR_TOY_DB_ID, conf.id ?? 0);
+		this.mempool.write_ui16(index, VAR_ITEM_INDEX, item_index);
+		this._init_slot(index);
+		this._enable_modules(index, conf);
+
+		if (immediate) {
+			this.toyupdate(0, index);
+		}
+
+		return index;
 	}
 
 	/**
-	 * @param {Toy} toy
+	 * @param {number} index
+	 * @param {boolean} [immediate]
+	 * @returns {void}
 	 */
-	_despawn(toy) {
-		if (!toy) {
+	despawn(index, immediate = false) {
+		// tbx-lifecycle step 5)
+		const mempool = this.mempool;
+		if (!mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_ACTIVE)) {
 			return;
 		}
-		this._scene.delmodel(toy.entity, toy.body);
-		this._scene.delbody(toy.bodyKey, toy.body);
+
+		mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED, true);
+		mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, false);
+
+		if (immediate) {
+			this.toyupdate(0, index);
+		}
+	}
+
+	/**
+	 * @param {number} dt
+	 * @param {number} index
+	 * @returns {void}
+	 */
+	toyupdate(dt, index) {
+		const mempool = this.mempool;
+		if (!mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_ACTIVE)) {
+			return;
+		}
+		if (mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2)) {
+			// tbx-lifecycle step 6)
+			this.blackboard.dispose_entity(index);
+			mempool.free(index);
+			return;
+		}
+
+		const initialized = mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED);
+		const disposed = mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED);
+
+		if (initialized && disposed) {
+			// tbx-lifecycle step 5)
+			this._eventsbus.emit("toy.dispose", { index });
+			const item_index = this.get_item_index(index);
+			this._itembox.despawn(item_index);
+			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED, false);
+			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED, true);
+			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, true);
+			return;
+		}
+
+		if (!initialized && !disposed) {
+			// tbx-lifecycle step 3)
+			const item_index = this.get_item_index(index);
+			// 2026-06-14, Composer: modules blackboard after item initialized [tbxit1]
+			if (!this._is_item_initialized(item_index)) {
+				return;
+			}
+			this._eventsbus.emit("toy.initialize", { index });
+			this.blackboard.ensure_root(index);
+			this.modulebox.init_modules(index);
+			const conf = this.get_toyconf(index);
+			if (conf) {
+				this.modulebox.configure(index, conf);
+			}
+			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED, true);
+			return;
+		}
+
+		this._eventsbus.emit("toy.update", { index });
+		// tbx-lifecycle step 4)
+		this.modulebox.update(dt, index);
+	}
+
+	/**
+	 * @param {number} dt
+	 * @returns {void}
+	 */
+	step(dt) {
+		const mempool = this.mempool;
+		for (let i = 0; i < mempool.chunk_size; i++) {
+			this.toyupdate(dt, i);
+		}
 	}
 }
 
 export default Toybox;
-// 2026-06-14, Composer: delmodel before delbody on despawn [scnmd2]
-// 2026-06-14, Composer: scene owns body pool and physics weld [scnbd2]
-// 2026-06-14, Composer: toybox spawn body mesh weld pipeline [tbx1]
-// 2026-06-14, Composer: mesh-less spawn body only no weld [flty1]
+export {
+	VAR_FLAGS_A,
+	VAR_FLAG_ACTIVE,
+	VAR_FLAG_INITIALIZED,
+	VAR_FLAG_DISPOSED,
+	VAR_FLAG_DISPOSED_L2,
+	VAR_TOY_DB_ID,
+	VAR_ITEM_INDEX,
+	VAR_ENTITY_BB_ROOT,
+};
+// 2026-06-14, Composer: toybox mempool item link blackboard [tbxbb1]
+// 2026-06-14, Composer: modules blackboard after item initialized [tbxit1]
+// 2026-06-14, Composer: toy-scope root gateway playbook [tbxgw1]

@@ -10,6 +10,7 @@ import {
   SpriteMaterialExtension,
 } from "../render/materials/sprite.js";
 import Environment from "../scene/environment.js";
+import { VAR_BODY_ID } from "../scene/itembox.js";
 import { oimo } from "../lib/OimoPhysics.js";
 import { RigidBody, RigidBodyType } from "./physics.js";
 
@@ -26,13 +27,21 @@ class Scene {
    * @param {import("./db.js").default} db
    * @param {import("./assets.js").default} assets
    * @param {import("./physics.js").default} physics
+   * @param {import("../scene/itembox.js").default} itembox
+   * @param {import("./eventsbus.js").default} eventsbus
    */
-  constructor(draw, db, assets, physics) {
+  constructor(draw, db, assets, physics, itembox, eventsbus) {
     this._draw = draw;
     this._db = db;
     this._assets = assets;
     // 2026-06-14, Composer: scene owns body pool and physics weld [scnbd2]
     this._physics = physics;
+    this._itembox = itembox;
+    this._eventsbus = eventsbus;
+    /** @type {number|null} */
+    this._on_item_init = null;
+    /** @type {number|null} */
+    this._on_item_dis = null;
     this.tyntext = new TyntextCore(draw, db, assets);
     // 2026-06-14, Composer: scene environment floor lights csm [scnenv1]
     this.environment = new Environment(draw._render, assets);
@@ -51,12 +60,28 @@ class Scene {
   start() {
     // 2026-06-14, Composer: environment start uses config only [scnenv2]
     this.environment.start();
+    // 2026-06-14, Composer: item init dispose via eventbus listeners [itmbx1]
+    this._on_item_init = this._eventsbus.on("item.initialize", ({ index }) => {
+      // tbx-lifecycle step 2) itm-scene-sidefx touchpoint
+      this.spawn_item(index);
+    });
+    this._on_item_dis = this._eventsbus.on("item.dispose", ({ index }) => {
+      this.despawn_item(index);
+    });
   }
 
   /**
    * @returns {void}
    */
   stop() {
+    if (this._on_item_init != null) {
+      this._eventsbus.off(this._on_item_init);
+      this._on_item_init = null;
+    }
+    if (this._on_item_dis != null) {
+      this._eventsbus.off(this._on_item_dis);
+      this._on_item_dis = null;
+    }
     this.environment.stop();
     this._clear_body_pool();
   }
@@ -333,8 +358,97 @@ class Scene {
    * @param {number} z
    * @returns {void}
    */
-  setBodyPosition(body, x, y, z) {
+  // 2026-06-14, Composer: snake_case scene method names [snkcs1]
+  set_bodyposition(body, x, y, z) {
     this._physics.setBodyPosition(body, x, y, z);
+  }
+
+  /**
+   * @param {number} index
+   * @returns {import("@three.ez/instanced-mesh").InstancedEntity|null}
+   */
+  get_itementity(index) {
+    const body = this.get_itembody(index);
+    if (!body) {
+      return null;
+    }
+    return this._physics.meshlist[body.id] ?? null;
+  }
+
+  /**
+   * @param {number} index
+   * @returns {oimo.dynamics.rigidbody.RigidBody|null}
+   */
+  get_itembody(index) {
+    const body_id = this._itembox.mempool.read_ui16(index, VAR_BODY_ID);
+    return this._physics.bodylist[body_id] ?? null;
+  }
+
+  /**
+   * @param {number} index
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   * @returns {void}
+   */
+  set_itemposition(index, x, y, z) {
+    const body = this.get_itembody(index);
+    if (!body) {
+      return;
+    }
+    this.set_bodyposition(body, x, y, z);
+  }
+
+  /**
+   * @param {number} index
+   * @returns {void}
+   */
+  spawn_item(index) {
+    // 2026-06-14, Composer: item init dispose via eventbus listeners [itmbx1]
+    const conf = this._itembox.get_itemconf(index);
+    if (!conf) {
+      logger.error(`Scene::spawn_item error: no item conf for index ${index}`);
+      return;
+    }
+
+    const body_key = conf.body;
+    const mesh_key = conf.mesh;
+    const body = this.makebody(body_key);
+    if (!body) {
+      return;
+    }
+
+    let entity = null;
+    if (mesh_key) {
+      entity = this.model(mesh_key);
+      if (!entity) {
+        this.delbody(body_key, body);
+        return;
+      }
+      this.weldbody(body, entity, { allow_rotate: true });
+    }
+
+    this._itembox.mempool.write_ui16(index, VAR_BODY_ID, body.id);
+  }
+
+  /**
+   * @param {number} index
+   * @returns {void}
+   */
+  despawn_item(index) {
+    const conf = this._itembox.get_itemconf(index);
+    if (!conf) {
+      return;
+    }
+
+    const body_id = this._itembox.mempool.read_ui16(index, VAR_BODY_ID);
+    const body = this._physics.bodylist[body_id];
+    const entity = body ? this._physics.meshlist[body.id] : null;
+
+    this.delmodel(entity, body);
+    if (body) {
+      this.delbody(conf.body, body);
+    }
   }
 
   /**
@@ -433,13 +547,13 @@ class Scene {
       }
     }
 
-    this.updateInstancedBounds();
+    this.update_instancedbounds();
   }
 
   /**
    * @returns {void}
    */
-  updateInstancedBounds() {
+  update_instancedbounds() {
     const drawcore = this._draw.core;
     if (!drawcore) {
       return;
@@ -467,3 +581,5 @@ export default Scene;
 // 2026-06-14, Composer: wire Tyntext inline #[sprite] tokens [sprfac1]
 // 2026-06-14, Composer: refresh bounds for culled instanced meshes [scnbs1]
 // 2026-06-14, Composer: billboard sprites face render camera [sprfac1]
+// 2026-06-14, Composer: item init dispose via eventbus listeners [itmbx1]
+// 2026-06-14, Composer: snake_case scene method names [snkcs1]
