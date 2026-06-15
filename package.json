@@ -22,7 +22,6 @@
   },
   "dependencies": {
     "@three.ez/instanced-mesh": "^0.3.15",
-    "n8ao": "^1.10.1",
     "postprocessing": "^6.38.0",
     "three": "^0.184.0"
   }

@@ -1,7 +1,8 @@
 /** @namespace ty */
 // 2026-06-14, Composer: move draw into src/core [d4f6b0]
 import * as THREE from "three";
-import { N8AOPass } from "n8ao";
+// 2026-06-15, Composer: wire N8AOPass from src/lib [n8aolib]
+import { N8AOPass } from "../lib/N8AO.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
@@ -337,5 +338,6 @@ class Draw {
 }
 
 export default Draw;
+// 2026-06-15, Composer: wire N8AOPass from src/lib [n8aolib]
 // 2026-06-14, Composer: cameraui resize in equalizer [drweq1]
 // 2026-06-14, Composer: port RenderBoolingSandsphere into Draw [drwprt1]

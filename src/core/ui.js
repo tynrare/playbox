@@ -66,6 +66,7 @@ class ElementValue {
  * @property {number} edgeWidth
  * @property {number} anchorx
  * @property {number} anchory
+ * @property {number} statecount
  */
 
 /**
@@ -80,8 +81,10 @@ class ElementValue {
  * @property {ElementValue} ry
  * @property {ElementValue} z
  * @property {number} fontsize
+ * @property {number} opacity
  * @property {number} anchorx
  * @property {number} anchory
+ * @property {number} statecount
  */
 
 /**
@@ -100,6 +103,7 @@ class ElementValue {
  * @property {number} opacity
  * @property {number} anchorx
  * @property {number} anchory
+ * @property {number} statecount
  */
 
 /** @typedef {UiPanelElement | UiTextElement | UiSpriteElement} UiElement */
@@ -224,6 +228,7 @@ class Ui {
 
     this._configure_element(element, element.conf);
 
+    let statecount = 0;
     for (const stateKey in this.states) {
       if (!this.states[stateKey]) {
         continue;
@@ -232,40 +237,64 @@ class Ui {
       if (!statedb) {
         continue;
       }
-      const stateconf = this._get_state_conf_for_element(
-        statedb,
-        key,
-        element.conf?.group,
-      );
-      if (stateconf) {
-        this._configure_element(element, stateconf);
+
+      let referenced = false;
+      for (const k of statedb.getkeys()) {
+        const conf = statedb.getconfig(k);
+        if (!this._conf_references_element(conf, key, element.conf?.group, k)) {
+          continue;
+        }
+        referenced = true;
+        this._configure_element(element, conf);
+      }
+      if (referenced) {
+        statecount++;
       }
     }
+
+    // 2026-06-14, Composer: statecount from active state refs in updateelement [uivis2]
+    element.statecount = statecount;
+    this._apply_element_visible(element);
   }
 
   /**
-   * @param {import("./db.js").DbEntry} statedb
+   * @param {Record<string, any>} conf
    * @param {string} elementKey
    * @param {string|undefined} group
-   * @returns {Record<string, any>|undefined}
+   * @param {string} [stateKey]
+   * @returns {boolean}
    */
-  _get_state_conf_for_element(statedb, elementKey, group) {
-    const direct = statedb.getconfig(elementKey);
-    if (direct) {
-      return direct;
+  _conf_references_element(conf, elementKey, group, stateKey) {
+    const el = conf?.element ?? conf?.name ?? stateKey;
+    if (el === elementKey || (group && el === group)) {
+      return true;
     }
-
-    for (const k of statedb.getkeys()) {
-      const conf = statedb.getconfig(k);
-      if (!conf) {
-        continue;
-      }
-      if (conf.element === elementKey || (group && conf.element === group)) {
-        return conf;
-      }
+    if (Array.isArray(el)) {
+      return el.includes(elementKey);
     }
+    return false;
+  }
 
-    return undefined;
+  /**
+   * @param {UiElement} element
+   * @returns {boolean}
+   */
+  _element_shown(element) {
+    return element.statecount > 0;
+  }
+
+  /**
+   * @param {UiElement} element
+   * @returns {void}
+   */
+  _apply_element_visible(element) {
+    if (element.kind === "text") {
+      element.text.opacity = this._element_shown(element) ? element.opacity : 0;
+      element.text.update();
+      return;
+    }
+    element.mesh.visible =
+      this._element_shown(element) && element.opacity > 1e-3;
   }
 
   /**
@@ -355,6 +384,7 @@ class Ui {
         element.text.glow = conf.glow;
       }
       if (conf.opacity !== undefined) {
+        element.opacity = conf.opacity;
         element.text.opacity = conf.opacity;
       }
       if (conf.anchorx !== undefined || conf.anchory !== undefined) {
@@ -374,6 +404,8 @@ class Ui {
       }
       if (conf.opacity !== undefined) {
         element.opacity = conf.opacity;
+        // 2026-06-14, Composer: sync sprite opacity uniform on state [uiop1]
+        element.mesh.setUniform("opacity", element.opacity);
       }
       if (conf.colorb !== undefined) {
         element.mesh.setUniform(
@@ -561,12 +593,13 @@ class Ui {
       edgeWidth: conf.edgewidth ?? RoundedboxShaderDefaults.edgeWidth,
       anchorx: conf.anchorx ?? 0.5,
       anchory: conf.anchory ?? 0.5,
+      statecount: 0,
     };
 
     this.elements[name] = element;
     this._panels_id_tokey[mesh.id] = name;
     this._apply_panel_uniforms(element);
-    mesh.visible = true;
+    mesh.visible = false;
     mesh.updateMatrix();
   }
 
@@ -597,8 +630,10 @@ class Ui {
       conf,
       ...this._make_layout_vals(conf),
       fontsize: conf.fontsize ?? 4,
+      opacity: conf.opacity ?? 1,
       anchorx: conf.anchorx ?? 0.5,
       anchory: conf.anchory ?? 0.5,
+      statecount: 0,
     };
 
     this.elements[name] = element;
@@ -629,6 +664,7 @@ class Ui {
       opacity: conf.opacity ?? 1,
       anchorx: conf.anchorx ?? 0.5,
       anchory: conf.anchory ?? 0.5,
+      statecount: 0,
     };
 
     mesh.setUniform("opacity", element.opacity);
@@ -660,7 +696,8 @@ class Ui {
 
     m.position.set(pos.x, pos.y, this._layout_z(element));
     m.scale.setScalar(worldSize);
-    m.visible = element.opacity > 1e-3;
+    m.setUniform("opacity", element.opacity);
+    m.visible = this._element_shown(element) && element.opacity > 1e-3;
     m.updateMatrix();
   }
 
@@ -679,6 +716,7 @@ class Ui {
     element.text.fontsize = this._pct(element.fontsize) * wmin;
     element.text.position.set(x, y, this._layout_z(element));
     element.text.anchor.set(element.anchorx, element.anchory);
+    element.text.opacity = this._element_shown(element) ? element.opacity : 0;
     element.text.update();
   }
 
@@ -836,7 +874,7 @@ class Ui {
     m.setUniform("rbSize", _rbSize.set(hw, hh));
     m.setUniform("rbRef", wmin);
     m.setUniform("corner", this._pct(element.corner));
-    m.visible = element.opacity > 1e-3;
+    m.visible = this._element_shown(element) && element.opacity > 1e-3;
   }
 
   /**
@@ -929,7 +967,13 @@ class Ui {
       }
 
       const panel = this.elements[hovered];
-      if (panel?.kind !== "panel" || !panel.enabled || !panel.interactive || panel.opacity <= 0) {
+      if (
+        panel?.kind !== "panel" ||
+        !panel.enabled ||
+        !panel.interactive ||
+        panel.statecount <= 0 ||
+        panel.opacity <= 0
+      ) {
         continue;
       }
 
@@ -995,3 +1039,7 @@ export default Ui;
 // 2026-06-14, Composer: color mat, emissive colorb light [rbmix1]
 // 2026-06-14, Composer: scale corner by panel aspect like booling [uicrn1]
 // 2026-06-14, Composer: minimal panel UI from ui_tests db [uicls1]
+// 2026-06-14, Composer: sync sprite opacity uniform on state [uiop1]
+// 2026-06-14, Composer: hide elements until active state refs them [uivis1]
+// 2026-06-14, Composer: statecount from active state refs in updateelement [uivis2]
+// 2026-06-14, Composer: ui_states element falls back to name [uiel1]

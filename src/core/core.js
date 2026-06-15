@@ -8,6 +8,9 @@ import Inputs from "./inputs.js";
 import EventsBus, { INPUTS_BRIDGE_MAP } from "./eventsbus.js";
 import Ui from "./ui.js";
 import Lang from "./lang.js";
+import Physics from "./physics.js";
+import Toybox from "../scene/toybox.js";
+import Datawork from "./datawork.js";
 
 /**
  * @class Core
@@ -32,6 +35,11 @@ class Core {
     this.lang = new Lang(this.db);
     /** @type {Ui} */
     this.ui = new Ui(this.scene, this.eventsbus, this.lang);
+    // 2026-06-14, Composer: physics and toybox on core [crcyc3]
+    this.physics = new Physics(this.render);
+    this.toybox = new Toybox(this);
+    // 2026-06-14, Composer: datawork localStorage namespace [dwrk1]
+    this.datawork = new Datawork("pb");
   }
 
   init() {
@@ -66,6 +74,11 @@ class Core {
     this.render.start();
     this.assets.start();
     this.draw.start();
+    // 2026-06-14, Composer: scene environment floor lights csm [scnenv1]
+    this.scene.start();
+    // 2026-06-14, Composer: physics and toybox on core [crcyc3]
+    this.physics.start();
+    this.toybox.start();
     // 2026-06-14, Composer: rename run to start on inputs ui [crn1]
     this.inputs?.start();
     this.ui?.start();
@@ -80,6 +93,9 @@ class Core {
     // 2026-06-14, Composer: stop reverses start in reverse order [crcyc1]
     this.ui.stop();
     this.inputs.stop();
+    this.toybox.stop();
+    this.physics.stop();
+    this.scene.stop();
     this.draw.stop();
     this.assets.stop();
     this.render.stop();
@@ -92,6 +108,8 @@ class Core {
 
     // 2026-06-14, Composer: draw owns equalizer and compositor render [drwprt1]
     // 2026-06-14, Composer: ui layout before bounds and billboards [crcyc2]
+    // 2026-06-14, Composer: physics before draw for weld sync [crcyc3]
+    this.physics.step(dt);
     this.draw.step(dt);
     this.ui?.step(dt);
     this.scene.step(dt);
@@ -101,6 +119,9 @@ class Core {
 }
 
 export default Core;
+// 2026-06-14, Composer: datawork localStorage namespace [dwrk1]
+// 2026-06-14, Composer: physics and toybox on core [crcyc3]
+// 2026-06-14, Composer: scene environment floor lights csm [scnenv1]
 // 2026-06-14, Composer: cache db lang strings by locale key [lng1]
 // 2026-06-14, Composer: stop then dispose in reverse init order [crcyc1]
 // 2026-06-14, Composer: Ui takes scene instead of draw db [uiscn1]

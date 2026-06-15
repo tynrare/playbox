@@ -9,6 +9,7 @@ import {
   MeshSpritesheetMaterial,
   SpriteMaterialExtension,
 } from "../render/materials/sprite.js";
+import Environment from "../scene/environment.js";
 
 const _billboardMatrix = new THREE.Matrix4();
 
@@ -28,8 +29,24 @@ class Scene {
     this._db = db;
     this._assets = assets;
     this.tyntext = new TyntextCore(draw, db, assets);
-    /** @type {Record<string, import("@three.ez/instanced-mesh").InstancedEntity>} */
+    // 2026-06-14, Composer: scene environment floor lights csm [scnenv1]
+    this.environment = new Environment(draw._render, assets);
     this._billboards = {};
+  }
+
+  /**
+   * @returns {void}
+   */
+  start() {
+    // 2026-06-14, Composer: environment start uses config only [scnenv2]
+    this.environment.start();
+  }
+
+  /**
+   * @returns {void}
+   */
+  stop() {
+    this.environment.stop();
   }
 
   // 2026-06-14, Composer: expose draw db getters for Ui [scnui1]
@@ -215,8 +232,8 @@ class Scene {
         capacity: 8,
         renderer: this._draw._render.renderer,
         castShadow: true,
-        receiveShadow: false,
-      });
+        receiveShadow: true,
+      }, this._draw.pivot);
     }
 
     const entity = core.makemesh(template_name);
@@ -233,6 +250,7 @@ class Scene {
    */
   step(dt) {
     this.tyntext.step(dt);
+    this.environment.step(dt);
 
     // 2026-06-14, Composer: billboard sprites face render camera [sprfac1]
     const camera = this._draw._render?.camera;
@@ -270,6 +288,8 @@ class Scene {
 }
 
 export default Scene;
+// 2026-06-14, Composer: scene environment floor lights csm [scnenv1]
+// 2026-06-14, Composer: environment start uses config only [scnenv2]
 // 2026-06-14, Composer: expose draw db getters for Ui [scnui1]
 // 2026-06-14, Composer: Scene facade for model and text [scnfac1]
 // 2026-06-14, Composer: wire Tyntext inline #[sprite] tokens [sprfac1]

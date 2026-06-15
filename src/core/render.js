@@ -31,17 +31,11 @@ class Render {
     this.renderer.setPixelRatio(window.devicePixelRatio);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0, 1, 1);
+    this.scene.background = new THREE.Color(0x66c0dc);
 
-    this.camera = new THREE.PerspectiveCamera(90, 1, 0.1, 10);
+    this.camera = new THREE.PerspectiveCamera(90, 1, 0.1, 1000);
     this.camera.position.set(1, 1, 1);
     this.camera.lookAt(0, 0, 0);
-
-    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
-    const directional = new THREE.DirectionalLight(0xffffff, 0.8);
-    directional.position.set(-1, 1, 0.5);
-    this.scene.add(ambient);
-    this.scene.add(directional);
 
     logger.log("Three.js render started");
   }
