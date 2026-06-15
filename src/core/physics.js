@@ -526,7 +526,7 @@ class Physics {
 		}
 		const mesh = this.meshlist[body.id];
 		if (mesh?.isInstanceEntity) {
-			mesh.dispose?.();
+			mesh.remove();
 		} else {
 			mesh?.removeFromParent?.();
 		}

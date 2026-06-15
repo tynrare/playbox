@@ -78,14 +78,13 @@ class Toybox {
 		// 2026-06-14, Composer: mesh-less spawn body only no weld [flty1]
 		let entity = null;
 		if (meshKey) {
-			const model = this._scene.model(meshKey);
-			if (!model?.entity) {
+			entity = this._scene.model(meshKey);
+			if (!entity) {
 				logger.error(
 					`Toybox::spawn "${key}" error: mesh "${meshKey}" failed`,
 				);
 				return null;
 			}
-			entity = model.entity;
 		}
 
 		// 2026-06-14, Composer: scene owns body pool and physics weld [scnbd2]
@@ -110,11 +109,13 @@ class Toybox {
 		if (!toy) {
 			return;
 		}
+		this._scene.delmodel(toy.entity, toy.body);
 		this._scene.delbody(toy.bodyKey, toy.body);
 	}
 }
 
 export default Toybox;
+// 2026-06-14, Composer: delmodel before delbody on despawn [scnmd2]
 // 2026-06-14, Composer: scene owns body pool and physics weld [scnbd2]
 // 2026-06-14, Composer: toybox spawn body mesh weld pipeline [tbx1]
 // 2026-06-14, Composer: mesh-less spawn body only no weld [flty1]

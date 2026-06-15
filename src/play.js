@@ -82,6 +82,7 @@ class Play {
         return;
       }
       console.log("ui click", key, event);
+      this._core.toybox._despawn(this.toy);
     });
   }
 

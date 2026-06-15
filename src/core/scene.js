@@ -193,12 +193,16 @@ class Scene {
 
   /**
    * @param {string} name
-   * @returns {{ key: string, entity: import("@three.ez/instanced-mesh").InstancedEntity }|null}
+   * @returns {import("@three.ez/instanced-mesh").InstancedEntity|null}
    */
   model(name) {
+    return this.makemodel(name);
+  }
+
+  makemodel(name) {
     const conf = this._db.get("models")?.getconfig(name);
     if (!conf) {
-      logger.error(`Scene::model config not found: ${name}`);
+      logger.error(`Scene::makemodel config not found: ${name}`);
       return null;
     }
 
@@ -253,7 +257,25 @@ class Scene {
       return null;
     }
 
-    return { key: template_name, entity };
+    // 2026-06-14, Composer: model returns entity only not wrapper [scnmd1]
+    return entity;
+  }
+
+  /**
+   * @param {import("@three.ez/instanced-mesh").InstancedEntity|null} entity
+   * @param {oimo.dynamics.rigidbody.RigidBody} [body]
+   * @returns {void}
+   */
+  delmodel(entity, body) {
+    if (!entity) {
+      return;
+    }
+    // 2026-06-14, Composer: delmodel before delbody clears weld ref [scnmd2]
+    if (body?.id != null && this._physics.meshlist[body.id] === entity) {
+      delete this._physics.meshlist[body.id];
+      delete this._physics.attachopts[body.id];
+    }
+    entity.remove();
   }
 
   /**
@@ -436,6 +458,8 @@ class Scene {
 export default Scene;
 // 2026-06-14, Composer: pooled makebody delbody by bodies db name [scnbd1]
 // 2026-06-14, Composer: scene owns body pool and physics weld [scnbd2]
+// 2026-06-14, Composer: model returns entity only not wrapper [scnmd1]
+// 2026-06-14, Composer: delmodel before delbody clears weld ref [scnmd2]
 // 2026-06-14, Composer: scene environment floor lights csm [scnenv1]
 // 2026-06-14, Composer: environment start uses config only [scnenv2]
 // 2026-06-14, Composer: expose draw db getters for Ui [scnui1]
