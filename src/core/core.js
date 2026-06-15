@@ -25,8 +25,10 @@ class Core {
     this.assets = new Assets(this.db, this.render);
     // 2026-06-14, Composer: unwrap draw ctor args [drwarg1]
     this.draw = new Draw(this.db, this.render, this.assets);
+    // 2026-06-14, Composer: physics before scene for body pool wiring [scnbd2]
+    this.physics = new Physics(this.render);
     // 2026-06-14, Composer: Scene facade for model and text [scnfac1]
-    this.scene = new Scene(this.draw, this.db, this.assets);
+    this.scene = new Scene(this.draw, this.db, this.assets, this.physics);
     // 2026-06-14, Composer: eventsbus hub for inputs and ui [evbs1]
     this.eventsbus = new EventsBus();
     /** @type {Inputs} */
@@ -35,9 +37,7 @@ class Core {
     this.lang = new Lang(this.db);
     /** @type {Ui} */
     this.ui = new Ui(this.scene, this.eventsbus, this.lang);
-    // 2026-06-14, Composer: physics and toybox on core [crcyc3]
-    this.physics = new Physics(this.render);
-    this.toybox = new Toybox(this);
+    this.toybox = new Toybox(this.scene, this.db);
     // 2026-06-14, Composer: datawork localStorage namespace [dwrk1]
     this.datawork = new Datawork("pb");
   }
@@ -119,6 +119,7 @@ class Core {
 }
 
 export default Core;
+// 2026-06-14, Composer: physics before scene for body pool wiring [scnbd2]
 // 2026-06-14, Composer: datawork localStorage namespace [dwrk1]
 // 2026-06-14, Composer: physics and toybox on core [crcyc3]
 // 2026-06-14, Composer: scene environment floor lights csm [scnenv1]

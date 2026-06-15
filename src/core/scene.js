@@ -10,6 +10,8 @@ import {
   SpriteMaterialExtension,
 } from "../render/materials/sprite.js";
 import Environment from "../scene/environment.js";
+import { oimo } from "../lib/OimoPhysics.js";
+import { RigidBody, RigidBodyType } from "./physics.js";
 
 const _billboardMatrix = new THREE.Matrix4();
 
@@ -23,15 +25,24 @@ class Scene {
    * @param {import("./draw.js").default} draw
    * @param {import("./db.js").default} db
    * @param {import("./assets.js").default} assets
+   * @param {import("./physics.js").default} physics
    */
-  constructor(draw, db, assets) {
+  constructor(draw, db, assets, physics) {
     this._draw = draw;
     this._db = db;
     this._assets = assets;
+    // 2026-06-14, Composer: scene owns body pool and physics weld [scnbd2]
+    this._physics = physics;
     this.tyntext = new TyntextCore(draw, db, assets);
     // 2026-06-14, Composer: scene environment floor lights csm [scnenv1]
     this.environment = new Environment(draw._render, assets);
     this._billboards = {};
+    /** @type {Record<string, oimo.dynamics.rigidbody.RigidBody[]>} */
+    this._body_pool = {};
+    this._body_cache = {
+      vec3: new oimo.common.Vec3(),
+      transform: new oimo.common.Transform(),
+    };
   }
 
   /**
@@ -47,6 +58,7 @@ class Scene {
    */
   stop() {
     this.environment.stop();
+    this._clear_body_pool();
   }
 
   // 2026-06-14, Composer: expose draw db getters for Ui [scnui1]
@@ -245,6 +257,140 @@ class Scene {
   }
 
   /**
+   * @param {string} name bodies db key
+   * @returns {oimo.dynamics.rigidbody.RigidBody|null}
+   */
+  makebody(name) {
+    // 2026-06-14, Composer: pooled makebody delbody by bodies db name [scnbd1]
+    const pool = this._body_pool[name];
+    let body = null;
+    if (pool?.length) {
+      body = pool.pop();
+      this._reset_body(body);
+    } else {
+      body = this._create_body(name);
+    }
+    if (!body) {
+      return null;
+    }
+    this._physics.addBody(body);
+    return body;
+  }
+
+  /**
+   * @param {string} name bodies db key
+   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @returns {void}
+   */
+  delbody(name, body) {
+    if (!body) {
+      return;
+    }
+    this._physics.remove(body);
+    this._reset_body(body);
+    if (!this._body_pool[name]) {
+      this._body_pool[name] = [];
+    }
+    this._body_pool[name].push(body);
+  }
+
+  /**
+   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {import("@three.ez/instanced-mesh").InstancedEntity} entity
+   * @param {object} [opts]
+   * @returns {void}
+   */
+  weldbody(body, entity, opts) {
+    this._physics.weld(body, entity, opts);
+  }
+
+  /**
+   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   * @returns {void}
+   */
+  setBodyPosition(body, x, y, z) {
+    this._physics.setBodyPosition(body, x, y, z);
+  }
+
+  /**
+   * @param {string} name
+   * @returns {oimo.dynamics.rigidbody.RigidBody|null}
+   */
+  _create_body(name) {
+    const bodyconf = this._db.get("bodies")?.getconfig(name);
+    if (!bodyconf) {
+      logger.error(`Scene::_create_body error: no body "${name}" declared`);
+      return null;
+    }
+
+    const rbody_config = new oimo.dynamics.rigidbody.RigidBodyConfig();
+    rbody_config.position.init(0, 1, 0);
+    rbody_config.type = bodyconf.dynamics
+      ? RigidBodyType.DYNAMIC
+      : RigidBodyType.STATIC;
+    rbody_config.angularDamping = bodyconf.adamping ?? 1;
+    rbody_config.linearDamping = bodyconf.ldamping ?? 1;
+
+    const body = new RigidBody(rbody_config);
+    let geometry = null;
+
+    switch (bodyconf.shape) {
+      case "box":
+        geometry = new oimo.collision.geometry.BoxGeometry(
+          this._body_cache.vec3.init(
+            (bodyconf.w ?? 1) * 0.5,
+            (bodyconf.h ?? 1) * 0.5,
+            (bodyconf.l ?? 1) * 0.5,
+          ),
+        );
+        break;
+      default:
+        logger.error(
+          `Scene::_create_body error: unsupported shape "${bodyconf.shape}"`,
+        );
+        return null;
+    }
+
+    if (geometry) {
+      const rshape_config = new oimo.dynamics.rigidbody.ShapeConfig();
+      rshape_config.geometry = geometry;
+      rshape_config.density = bodyconf.density ?? 1;
+      rshape_config.friction = bodyconf.friction ?? 1;
+      rshape_config.restitution = bodyconf.restitution ?? 0;
+      const rshape = new oimo.dynamics.rigidbody.Shape(rshape_config);
+      body.addShape(rshape);
+    }
+
+    body.setGravityScale(bodyconf.gravityscale ?? 1);
+    return body;
+  }
+
+  /**
+   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @returns {void}
+   */
+  _reset_body(body) {
+    const v = this._body_cache.vec3.init(0, 1, 0);
+    const t = this._body_cache.transform;
+    t.setPosition(v);
+    body.setTransform(t);
+    body.setLinearVelocity(this._body_cache.vec3.init(0, 0, 0));
+    body.setAngularVelocity(this._body_cache.vec3.init(0, 0, 0));
+  }
+
+  /**
+   * @returns {void}
+   */
+  _clear_body_pool() {
+    for (const k in this._body_pool) {
+      delete this._body_pool[k];
+    }
+  }
+
+  /**
    * @param {number} dt
    * @returns {void}
    */
@@ -288,6 +434,8 @@ class Scene {
 }
 
 export default Scene;
+// 2026-06-14, Composer: pooled makebody delbody by bodies db name [scnbd1]
+// 2026-06-14, Composer: scene owns body pool and physics weld [scnbd2]
 // 2026-06-14, Composer: scene environment floor lights csm [scnenv1]
 // 2026-06-14, Composer: environment start uses config only [scnenv2]
 // 2026-06-14, Composer: expose draw db getters for Ui [scnui1]

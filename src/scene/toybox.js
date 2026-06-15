@@ -1,8 +1,6 @@
 /** @namespace ty */
 // 2026-06-14, Composer: toybox spawn body mesh weld pipeline [tbx1]
 import logger from "../logger.js";
-import { oimo } from "../lib/OimoPhysics.js";
-import { RigidBody, RigidBodyType } from "../core/physics.js";
 
 /**
  * @class Toy
@@ -11,15 +9,17 @@ import { RigidBody, RigidBodyType } from "../core/physics.js";
 export class Toy {
 	/**
 	 * @param {string} key
+	 * @param {string} bodyKey
 	 * @param {oimo.dynamics.rigidbody.RigidBody} body
 	 * @param {import("@three.ez/instanced-mesh").InstancedEntity|null} entity
-	 * @param {import("../core/physics.js").default} physics
+	 * @param {import("../core/scene.js").default} scene
 	 */
-	constructor(key, body, entity, physics) {
+	constructor(key, bodyKey, body, entity, scene) {
 		this.key = key;
+		this.bodyKey = bodyKey;
 		this.body = body;
 		this.entity = entity;
-		this._physics = physics;
+		this._scene = scene;
 	}
 
 	/**
@@ -28,7 +28,7 @@ export class Toy {
 	 * @param {number} z
 	 */
 	setPosition(x, y, z) {
-		this._physics.setBodyPosition(this.body, x, y, z);
+		this._scene.setBodyPosition(this.body, x, y, z);
 	}
 }
 
@@ -38,10 +38,12 @@ export class Toy {
  */
 class Toybox {
 	/**
-	 * @param {import("../core/core.js").default} core
+	 * @param {import("../core/scene.js").default} scene
+	 * @param {import("../core/db.js").default} db
 	 */
-	constructor(core) {
-		this._core = core;
+	constructor(scene, db) {
+		this._scene = scene;
+		this._db = db;
 		/** @type {Toy[]} */
 		this._toys = [];
 	}
@@ -60,7 +62,7 @@ class Toybox {
 	 * @returns {Toy|null}
 	 */
 	spawn(key) {
-		const conf = this._core.db.get("toys")?.getconfig(key);
+		const conf = this._db.get("toys")?.getconfig(key);
 		if (!conf) {
 			logger.error(`Toybox::spawn "${key}" error: no toy declared`);
 			return null;
@@ -76,7 +78,7 @@ class Toybox {
 		// 2026-06-14, Composer: mesh-less spawn body only no weld [flty1]
 		let entity = null;
 		if (meshKey) {
-			const model = this._core.scene.model(meshKey);
+			const model = this._scene.model(meshKey);
 			if (!model?.entity) {
 				logger.error(
 					`Toybox::spawn "${key}" error: mesh "${meshKey}" failed`,
@@ -86,73 +88,19 @@ class Toybox {
 			entity = model.entity;
 		}
 
-		const body = this._makeBody(bodyKey);
+		// 2026-06-14, Composer: scene owns body pool and physics weld [scnbd2]
+		const body = this._scene.makebody(bodyKey);
 		if (!body) {
 			return null;
 		}
 
-		this._core.physics.addBody(body);
 		if (entity) {
-			this._core.physics.weld(body, entity, { allow_rotate: true });
+			this._scene.weldbody(body, entity, { allow_rotate: true });
 		}
 
-		const toy = new Toy(key, body, entity, this._core.physics);
+		const toy = new Toy(key, bodyKey, body, entity, this._scene);
 		this._toys.push(toy);
 		return toy;
-	}
-
-	/**
-	 * @param {string} name
-	 * @returns {oimo.dynamics.rigidbody.RigidBody|null}
-	 */
-	_makeBody(name) {
-		const bodyconf = this._core.db.get("bodies")?.getconfig(name);
-		if (!bodyconf) {
-			logger.error(`Toybox::_makeBody error: no body "${name}" declared`);
-			return null;
-		}
-
-		const physics = this._core.physics;
-		const rbody_config = new oimo.dynamics.rigidbody.RigidBodyConfig();
-		rbody_config.position.init(0, 1, 0);
-		rbody_config.type = bodyconf.dynamics
-			? RigidBodyType.DYNAMIC
-			: RigidBodyType.STATIC;
-		rbody_config.angularDamping = bodyconf.adamping ?? 1;
-		rbody_config.linearDamping = bodyconf.ldamping ?? 1;
-
-		const body = new RigidBody(rbody_config);
-		let geometry = null;
-
-		switch (bodyconf.shape) {
-			case "box":
-				geometry = new oimo.collision.geometry.BoxGeometry(
-					physics.cache.vec3_0.init(
-						(bodyconf.w ?? 1) * 0.5,
-						(bodyconf.h ?? 1) * 0.5,
-						(bodyconf.l ?? 1) * 0.5,
-					),
-				);
-				break;
-			default:
-				logger.error(
-					`Toybox::_makeBody error: unsupported shape "${bodyconf.shape}"`,
-				);
-				return null;
-		}
-
-		if (geometry) {
-			const rshape_config = new oimo.dynamics.rigidbody.ShapeConfig();
-			rshape_config.geometry = geometry;
-			rshape_config.density = bodyconf.density ?? 1;
-			rshape_config.friction = bodyconf.friction ?? 1;
-			rshape_config.restitution = bodyconf.restitution ?? 0;
-			const rshape = new oimo.dynamics.rigidbody.Shape(rshape_config);
-			body.addShape(rshape);
-		}
-
-		body.setGravityScale(bodyconf.gravityscale ?? 1);
-		return body;
 	}
 
 	/**
@@ -162,10 +110,11 @@ class Toybox {
 		if (!toy) {
 			return;
 		}
-		this._core.physics.remove(toy.body);
+		this._scene.delbody(toy.bodyKey, toy.body);
 	}
 }
 
 export default Toybox;
+// 2026-06-14, Composer: scene owns body pool and physics weld [scnbd2]
 // 2026-06-14, Composer: toybox spawn body mesh weld pipeline [tbx1]
 // 2026-06-14, Composer: mesh-less spawn body only no weld [flty1]
