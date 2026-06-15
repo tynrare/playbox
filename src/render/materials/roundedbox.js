@@ -5,8 +5,8 @@ import * as THREE from "three";
 
 export const RoundedboxShaderDefaults = {
 	pillDome: 0.3,
-	edgeSharp: 0.6,
-	edgeWidth: 0.1,
+	edgeSharp: 0.8,
+	edgeWidth: 0.2,
 };
 
 export const RoundedboxMaterialExtension = {
@@ -73,15 +73,17 @@ export const RoundedboxMaterialExtension = {
 			if (rbd > 0.0) discard;
 
 			float inside = rbInside(rbposS, rbbox, rbcorner);
-			// 2026-06-14, Composer: edgeWidth pct of wmin via rbRef [rbedg2]
-			float edgeSize = edgeWidth * rbRef;
+			// 2026-06-14, Composer: sdf inside to world via aspect rbbox min [rbedg3]
 			float rbMinPlane = 2.0 * min(rbSize.x, rbSize.y);
-			float ew = edgeSize / max(rbMinPlane, 0.001);
+			float rbSdfMin = min(rbbox.x, rbbox.y);
+			float sdfToWorld = rbMinPlane / max(2.0 * rbSdfMin, 0.001);
+			float edgeSize = edgeWidth * rbRef;
+			float insideWorld = inside * sdfToWorld;
+			float ew = edgeSize / max(sdfToWorld, 0.001);
 			vec3 nPill = rbPillNormal(rbposS, rbbox);
 			vec3 nEdge = rbEdgeNormal(rbposS, rbbox, rbcorner, ew);
 			vec3 nFlat = vec3(0.0, 0.0, 1.0);
 			vec3 nP = normalize(mix(nFlat, nPill, pillDome));
-			float insideWorld = inside * rbMinPlane;
 			float edgeMask = 1.0 - smoothstep(0.0, edgeSize, insideWorld);
 			vec3 rbn = normalize(mix(nP, nEdge, edgeMask * edgeSharp));
 
@@ -139,3 +141,4 @@ export const RoundedboxMaterialExtension = {
 // 2026-06-14, Composer: edgeWidth pct of wmin via rbRef [rbedg2]
 // 2026-06-14, Composer: aspect sdf space for w/h scaled mesh [rbasp2]
 // 2026-06-14, Composer: pill+edge mixed normals and colorb lighting [rbmix1]
+// 2026-06-14, Composer: sdf inside to world via aspect rbbox min [rbedg3]
