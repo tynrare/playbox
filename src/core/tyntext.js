@@ -509,7 +509,8 @@ class Tyntext {
 			}
 			mesh.position.add(this.position);
 			mesh.position.x -= this._size.x * this.anchor.x;
-			mesh.position.y -= this._size.y * this.anchor.y;
+			// 2026-06-14, Composer: anchory 0=bottom 1=top like ui layout [tyan1]
+			mesh.position.y -= this._size.y * (1 - this.anchor.y);
 			mesh.updateMatrix();
 		}
 
@@ -612,3 +613,4 @@ export { TyntextCore, Tyntext };
 // 2026-06-12, Composer: texture msdf/sdf flags select distance shader [tymsdf1]
 // 2026-06-12, Composer: msdf_boldness from fonts db or JSON [tymsdf2]
 // 2026-06-12, Composer: fonts db msdf/sdf flags select distance shader [tymsdf3]
+// 2026-06-14, Composer: anchory 0=bottom 1=top like ui layout [tyan1]

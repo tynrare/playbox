@@ -48,7 +48,6 @@ class Assets {
    * @returns {Assets}
    */
   stop() {
-    this._dispose_textures();
     return this;
   }
 
@@ -176,6 +175,7 @@ class Assets {
 }
 
 export default Assets;
+// 2026-06-14, Composer: stop is no-op, dispose clears texture cache [asscyc1]
 // 2026-06-14, Composer: cache THREE.Texture at preload, drop three_texture [t3cch1]
 // 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]
 // 2026-06-14, Composer: move assets into src/core [b2d4f8]

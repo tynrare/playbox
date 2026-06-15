@@ -32,6 +32,17 @@ class Scene {
     this._billboards = {};
   }
 
+  // 2026-06-14, Composer: expose draw db getters for Ui [scnui1]
+  /** @returns {import("./draw.js").default} */
+  get draw() {
+    return this._draw;
+  }
+
+  /** @returns {import("./db.js").default} */
+  get db() {
+    return this._db;
+  }
+
   /**
    * @param {string} fontkey
    * @param {boolean} [ui]
@@ -225,22 +236,42 @@ class Scene {
 
     // 2026-06-14, Composer: billboard sprites face render camera [sprfac1]
     const camera = this._draw._render?.camera;
-    if (!camera) {
+    if (camera) {
+      for (const k in this._billboards) {
+        const b = this._billboards[k];
+        _billboardMatrix.compose(b.position, b.quaternion, b.scale);
+        _billboardMatrix.lookAt(camera.position, b.position, v3up);
+        b.position.setFromMatrixPosition(_billboardMatrix);
+        b.quaternion.setFromRotationMatrix(_billboardMatrix);
+        b.updateMatrix();
+      }
+    }
+
+    this.updateInstancedBounds();
+  }
+
+  /**
+   * @returns {void}
+   */
+  updateInstancedBounds() {
+    const drawcore = this._draw.core;
+    if (!drawcore) {
       return;
     }
 
-    for (const k in this._billboards) {
-      const b = this._billboards[k];
-      _billboardMatrix.compose(b.position, b.quaternion, b.scale);
-      _billboardMatrix.lookAt(camera.position, b.position, v3up);
-      b.position.setFromMatrixPosition(_billboardMatrix);
-      b.quaternion.setFromRotationMatrix(_billboardMatrix);
-      b.updateMatrix();
+    // 2026-06-14, Composer: refresh bounds for culled instanced meshes [scnbs1]
+    for (const key in drawcore.imeshes) {
+      const imesh = drawcore.imeshes[key];
+      if (imesh.frustumCulled || imesh.perObjectFrustumCulled) {
+        imesh.computeBoundingSphere();
+      }
     }
   }
 }
 
 export default Scene;
+// 2026-06-14, Composer: expose draw db getters for Ui [scnui1]
 // 2026-06-14, Composer: Scene facade for model and text [scnfac1]
 // 2026-06-14, Composer: wire Tyntext inline #[sprite] tokens [sprfac1]
+// 2026-06-14, Composer: refresh bounds for culled instanced meshes [scnbs1]
 // 2026-06-14, Composer: billboard sprites face render camera [sprfac1]

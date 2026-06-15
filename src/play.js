@@ -54,15 +54,6 @@ class Play {
       this.ping.updateMatrix();
     }
 
-    this.labelUi = this._core.scene.text("afont", true);
-    if (this.labelUi) {
-      this.labelUi.text = "#[plus] OK #[check]";
-      this.labelUi.fontsize = 28;
-      this.labelUi.position.set(0, 0, 0);
-      this.labelUi.anchor.set(0.5, 0.5);
-      this.labelUi.update();
-    }
-
     // 2026-06-14, Composer: ui.click test via eventsbus [uiclk1]
     this._ui_click_id = this._core.eventsbus.on("ui.click", ({ key, event }) => {
       console.log("ui click", key, event);
@@ -106,6 +97,7 @@ class Play {
 }
 
 export default Play;
+// 2026-06-14, Composer: db text label via scene.text in Ui [uidb6]
 // 2026-06-14, Composer: ui.click test via eventsbus [uiclk1]
 // 2026-06-14, Composer: weld 3D and UI test text labels [txtwld1]
 // 2026-06-14, Composer: Scene facade for model and text [scnfac1]

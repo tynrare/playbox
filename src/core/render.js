@@ -24,13 +24,6 @@ class Render {
     return this;
   }
 
-  dispose() {
-    this.renderer?.dispose();
-    this.renderer = null;
-    this.scene = null;
-    this.camera = null;
-  }
-
   start() {
     // 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]
     this.canvas = document.getElementById("canvas_pb");
@@ -54,13 +47,20 @@ class Render {
   }
 
   stop() {
+    this.renderer?.dispose();
     this.renderer = null;
     this.scene = null;
     this.camera = null;
   }
+
+  dispose() {
+    // 2026-06-14, Composer: stop reverts start, dispose reverts init [rncyc1]
+    this.stop();
+  }
 }
 
 export default Render;
+// 2026-06-14, Composer: stop reverts start, dispose reverts init [rncyc1]
 // 2026-06-14, Composer: slim render, equalizer moved to draw [drwprt1]
 // 2026-06-14, Composer: Three.js renderer replaces PicoGL [t3r8n2]
 // 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]

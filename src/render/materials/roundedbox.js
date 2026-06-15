@@ -1,17 +1,19 @@
 // 2026-06-14, Composer: shared shader default pill uniforms [rbdef1]
 // 2026-06-14, Composer: port booling 2d rounded panel material [rbxm1]
 // 2026-06-14, Composer: pill+edge mixed normals and colorb lighting [rbmix1]
+import * as THREE from "three";
+
 export const RoundedboxShaderDefaults = {
 	pillDome: 0.3,
-	edgeSharp: 0.3,
-	edgeWidth: 0.01,
+	edgeSharp: 0.6,
+	edgeWidth: 0.1,
 };
 
 export const RoundedboxMaterialExtension = {
 	name: "simple-roundedbox",
 	uniforms: {
-		ratiox: 1,
-		ratioy: 1,
+		rbSize: new THREE.Vector2(1, 1),
+		rbRef: 1,
 		corner: 0.05,
 		pillDome: RoundedboxShaderDefaults.pillDome,
 		edgeSharp: RoundedboxShaderDefaults.edgeSharp,
@@ -62,17 +64,25 @@ export const RoundedboxMaterialExtension = {
 			void main() {
 			vec3 rbFinalColor = vec3(0.0);
 			vec2 rbpos = vMapUv.xy - vec2(0.5, 0.5);
-			vec2 rbbox = vec2(0.5 * ratiox, 0.5 * ratioy);
-			float rbcorner = corner;
-			float rbd = sdRound2dBox(rbpos, rbbox, vec4(rbcorner));
+			// 2026-06-14, Composer: aspect sdf space for w/h scaled mesh [rbasp2]
+			vec2 rbRatio = rbSize / max(rbSize.x, rbSize.y);
+			vec2 rbposS = rbpos * rbRatio;
+			vec2 rbbox = 0.5 * rbRatio;
+			float rbcorner = corner * min(rbRatio.x, rbRatio.y);
+			float rbd = sdRound2dBox(rbposS, rbbox, vec4(rbcorner));
 			if (rbd > 0.0) discard;
 
-			float inside = rbInside(rbpos, rbbox, rbcorner);
-			vec3 nPill = rbPillNormal(rbpos, rbbox);
-			vec3 nEdge = rbEdgeNormal(rbpos, rbbox, rbcorner, edgeWidth);
+			float inside = rbInside(rbposS, rbbox, rbcorner);
+			// 2026-06-14, Composer: edgeWidth pct of wmin via rbRef [rbedg2]
+			float edgeSize = edgeWidth * rbRef;
+			float rbMinPlane = 2.0 * min(rbSize.x, rbSize.y);
+			float ew = edgeSize / max(rbMinPlane, 0.001);
+			vec3 nPill = rbPillNormal(rbposS, rbbox);
+			vec3 nEdge = rbEdgeNormal(rbposS, rbbox, rbcorner, ew);
 			vec3 nFlat = vec3(0.0, 0.0, 1.0);
 			vec3 nP = normalize(mix(nFlat, nPill, pillDome));
-			float edgeMask = 1.0 - smoothstep(0.0, edgeWidth, inside);
+			float insideWorld = inside * rbMinPlane;
+			float edgeMask = 1.0 - smoothstep(0.0, edgeSize, insideWorld);
 			vec3 rbn = normalize(mix(nP, nEdge, edgeMask * edgeSharp));
 
 			vec3 rbMat = color;
@@ -126,4 +136,6 @@ export const RoundedboxMaterialExtension = {
 // 2026-06-14, Composer: shared shader default pill uniforms [rbdef1]
 // 2026-06-14, Composer: port booling 2d rounded panel material [rbxm1]
 // 2026-06-14, Composer: pass edgeWidth into helper for instanced locals [rbfix1]
+// 2026-06-14, Composer: edgeWidth pct of wmin via rbRef [rbedg2]
+// 2026-06-14, Composer: aspect sdf space for w/h scaled mesh [rbasp2]
 // 2026-06-14, Composer: pill+edge mixed normals and colorb lighting [rbmix1]

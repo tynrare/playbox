@@ -1,4 +1,5 @@
 // 2026-06-14, Composer: move db into src/core [c3e5a9]
+import { call } from "three/src/nodes/code/FunctionCallNode.js";
 import logger from "../logger.js";
 
 /**
@@ -127,6 +128,7 @@ function DbList(container, dbkey) {
 	const db = container.querySelector(dbkey);
 	const dblist = db.querySelectorAll("db[name]");
 	const list = {};
+	const scopes = {};
 
 	function start() {
 		for (let i = 0; i < dblist.length; i++) {
@@ -137,26 +139,49 @@ function DbList(container, dbkey) {
 			}
 
 			const name = d.getAttribute("name");
+			const scope = d.getAttribute("scope");
 			const entry = new DbEntry(db, `db#${id}`);
 			entry.start();
 			list[name] = entry;
+			if (scope) {
+				if (!scopes[scope]) {
+					scopes[scope] = {};
+				}
+				scopes[scope][name] = entry;
+			}
 		}
 	}
 
 	function stop() {
-		for (const entry of Object.values(list)) {
-			entry.stop();
+		for (const k in list) {
+			list[k].stop();
+			delete list[k];
+		}
+		for (const k in scopes) {
+			for (const kk in scopes[k]) {
+				delete scopes[k][kk];
+			}
+			delete scopes[k];
 		}
 	}
 
 	/**
-	 *
 	 * @param {string} name
 	 * @returns {DbEntry}
 	 */
 	this.get = (name) => {
 		return list[name];
 	};
+
+	this.scope = (key, callback) => {
+		const scope = scopes[key];
+		if (!scope) {
+			return;
+		}
+		for (const k in scope) {
+			callback(scope[k]);
+		}
+	}
 
 	this.list = () => {
 		return list;

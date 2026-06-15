@@ -22,12 +22,9 @@ import Events from "./events.js";
  * @emits Inputs#pointerdrag
  */
 class Inputs {
-  /**
-   * @param {HTMLElement|null} container
-   */
-  constructor(container) {
+  constructor() {
     /** @type {HTMLElement|null} */
-    this._container = container;
+    this._container = null;
     /** @type {Events} */
     this.events = new Events();
 
@@ -75,9 +72,19 @@ class Inputs {
   }
 
   /**
+   * @param {HTMLElement|null} container
    * @returns {void}
    */
-  run() {
+  init(container) {
+    // 2026-06-14, Composer: defer canvas binding to init [inpdev3]
+    this._container = container;
+  }
+
+  /**
+   * @returns {void}
+   */
+  start() {
+    // 2026-06-14, Composer: rename run to start on inputs ui [crn1]
     const container = this._container;
     if (!container) {
       return;
@@ -113,13 +120,19 @@ class Inputs {
     this._on_pointerdown = null;
     this._on_pointerup = null;
     this._on_pointermove = null;
-    this.events.dispose();
     this._pointers = {};
     this._pointers_pool = Array.from({ length: 10 }, () => ({
       x: 0,
       y: 0,
       touch_identifier: -1,
     }));
+  }
+
+  dispose() {
+    // 2026-06-14, Composer: stop unbinds listeners, dispose clears init [inpdev4]
+    this.stop();
+    this.events.dispose();
+    this._container = null;
   }
 
   /**
@@ -341,5 +354,8 @@ class Inputs {
 }
 
 export default Inputs;
+// 2026-06-14, Composer: stop unbinds listeners, dispose clears init [inpdev4]
+// 2026-06-14, Composer: defer canvas binding to init [inpdev3]
+// 2026-06-14, Composer: rename run to start on inputs ui [crn1]
 // 2026-06-14, Composer: bind canvas pointer listeners [inpdev2]
 // 2026-06-14, Composer: port booling Inputs without DOM binding [inpdev1]

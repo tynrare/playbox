@@ -47,10 +47,9 @@ class App {
    * @returns {Promise<void>}
    */
   async start() {
-    this.core.start();
     this.active = true;
-
     await this.core.assets.preload(1);
+    this.core.start();
     await this.core.assets.preload(2);
     this.play.start();
     this.ready = true;

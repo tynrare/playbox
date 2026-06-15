@@ -1,5 +1,6 @@
 // 2026-06-14, Composer: import app from src/core [f6b8d2]
 import App from "./core/app.js";
+import logger from "./logger.js";
 
 /**
  * @param {App} app
@@ -18,6 +19,7 @@ function loop(app) {
     const t2 = performance.now();
     const code = update(app, t2 - t1);
     if (code !== 0) {
+      logger.log(`App stopped with code ${code}`);
       return;
     }
 

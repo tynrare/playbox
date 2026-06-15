@@ -7,6 +7,7 @@ import DbList from "./db.js";
 import Inputs from "./inputs.js";
 import EventsBus, { INPUTS_BRIDGE_MAP } from "./eventsbus.js";
 import Ui from "./ui.js";
+import Lang from "./lang.js";
 
 /**
  * @class Core
@@ -25,10 +26,12 @@ class Core {
     this.scene = new Scene(this.draw, this.db, this.assets);
     // 2026-06-14, Composer: eventsbus hub for inputs and ui [evbs1]
     this.eventsbus = new EventsBus();
-    /** @type {Inputs|null} */
-    this.inputs = null;
-    /** @type {Ui|null} */
-    this.ui = null;
+    /** @type {Inputs} */
+    this.inputs = new Inputs();
+    /** @type {Lang} */
+    this.lang = new Lang(this.db);
+    /** @type {Ui} */
+    this.ui = new Ui(this.scene, this.eventsbus, this.lang);
   }
 
   init() {
@@ -36,21 +39,26 @@ class Core {
     this.db.start();
     this.draw.init();
     this.assets.init();
-    // 2026-06-14, Composer: canvas inputs wired, binding deferred [inpdev1]
-    this.inputs = new Inputs(document.getElementById("canvas_pb"));
+    // 2026-06-14, Composer: cache db lang strings by locale key [lng1]
+    this.lang.init();
+    // 2026-06-14, Composer: defer canvas binding to init [inpdev3]
+    this.inputs.init(document.getElementById("canvas_pb"));
     this.eventsbus.register("inputs", this.inputs.events, INPUTS_BRIDGE_MAP);
-    this.ui = new Ui(this.draw, this.db, this.eventsbus);
     return this;
   }
 
   dispose() {
-    this.ui?.dispose();
-    this.ui = null;
+    // 2026-06-14, Composer: stop then dispose in reverse init order [crcyc1]
+    if (this.active) {
+      this.stop();
+    }
+    this.ui.dispose();
     this.eventsbus.dispose();
-    this.inputs?.stop();
-    this.inputs = null;
+    this.inputs.dispose();
     this.draw.dispose();
     this.assets.dispose();
+    this.lang.stop();
+    this.db.stop();
     this.render.dispose();
   }
 
@@ -58,19 +66,22 @@ class Core {
     this.render.start();
     this.assets.start();
     this.draw.start();
-    this.ui?.init();
-    this.inputs?.run();
-    this.ui?.run();
+    // 2026-06-14, Composer: rename run to start on inputs ui [crn1]
+    this.inputs?.start();
+    this.ui?.start();
     this.active = true;
   }
 
   stop() {
+    if (!this.active) {
+      return;
+    }
     this.active = false;
-    this.ui?.stop();
-    this.inputs?.stop();
+    // 2026-06-14, Composer: stop reverses start in reverse order [crcyc1]
+    this.ui.stop();
+    this.inputs.stop();
     this.draw.stop();
     this.assets.stop();
-    this.db.stop();
     this.render.stop();
   }
 
@@ -80,15 +91,21 @@ class Core {
     }
 
     // 2026-06-14, Composer: draw owns equalizer and compositor render [drwprt1]
+    // 2026-06-14, Composer: ui layout before bounds and billboards [crcyc2]
     this.draw.step(dt);
-    this.scene.step(dt);
     this.ui?.step(dt);
+    this.scene.step(dt);
 
     return 0;
   }
 }
 
 export default Core;
+// 2026-06-14, Composer: cache db lang strings by locale key [lng1]
+// 2026-06-14, Composer: stop then dispose in reverse init order [crcyc1]
+// 2026-06-14, Composer: Ui takes scene instead of draw db [uiscn1]
+// 2026-06-14, Composer: defer canvas binding to init [inpdev3]
+// 2026-06-14, Composer: rename run to start on inputs ui [crn1]
 // 2026-06-14, Composer: eventsbus hub for inputs and ui [evbs1]
 // 2026-06-14, Composer: canvas inputs wired, binding deferred [inpdev1]
 // 2026-06-14, Composer: Scene facade for model and text [scnfac1]
