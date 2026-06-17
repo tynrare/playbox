@@ -1,6 +1,8 @@
 /** @namespace ty */
 // 2026-06-17, Composer: test flow spawn orbit decor despawn [flwtst1]
 // 2026-06-17, Composer: test flow stop despawns decor resets camera [flwtst2]
+// 2026-06-17, Composer: test flow close btn returns menu [flwtst3]
+// 2026-06-17, Composer: test ok button despawns toy [flwtst4]
 import FlowBase from "../core/flowbase.js";
 
 /**
@@ -8,6 +10,15 @@ import FlowBase from "../core/flowbase.js";
  * @memberof pb.flows
  */
 class TestFlow extends FlowBase {
+	/**
+	 * @param {import("../core/core.js").default} core
+	 * @param {import("./menu.js").default} menuFlow
+	 */
+	constructor(core, menuFlow) {
+		super(core);
+		this._menu = menuFlow;
+	}
+
 	/**
 	 * @returns {this}
 	 */
@@ -53,12 +64,23 @@ class TestFlow extends FlowBase {
 
 		this._sync_toy_decor();
 
-		this._ui_click_id = this._core.eventsbus.on("ui.click", ({ key, event }) => {
+		// 2026-06-17, Composer: test flow close btn returns menu [flwtst3]
+		// 2026-06-17, Composer: test ok button despawns toy [flwtst4]
+		// 2026-06-17, Composer: test flow ui_test and ui_tests vis [flwtst5]
+		this._core.ui.setstate("ui_test_vis");
+		this._core.ui.setstate("ui_tests_vis");
+		this._ui_click_id = this._core.eventsbus.on("ui.click", ({ event }) => {
 			if (event === "debug_button") {
 				return;
 			}
-			console.log("ui click", key, event);
-			this._core.toybox.despawn(this._toy_index);
+			if (event === "test_close") {
+				this._return_menu();
+				return;
+			}
+			// 2026-06-17, Composer: test ok button despawns toy [flwtst4]
+			if (event === "button_test") {
+				this._core.toybox.despawn(this._toy_index);
+			}
 		});
 	}
 
@@ -78,6 +100,9 @@ class TestFlow extends FlowBase {
 			this._core.eventsbus.off(this._ui_click_id);
 			this._ui_click_id = null;
 		}
+		this._core.ui.delstate("ui_test_vis");
+		this._core.ui.delstate("ui_tests_vis");
+		this._core.ui.delstate("ui_tests_states");
 		// 2026-06-17, Composer: test flow stop despawns decor resets camera [flwtst2]
 		this.label3d?.remove();
 		this.label3d = null;
@@ -91,11 +116,19 @@ class TestFlow extends FlowBase {
 			this._core.itembox.despawn(this._floor_index, true);
 			this._floor_index = null;
 		}
+		// 2026-06-17, Composer: test stop hides environment floor plane [flwtst6]
+		this._core.scene.environment.floorstyle(null, 0xffffff);
 		const camera = this._core.render?.camera;
 		if (camera && this._camera_home) {
 			camera.position.copy(this._camera_home);
 			camera.lookAt(0, 0, 0);
 		}
+	}
+
+	/** @returns {void} */
+	_return_menu() {
+		this._core.flowbus.detach(this);
+		this._core.flowbus.attach(this._menu);
 	}
 
 	/** @returns {void} */
@@ -155,3 +188,7 @@ class TestFlow extends FlowBase {
 export default TestFlow;
 // 2026-06-17, Composer: test flow spawn orbit decor despawn [flwtst1]
 // 2026-06-17, Composer: test flow stop despawns decor resets camera [flwtst2]
+// 2026-06-17, Composer: test flow close btn returns menu [flwtst3]
+// 2026-06-17, Composer: test ok button despawns toy [flwtst4]
+// 2026-06-17, Composer: test flow ui_test and ui_tests vis [flwtst5]
+// 2026-06-17, Composer: test stop hides environment floor plane [flwtst6]

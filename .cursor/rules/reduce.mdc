@@ -1,0 +1,19 @@
+---
+alwaysApply: false
+description: "Reduce: separate given from assumed before acting; verify, no theory"
+---
+`@reduce`: **Given before theory.** Strip the task to what is observed vs what is guessed—then act.
+
+**Before diagnose, plan, or fix**, output (brief):
+
+1. **Given** — symptoms, logs, repro steps, cited lines, command output you actually read/ran.
+2. **Assumed** — hypotheses, root causes, intent, “obviously X” not yet checked.
+3. **Check** — smallest step that confirms or kills each assumption (read file, run test, repro).
+
+**Do:** Read code and run checks before naming a cause. Label inference as inference. If Given is empty, ask one tight question or run the smallest repro—do not invent a narrative.
+
+**Don't:** Philosophy, phenomenology jargon, long preambles, tables for show, “probably/maybe” stated as fact, fixes on unverified assumptions.
+
+**Output shape:** Few lines or bullets. Lead with Given; one primary path. With `@keepshort`, stay short. With `@berude`, call out when Assumed is masquerading as Given.
+
+**Conflict:** `reduce` wins on **order** (Given → Assumed → Check before solution). `berude` wins on pushback when Given is thin.

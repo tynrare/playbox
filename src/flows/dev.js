@@ -20,7 +20,6 @@ class DevFlow extends FlowBase {
 	/** @returns {void} */
 	start() {
 		this._core.ui.setstate("ui_dev");
-		this._core.ui.setstate("ui_tests_vis");
 		this.settings.start(this._core);
 		this._ui_click_id = this._core.eventsbus.on("ui.click", ({ event }) => {
 			if (event !== "debug_button") {
@@ -39,7 +38,6 @@ class DevFlow extends FlowBase {
 		}
 		// 2026-06-17, Composer: dev flow stop clears ui states [flwdev2]
 		this._core.ui.delstate("ui_dev");
-		this._core.ui.delstate("ui_tests_vis");
 	}
 }
 

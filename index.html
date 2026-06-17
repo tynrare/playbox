@@ -17,9 +17,8 @@
 
     <title>playbox</title>
     <style>
-      html, body, #preload {
+      html, body {
         margin: 0;
-        display: flex;
         width: 100%;
         height: 100%;
       }
@@ -31,20 +30,6 @@
       body.active #app {
         display: flex;
       }
-
-      body #preload {
-        display: flex;
-      }
-
-      body.active #preload {
-        display: none;
-      }
-
-      body #preload > header {
-        margin: auto;
-        font-size: 25vh;
-      }
-
     </style>
     <script>
       document.addEventListener("DOMContentLoaded", (event) => {
@@ -56,7 +41,12 @@
     <link rel="stylesheet" href="src/index.less" />
   </head>
   <body>
-    <decor id="preload"><header>...</header></decor>
+    <decor id="preload">
+      <div id="preload_indicator">
+        <div id="preload_square"></div>
+        <span id="preload_symbol">.</span>
+      </div>
+    </decor>
     <pug src="src/index.pug" />
     <script type="module" src="src/index.js"></script>
   </body>

@@ -2,12 +2,18 @@
 // 2026-06-14, Composer: move app into src/core [a1c3e7]
 // 2026-06-17, Composer: flows step in core drop play.step [appflw1]
 // 2026-06-17, Composer: app stop unwinds play then core [appstp1]
+// 2026-06-17, Composer: boot canvas after preload l1 [ldbt1]
 import Core from "./core.js";
 import Play from "../play.js";
 import logger from "../logger.js";
-import Loader from "./loader.js";
 
 // 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]
+/**
+ * @typedef {Object} AppStartOptions
+ * @property {(loaded: number, total: number) => void} [onProgress]
+ * @property {() => void} [onCanvasReady]
+ */
+
 /**
  * @class App
  * @memberof pb.app
@@ -59,14 +65,17 @@ class App {
   }
 
   /**
+   * @param {AppStartOptions} [options]
    * @returns {Promise<void>}
    */
-  async start() {
+  async start(options = {}) {
+    const { onProgress, onCanvasReady } = options;
     this.active = true;
-    await this.core.assets.preload(1);
+    await this.core.assets.preload(1, onProgress);
     this.core.start();
     this.play.splashscreen(true);
-    await this.core.assets.preload(2);
+    onCanvasReady?.();
+    await this.core.assets.preload(2, onProgress);
     this.play.start();
     this.ready = true;
     // 2026-06-14, Composer: rename pureplay to playbox [r7n2p4]
@@ -95,3 +104,4 @@ export default App;
 // 2026-04-30, Codex 5.3: validate app function JSDoc types [b3f91e]
 // 2026-06-17, Composer: flows step in core drop play.step [appflw1]
 // 2026-06-17, Composer: app stop unwinds play then core [appstp1]
+// 2026-06-17, Composer: boot canvas after preload l1 [ldbt1]
