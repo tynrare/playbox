@@ -1,0 +1,21 @@
+---
+description: JS lifecycle — acyclic graph, ctor alloc-only, init/start/stop/dispose
+globs:
+  - "**/*.js"
+alwaysApply: false
+---
+
+# JS lifecycle
+
+**Acyclic:** Before wiring classes, stop and ask if ownership, init/start order, or dispose would cycle (A↔B, init needs start loop). No silent cycles.
+
+**Phases:**
+- `constructor` — alloc only: fields, `new Child()`; no DOM/GL/listeners/I/O
+- `init()` — memory, refs, child `init()`; no operational side effects
+- `start()` — purpose work (listen, hook, run)
+- `stop()` — reverse `start()` plus end all lifetime ops (`step()`, timers, ticks, in-flight state); idempotent
+- `dispose()` — `stop()` if needed, reverse `init()`, null refs, child `dispose()`
+
+**Composite:** parent drives phase; unwind children in reverse order.
+
+**Violations:** ctor side effects, alloc in `start()` without `stop()` cleanup, parent↔child cycles → stop and ask.

@@ -12,6 +12,7 @@ import Physics from "./physics.js";
 import Itembox from "../scene/itembox.js";
 import Toybox from "../scene/toybox.js";
 import Datawork from "./datawork.js";
+import FlowBus from "./flowbus.js";
 
 /**
  * @class Core
@@ -22,7 +23,8 @@ class Core {
     this.active = false;
     this.render = new Render();
     // 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]
-    this.db = new DbList(document.getElementById("app"), "#db_pb");
+    // 2026-06-17, Composer: defer db DOM bind to init [dblbind1]
+    this.db = new DbList();
     this.assets = new Assets(this.db, this.render);
     // 2026-06-14, Composer: unwrap draw ctor args [drwarg1]
     this.draw = new Draw(this.db, this.render, this.assets);
@@ -51,18 +53,29 @@ class Core {
     this.ui = new Ui(this.scene, this.eventsbus, this.lang);
     // 2026-06-14, Composer: datawork localStorage namespace [dwrk1]
     this.datawork = new Datawork("pb");
+    // 2026-06-17, Composer: flowbus container wired to eventsbus [flwcor1]
+    this.flowbus = new FlowBus(this.eventsbus);
   }
 
   init() {
     this.render.init();
-    this.db.start();
+    this.db.bind(document.getElementById("app"), "#db_pb");
+    // 2026-06-17, Composer: rename db start to init phase [dbinit1]
+    this.db.init();
     this.draw.init();
     this.assets.init();
     // 2026-06-14, Composer: cache db lang strings by locale key [lng1]
     this.lang.init();
+    // 2026-06-17, Composer: core init drives all children [crcyc5]
+    this.itembox.init();
+    this.toybox.init();
+    this.scene.init();
+    this.physics.init();
+    this.ui.init();
     // 2026-06-14, Composer: defer canvas binding to init [inpdev3]
     this.inputs.init(document.getElementById("canvas_pb"));
     this.eventsbus.register("inputs", this.inputs.events, INPUTS_BRIDGE_MAP);
+    // 2026-06-17, Composer: flowbus has no init phase [flwatt1]
     return this;
   }
 
@@ -71,12 +84,18 @@ class Core {
     if (this.active) {
       this.stop();
     }
+    this.flowbus.dispose();
     this.ui.dispose();
-    this.eventsbus.dispose();
     this.inputs.dispose();
+    this.eventsbus.dispose();
+    // 2026-06-17, Composer: dispose scene physics pools on teardown [crcyc4]
+    this.scene.dispose();
+    this.physics.dispose();
+    this.toybox.dispose();
+    this.itembox.dispose();
     this.draw.dispose();
     this.assets.dispose();
-    this.lang.stop();
+    this.lang.dispose();
     this.db.stop();
     this.render.dispose();
   }
@@ -89,11 +108,10 @@ class Core {
     this.scene.start();
     // 2026-06-14, Composer: physics and itembox on core [itmbx1]
     this.physics.start();
-    this.itembox.start();
-    this.toybox.start();
-    // 2026-06-14, Composer: rename run to start on inputs ui [crn1]
+    // 2026-06-17, Composer: itembox toybox alloc moved to init [crcyc5]
     this.inputs?.start();
     this.ui?.start();
+    this.flowbus.start();
     this.active = true;
   }
 
@@ -103,6 +121,7 @@ class Core {
     }
     this.active = false;
     // 2026-06-14, Composer: stop reverses start in reverse order [crcyc1]
+    this.flowbus.stop();
     this.ui.stop();
     this.inputs.stop();
     this.toybox.stop();
@@ -130,6 +149,7 @@ class Core {
     this.draw.step(dt);
     this.ui?.step(dt);
     this.scene.step(dt);
+    this.flowbus.step(dt);
 
     return 0;
   }
@@ -156,3 +176,9 @@ export default Core;
 // 2026-06-14, Composer: itembox data worker before scene [itmbx1]
 // 2026-06-14, Composer: toybox step before physics [tbxbb1]
 // 2026-06-14, Composer: toybox mempool item link blackboard [tbxbb1]
+// 2026-06-17, Composer: flowbus container wired to eventsbus [flwcor1]
+// 2026-06-17, Composer: flowbus has no init phase [flwatt1]
+// 2026-06-17, Composer: defer db DOM bind to init [dblbind1]
+// 2026-06-17, Composer: dispose scene physics pools on teardown [crcyc4]
+// 2026-06-17, Composer: rename db start to init phase [dbinit1]
+// 2026-06-17, Composer: core init drives all children [crcyc5]

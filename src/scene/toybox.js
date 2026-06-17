@@ -71,13 +71,23 @@ class Toybox {
 		this._toy_by_id = {};
 	}
 
-	start() {
+	/** @returns {this} */
+	init() {
+		// 2026-06-17, Composer: toybox pool alloc in init [tbxinit1]
 		this.mempool.init(TOY_ENTITY_BYTES * 2, TOY_POOL_SIZE);
-		this.blackboard.ensure();
+		this.blackboard.init();
+		this.modulebox.init();
 		this._build_toy_by_id();
+		return this;
 	}
 
+	/** @returns {void} */
+	start() {}
+
 	stop() {
+		if (!this.mempool.buffer) {
+			return;
+		}
 		const mempool = this.mempool;
 		for (let i = 0; i < mempool.chunk_size; i++) {
 			if (mempool.read_flag(i, VAR_FLAGS_A, VAR_FLAG_ACTIVE)) {
@@ -86,6 +96,12 @@ class Toybox {
 		}
 		this.blackboard.stop();
 		this.mempool.dispose();
+	}
+
+	/** @returns {void} */
+	dispose() {
+		// 2026-06-17, Composer: toybox dispose unwinds start [tbxdsp1]
+		this.stop();
 	}
 
 	/**
@@ -352,3 +368,5 @@ export {
 // 2026-06-14, Composer: toy-scope root gateway playbook [tbxgw1]
 // 2026-06-14, Composer: despawn before init still cascades item [tbxds1]
 // 2026-06-14, Composer: spawn_conf scalar events gated toy.update [tbxhp1]
+// 2026-06-17, Composer: toybox dispose unwinds start [tbxdsp1]
+// 2026-06-17, Composer: toybox pool alloc in init [tbxinit1]

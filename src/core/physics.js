@@ -287,6 +287,14 @@ class Physics {
 	/**
 	 * @returns {Physics}
 	 */
+	init() {
+		// 2026-06-17, Composer: core init drives all children [crcyc5]
+		return this;
+	}
+
+	/**
+	 * @returns {Physics}
+	 */
 	start() {
 		// 2026-06-14, Composer: Oimo world on start floor via toybox [phy3]
 		this.guids = 0;
@@ -308,6 +316,12 @@ class Physics {
 		this.bodylist = {};
 		this.meshlist = {};
 		this.attachopts = {};
+	}
+
+	/** @returns {void} */
+	dispose() {
+		// 2026-06-17, Composer: physics dispose unwinds start [phydsp1]
+		this.stop();
 	}
 
 	/**
@@ -566,3 +580,4 @@ export { Physics, DebugDraw, PhysicsUtils, RigidBodyType, RigidBody };
 // 2026-06-14, Composer: wireframe only line() implemented not triangle [phydb1]
 // 2026-06-14, Composer: Oimo physics DebugDraw PhysicsUtils port [phy1]
 // 2026-06-14, Composer: Oimo world on start floor via toybox [phy3]
+// 2026-06-17, Composer: physics dispose unwinds start [phydsp1]

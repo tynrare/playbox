@@ -44,6 +44,12 @@ class Blackboard {
 		this._started = true;
 	}
 
+	/** @returns {void} */
+	init() {
+		// 2026-06-17, Composer: blackboard ensure renamed init [bbinit1]
+		this.ensure();
+	}
+
 	stop() {
 		if (!this._started) {
 			return;
@@ -294,3 +300,4 @@ export {
 	VAR_FLAG_DISPOSED,
 };
 // 2026-06-14, Composer: blackboard merged chunk pool for modules [bbpl1]
+// 2026-06-17, Composer: blackboard ensure renamed init [bbinit1]

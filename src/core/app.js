@@ -1,5 +1,7 @@
 /** @namespace ty */
 // 2026-06-14, Composer: move app into src/core [a1c3e7]
+// 2026-06-17, Composer: flows step in core drop play.step [appflw1]
+// 2026-06-17, Composer: app stop unwinds play then core [appstp1]
 import Core from "./core.js";
 import Play from "../play.js";
 import logger from "../logger.js";
@@ -38,9 +40,22 @@ class App {
   /**
    * @returns {void}
    */
+  stop() {
+    if (!this.active) {
+      return;
+    }
+    // 2026-06-17, Composer: app stop unwinds play then core [appstp1]
+    this.play.stop();
+    this.core.stop();
+    this.active = false;
+  }
+
+  /**
+   * @returns {void}
+   */
   dispose() {
-    this.core.dispose();
     this.play.dispose();
+    this.core.dispose();
   }
 
   /**
@@ -68,9 +83,6 @@ class App {
     }
 
     this.core.step(dt);
-    if (this.ready) {
-      this.play.step(dt);
-    }
 
     return 0;
   }
@@ -81,3 +93,5 @@ export default App;
 // 2026-06-14, Composer: rename pureplay to playbox [r7n2p4]
 // 2026-06-14, Composer: move app into src/core [a1c3e7]
 // 2026-04-30, Codex 5.3: validate app function JSDoc types [b3f91e]
+// 2026-06-17, Composer: flows step in core drop play.step [appflw1]
+// 2026-06-17, Composer: app stop unwinds play then core [appstp1]

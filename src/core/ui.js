@@ -138,6 +138,14 @@ class Ui {
   }
 
   /**
+   * @returns {this}
+   */
+  init() {
+    // 2026-06-17, Composer: core init drives all children [crcyc5]
+    return this;
+  }
+
+  /**
    * @returns {void}
    */
   _build_elements() {

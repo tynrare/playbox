@@ -1,186 +1,69 @@
 /** @namespace ty */
 // 2026-06-14, Composer: import core from src/core [g7c9e3]
+// 2026-06-17, Composer: play attaches flows splashscreen only [plflw1]
 import Core from "./core/core.js";
-import Settings from "./play/settings.js";
+import DevFlow from "./flows/dev.js";
+import TestFlow from "./flows/test.js";
 
-// 2026-06-14, Composer: one instanced box via draw.model [t3pl1]
 /**
  * @class Play
  * @memberof pb.play
  */
 class Play {
-  /**
-   * @param {Core} core
-   */
-  constructor(core) {
-    this._core = core;
-    this._orbit_time = 0;
-    this._orbit_radius = 2.75;
-    this._orbit_height = 1.35;
-    this._orbit_speed = 0.8;
-    /** @type {number|null} */
-    this._floor_index = null;
-    /** @type {number|null} */
-    this._toy_index = null;
-    this._toy_positions_applied = false;
-    // 2026-06-14, Composer: settings dev_debug_state persistence [stgs1]
-    this.settings = new Settings(core.datawork);
-  }
+	/**
+	 * @param {Core} core
+	 */
+	constructor(core) {
+		this._core = core;
+		/** @type {import("./core/flowbase.js").default[]} */
+		this._flows = [];
+	}
 
-  /**
-   * @returns {Play}
-   */
-  init() {
-    return this;
-  }
+	/**
+	 * @returns {Play}
+	 */
+	init() {
+		return this;
+	}
 
-  splashscreen(visible) {
-    if (visible) {
-      this._core.ui.setstate("ui_loading");
-    } else {
-      this._core.ui.delstate("ui_loading");
-    }
-  }
+	/**
+	 * @param {boolean} visible
+	 * @returns {void}
+	 */
+	splashscreen(visible) {
+		if (visible) {
+			this._core.ui.setstate("ui_loading");
+		} else {
+			this._core.ui.delstate("ui_loading");
+		}
+	}
 
-  /**
-   * @returns {void}
-   */
-  start() {
-    this.splashscreen(false);
-    // 2026-06-14, Composer: floor tex0 via environment floorstyle [plflr1]
-    this._core.scene.environment.floorstyle("floor", 0xffffff);
+	/** @returns {void} */
+	start() {
+		this.splashscreen(false);
+		const dev = new DevFlow(this._core).init();
+		const test = new TestFlow(this._core).init();
+		this._flows.push(dev, test);
+		this._core.flowbus.attach(dev);
+		this._core.flowbus.attach(test);
+	}
 
-    // 2026-06-14, Composer: floor via itembox toy via toybox [tbxbb1]
-    this._floor_index = this._core.itembox.spawn("floor_item");
-    this._toy_index = this._core.toybox.spawn("box_test_toy");
-    this._toy_positions_applied = false;
+	/** @returns {void} */
+	stop() {
+		// 2026-06-17, Composer: play stop detaches tracked flows [plstop1]
+		for (let i = 0; i < this._flows.length; i++) {
+			this._core.flowbus.detach(this._flows[i]);
+		}
+		this._flows.length = 0;
+	}
 
-    // 2026-06-14, Composer: weld 3D and UI test text labels [txtwld1]
-    this.label3d = this._core.scene.text("afont", false);
-    if (this.label3d) {
-      this.label3d.text = "on box";
-      this.label3d.fontsize = 0.12;
-      this.label3d.anchor.set(0.5, 0.5);
-      this.label3d.update();
-    }
-
-    // 2026-06-14, Composer: 3D billboard pingtag sprite above box [sprtst1]
-    this.ping = this._core.scene.makesprite("pingtag", false);
-    if (this.ping) {
-      this.ping.updateMatrix();
-    }
-
-    this._sync_toy_decor();
-
-    // 2026-06-14, Composer: ui_dev state shows dev panel elements [uivis1]
-    this._core.ui.setstate("ui_dev");
-    this._core.ui.setstate("ui_tests_vis");
-
-    // 2026-06-14, Composer: settings dev_debug_state persistence [stgs1]
-    this.settings.start(this._core);
-
-    // 2026-06-14, Composer: ui.click test via eventsbus [uiclk1]
-    this._ui_click_id = this._core.eventsbus.on("ui.click", ({ key, event }) => {
-      if (event === "debug_button") {
-        this.settings.dev_debug_state = !this.settings.dev_debug_state;
-        this.settings.apply(this._core);
-        return;
-      }
-      console.log("ui click", key, event);
-      this._core.toybox.despawn(this._toy_index);
-    });
-  }
-
-  /**
-   * @returns {void}
-   */
-  stop() {
-    if (this._ui_click_id != null) {
-      this._core.eventsbus.off(this._ui_click_id);
-      this._ui_click_id = null;
-    }
-  }
-
-  /**
-   * @param {number} dt
-   * @returns {void}
-   */
-  step(dt) {
-    // 2026-06-14, Composer: index-based toy spawn despawn [tbxdw1]
-    this._apply_toy_positions();
-    this._update_camera_orbit(dt);
-    this._sync_toy_decor();
-  }
-
-  /**
-   * @returns {void}
-   */
-  _apply_toy_positions() {
-    if (this._toy_positions_applied || this._toy_index == null) {
-      return;
-    }
-    const item_index = this._core.toybox.get_item_index(this._toy_index);
-    const entity = this._core.scene.get_itementity(item_index);
-    if (!entity) {
-      return;
-    }
-    if (this._floor_index != null) {
-      this._core.scene.set_itemposition(this._floor_index, 0, -0.05, 0);
-    }
-    this._core.scene.set_itemposition(item_index, 0, 2, -1.25);
-    this._toy_positions_applied = true;
-  }
-
-  /**
-   * @returns {void}
-   */
-  _sync_toy_decor() {
-    const item_index = this._core.toybox.get_item_index(this._toy_index);
-    const entity = this._core.scene.get_itementity(item_index);
-    if (!entity) {
-      return;
-    }
-
-    const { x, y, z } = entity.position;
-    if (this.label3d) {
-      this.label3d.position.set(x, y + 0.65, z);
-      this.label3d.update();
-    }
-    if (this.ping) {
-      this.ping.position.set(x, y + 1.1, z);
-      this.ping.updateMatrix();
-    }
-  }
-
-  /**
-   * @param {number} dt
-   * @returns {void}
-   */
-  _update_camera_orbit(dt) {
-    const camera = this._core?.render?.camera;
-    if (!camera) {
-      return;
-    }
-
-    this._orbit_time += dt * this._orbit_speed;
-    const x = Math.cos(this._orbit_time) * this._orbit_radius;
-    const z = Math.sin(this._orbit_time) * this._orbit_radius;
-    camera.position.set(x, this._orbit_height, z);
-    camera.lookAt(0, 0, 0);
-  }
+	/** @returns {void} */
+	dispose() {
+		this.stop();
+	}
 }
 
 export default Play;
-// 2026-06-14, Composer: ui_dev state shows dev panel elements [uivis1]
-// 2026-06-14, Composer: settings dev_debug_state persistence [stgs1]
-// 2026-06-14, Composer: floor collision via mesh-less floor_item [flit1]
-// 2026-06-14, Composer: floor via itembox toy via toybox [tbxbb1]
-// 2026-06-14, Composer: floor tex0 via environment floorstyle [plflr1]
-// 2026-06-14, Composer: db text label via scene.text in Ui [uidb6]
-// 2026-06-14, Composer: ui.click test via eventsbus [uiclk1]
-// 2026-06-14, Composer: weld 3D and UI test text labels [txtwld1]
-// 2026-06-14, Composer: Scene facade for model and text [scnfac1]
-// 2026-06-14, Composer: one instanced box via draw.model [t3pl1]
-// 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]
 // 2026-06-14, Composer: import core from src/core [g7c9e3]
-// 2026-06-14, Composer: index-based toy spawn despawn [tbxdw1]
+// 2026-06-17, Composer: play attaches flows splashscreen only [plflw1]
+// 2026-06-17, Composer: play stop detaches tracked flows [plstop1]

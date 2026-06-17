@@ -55,6 +55,14 @@ class Scene {
   }
 
   /**
+   * @returns {this}
+   */
+  init() {
+    // 2026-06-17, Composer: core init drives all children [crcyc5]
+    return this;
+  }
+
+  /**
    * @returns {void}
    */
   start() {
@@ -85,6 +93,14 @@ class Scene {
     }
     this.environment.stop();
     this._clear_body_pool();
+  }
+
+  /**
+   * @returns {void}
+   */
+  dispose() {
+    // 2026-06-17, Composer: dispose scene physics pools on teardown [crcyc4]
+    this.stop();
   }
 
   // 2026-06-14, Composer: expose draw db getters for Ui [scnui1]
@@ -585,3 +601,4 @@ export default Scene;
 // 2026-06-14, Composer: item init dispose via eventbus listeners [itmbx1]
 // 2026-06-14, Composer: item events pass index scalar [itmhp1]
 // 2026-06-14, Composer: snake_case scene method names [snkcs1]
+// 2026-06-17, Composer: dispose scene physics pools on teardown [crcyc4]

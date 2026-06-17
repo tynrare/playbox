@@ -34,9 +34,14 @@ class Modulebox {
 		this._blackboard = blackboard;
 		this._toy_mempool = toy_mempool;
 		this.lifespan = new Lifespan(VAR_MFLAG_LIFESPAN, toy_mempool);
-		this.lifespan.init(blackboard);
 		/** @type {Array<import("../toys/module.js").default>} */
 		this.modulelist = [this.lifespan];
+	}
+
+	/** @returns {void} */
+	init() {
+		// 2026-06-17, Composer: modulebox init defers lifespan init [mdlinit1]
+		this.lifespan.init(this._blackboard);
 	}
 
 	/**
@@ -258,3 +263,4 @@ class Modulebox {
 export default Modulebox;
 export { VAR_FLAGS_MODULES, VAR_MFLAG_LIFESPAN, modulenames };
 // 2026-06-14, Composer: modulebox storage via blackboard merged pool [mdlbx1]
+// 2026-06-17, Composer: modulebox init defers lifespan init [mdlinit1]

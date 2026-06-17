@@ -32,12 +32,21 @@ class Itembox {
 		this._item_by_key = {};
 	}
 
-	start() {
+	/** @returns {this} */
+	init() {
+		// 2026-06-17, Composer: itembox pool alloc in init [itminit1]
 		this.mempool.init(ITEM_ENTITY_BYTES * 2, ITEM_POOL_SIZE);
 		this._build_item_by_id();
+		return this;
 	}
 
+	/** @returns {void} */
+	start() {}
+
 	stop() {
+		if (!this.mempool.buffer) {
+			return;
+		}
 		const mempool = this.mempool;
 		for (let i = 0; i < mempool.chunk_size; i++) {
 			if (mempool.read_flag(i, VAR_FLAGS_A, VAR_FLAG_ACTIVE)) {
@@ -45,6 +54,12 @@ class Itembox {
 			}
 		}
 		this.mempool.dispose();
+	}
+
+	/** @returns {void} */
+	dispose() {
+		// 2026-06-17, Composer: itembox dispose unwinds start [itmdsp1]
+		this.stop();
 	}
 
 	/**
@@ -234,3 +249,5 @@ export {
 // 2026-06-14, Composer: itembox mempool data worker eventbus [itmbx1]
 // 2026-06-14, Composer: despawn before init advances to DISPOSED_L2 [itmds1]
 // 2026-06-14, Composer: spawn_conf scalar item events no item.update [itmhp1]
+// 2026-06-17, Composer: itembox dispose unwinds start [itmdsp1]
+// 2026-06-17, Composer: itembox pool alloc in init [itminit1]

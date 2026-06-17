@@ -1,5 +1,6 @@
 /** @namespace ty */
 // 2026-06-14, Composer: cache db lang strings by locale key [lng1]
+// 2026-06-17, Composer: lang dispose unwinds init [lngdsp1]
 import logger from "../logger.js";
 
 /**
@@ -60,7 +61,16 @@ class Lang {
   stop() {
     this._cache.clear();
   }
+
+  /**
+   * @returns {void}
+   */
+  dispose() {
+    // 2026-06-17, Composer: lang dispose unwinds init [lngdsp1]
+    this.stop();
+  }
 }
 
 export default Lang;
 // 2026-06-14, Composer: cache db lang strings by locale key [lng1]
+// 2026-06-17, Composer: lang dispose unwinds init [lngdsp1]

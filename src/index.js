@@ -1,4 +1,5 @@
 // 2026-06-14, Composer: import app from src/core [f6b8d2]
+// 2026-06-17, Composer: await async start before rAF loop [idxaw1]
 import App from "./core/app.js";
 import logger from "./logger.js";
 
@@ -30,12 +31,14 @@ function loop(app) {
   });
 }
 
-function main() {
+async function main() {
   const element = document.getElementById("app");
   element?.classList.add("active");
 
   const app = new App();
-  app.init().start();
+  app.init();
+  // 2026-06-17, Composer: await async start before rAF loop [idxaw1]
+  await app.start();
 
   element?.classList.add("ready");
 
@@ -44,3 +47,4 @@ function main() {
 
 window.main = main;
 // 2026-06-14, Composer: import app from src/core [f6b8d2]
+// 2026-06-17, Composer: await async start before rAF loop [idxaw1]

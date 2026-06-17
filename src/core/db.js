@@ -1,4 +1,6 @@
 // 2026-06-14, Composer: move db into src/core [c3e5a9]
+// 2026-06-17, Composer: defer DbList DOM bind to init [dblbind1]
+// 2026-06-17, Composer: rename db start to init phase [dbinit1]
 import { call } from "three/src/nodes/code/FunctionCallNode.js";
 import logger from "../logger.js";
 
@@ -7,7 +9,7 @@ import logger from "../logger.js";
  * @param {HTMLElement} container .
  */
 function DbEntry(container, dbkey) {
-	this.start = start;
+	this.init = init;
 	this.stop = stop;
 	/** @type {HTMLElement} */
 	const list = container.querySelector(dbkey);
@@ -41,7 +43,7 @@ function DbEntry(container, dbkey) {
 		return conf;
 	}
 
-	function start() {
+	function init() {
 		parse();
 	}
 
@@ -121,16 +123,30 @@ function DbEntry(container, dbkey) {
 /**
  * @brief holds bunch of db's
  * @constructor
- * @param {HTMLElement} container .
- * @param {string} dbkey .
  */
-function DbList(container, dbkey) {
-	const db = container.querySelector(dbkey);
-	const dblist = db.querySelectorAll("db[name]");
+function DbList() {
 	const list = {};
 	const scopes = {};
+	/** @type {HTMLElement|null} */
+	let db = null;
+	/** @type {NodeListOf<Element>|null} */
+	let dblist = null;
 
-	function start() {
+	/**
+	 * @param {HTMLElement} container
+	 * @param {string} dbkey
+	 * @returns {void}
+	 */
+	this.bind = (container, dbkey) => {
+		db = container.querySelector(dbkey);
+		dblist = db.querySelectorAll("db[name]");
+	};
+
+	function init() {
+		if (!dblist) {
+			logger.warn("DbList::init called before bind");
+			return;
+		}
 		for (let i = 0; i < dblist.length; i++) {
 			const d = dblist[i];
 			const id = d.id;
@@ -141,7 +157,7 @@ function DbList(container, dbkey) {
 			const name = d.getAttribute("name");
 			const scope = d.getAttribute("scope");
 			const entry = new DbEntry(db, `db#${id}`);
-			entry.start();
+			entry.init();
 			list[name] = entry;
 			if (scope) {
 				if (!scopes[scope]) {
@@ -187,7 +203,7 @@ function DbList(container, dbkey) {
 		return list;
 	}
 
-	this.start = start;
+	this.init = init;
 	this.stop = stop;
 }
 
@@ -195,3 +211,5 @@ export default DbList;
 
 export { DbEntry, DbList };
 // 2026-06-14, Composer: move db into src/core [c3e5a9]
+// 2026-06-17, Composer: defer DbList DOM bind to init [dblbind1]
+// 2026-06-17, Composer: rename db start to init phase [dbinit1]
