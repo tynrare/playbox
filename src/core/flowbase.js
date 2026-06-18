@@ -28,9 +28,10 @@ class FlowBase {
 
 	/**
 	 * @param {number} dt
+	 * @param {number} _rdt
 	 * @returns {void}
 	 */
-	step(_dt) {}
+	step(_dt, _rdt) {}
 
 	/** @returns {void} */
 	stop() {}

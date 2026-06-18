@@ -66,4 +66,16 @@ export function clamp(min, max, v) {
   return Math.max(min, Math.min(max, v));
 }
 
+/**
+ * @param {number} a
+ * @param {number} b
+ * @param {number} t
+ * @returns {number}
+ */
+export function lerp(a, b, t) {
+  // 2026-06-18, Composer: lerp for loop smoothed dt [lrpdt1]
+  return a + t * (b - a);
+}
+
 // 2026-06-14, Composer: replace glmatrix with THREE math types [thmth1]
+// 2026-06-18, Composer: lerp for loop smoothed dt [lrpdt1]

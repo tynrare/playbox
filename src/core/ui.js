@@ -890,7 +890,7 @@ class Ui {
    * @param {number} dt
    * @returns {void}
    */
-  step(dt) {
+  step(dt, _rdt) {
     for (const k in this.elements) {
       const element = this.elements[k];
       if (element.kind === "text") {
@@ -960,9 +960,20 @@ class Ui {
       return null;
     }
 
-    const ww = this._scene.draw.width;
-    const wh = this._scene.draw.height;
-    _pointer.set((x / ww) * 2 - 1, -(y / wh) * 2 + 1);
+    const canvas = this._scene.draw._render?.canvas;
+    if (!canvas) {
+      return null;
+    }
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return null;
+    }
+
+    // 2026-06-18, Composer: raycast NDC from css canvas rect [uiray1]
+    _pointer.set(
+      ((x - rect.left) / rect.width) * 2 - 1,
+      -((y - rect.top) / rect.height) * 2 + 1,
+    );
     _raycaster.setFromCamera(_pointer, cameraui);
 
     this._raycache.length = 0;
@@ -1047,6 +1058,7 @@ export default Ui;
 // 2026-06-14, Composer: default pill uses shader defaults, second pill tuned [uidb2]
 // 2026-06-14, Composer: color mat, emissive colorb light [rbmix1]
 // 2026-06-14, Composer: scale corner by panel aspect like booling [uicrn1]
+// 2026-06-18, Composer: raycast NDC from css canvas rect [uiray1]
 // 2026-06-14, Composer: corner db 0-1 not layout pct [uicrn2]
 // 2026-06-14, Composer: minimal panel UI from ui_tests db [uicls1]
 // 2026-06-14, Composer: sync sprite opacity uniform on state [uiop1]

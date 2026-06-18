@@ -328,7 +328,7 @@ class Physics {
 	 * @param {number} dt seconds
 	 * @returns {void}
 	 */
-	step(dt) {
+	step(dt, _rdt) {
 		if (!this.world) {
 			return;
 		}

@@ -4,9 +4,9 @@ import Mempool, { VAR_FLAGS_A, VAR_FLAG_ACTIVE } from "../core/mempool.js";
 
 const BB_INVALID = 0xffff;
 const BB_KEY_MODULE = 0;
-const BB_SLOT_BASE = 2;
+// 2026-06-18, Composer: bb root slots after mempool header fields [bbfix1]
+const BB_SLOT_BASE = 3;
 const BB_MAX_KEYS = 8;
-const VAR_BB_CHUNK_KEY = 1;
 const BB_CHUNK_BYTES = 32;
 const BB_POOL_SIZE = 2048;
 const VAR_MTBL_FLAGS = 3;
@@ -66,7 +66,13 @@ class Blackboard {
 			return BB_INVALID;
 		}
 		const index = this._bb_pool.allocate();
-		return index ?? BB_INVALID;
+		if (index == null) {
+			return BB_INVALID;
+		}
+		// 2026-06-18, Composer: zero recycled chunk payload on spawn [bbclr1]
+		this._clear_chunk_payload(index);
+		this._bb_pool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_ACTIVE, true);
+		return index;
 	}
 
 	/**
@@ -78,6 +84,19 @@ class Blackboard {
 			return;
 		}
 		this._bb_pool.free(chunk_index);
+		// 2026-06-18, Composer: zero recycled chunk payload on free [bbclr1]
+		this._clear_chunk_payload(chunk_index);
+	}
+
+	/**
+	 * @param {number} chunk_index
+	 * @returns {void}
+	 */
+	_clear_chunk_payload(chunk_index) {
+		const pool = this._bb_pool;
+		for (let f = 2; f < pool.element_uint16size; f++) {
+			pool.write_ui16(chunk_index, f, 0);
+		}
 	}
 
 	/**
@@ -124,7 +143,6 @@ class Blackboard {
 		if (child === BB_INVALID) {
 			return BB_INVALID;
 		}
-		pool.write_ui16(child, VAR_BB_CHUNK_KEY, key_index);
 		pool.write_ui16(root, slot_field, child);
 		return child;
 	}
@@ -301,3 +319,5 @@ export {
 };
 // 2026-06-14, Composer: blackboard merged chunk pool for modules [bbpl1]
 // 2026-06-17, Composer: blackboard ensure renamed init [bbinit1]
+// 2026-06-18, Composer: bb root slots after mempool header fields [bbfix1]
+// 2026-06-18, Composer: zero recycled chunk payload on spawn/free [bbclr1]

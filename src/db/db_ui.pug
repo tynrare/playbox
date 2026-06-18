@@ -7,6 +7,13 @@
 //- 2026-06-17, Composer: root dev menu test nav ui elements [uinav1]
 //- 2026-06-17, Composer: menu btn y high is screen top [uinav2]
 //- 2026-06-17, Composer: each/in loops for repeated menu buttons [uinav3]
+//- 2026-06-18, Composer: root menu settings button label [uinav7]
+//- 2026-06-18, Composer: settings submenu ui elements [uinav8]
+//- 2026-06-18, Composer: dev menu back button label [uinav9]
+//- 2026-06-18, Composer: settings menu quality button label [uinav10]
+//- 2026-06-18, Composer: test close cross sprite icon [uinav11]
+//- 2026-06-18, Composer: settings shadows tilt shift ao buttons [uinav12]
+//- 2026-06-18, Composer: settings pixelate postprocess button [uinav13]
 - var menu_btn_indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 db#db_pb_ui_root_elements(name="ui_root_elements" scope="ui_elements")
@@ -14,7 +21,25 @@ db#db_pb_ui_root_elements(name="ui_root_elements" scope="ui_elements")
         - var btn_name = "root_btn_" + val
         - var label_name = "root_btn_" + val + "_label"
         - var btn_y = 84 - val * 8
-        - var btn_label = val === 0 ? "Dev" : "-"
+        //- 2026-06-18, Composer: root menu settings button label [uinav7]
+        - var btn_label = val === 0 ? "Dev" : val === 1 ? "Settings" : "-"
+        d(name=btn_name type="panel" interactive="true" event=btn_name
+            x=50 y=btn_y w=40 h=7 scale=1
+            color="0x0" colorb="0xffffff" glow="1" opacity="1" corner="0.3")
+        d(name=label_name type="text" font="afont" pivot=btn_name
+            text=btn_label fontsize="4" color="0xffffff" colorb="0xffffff" glow="1" opacity="1"
+            anchorx=0.5 anchory=0.5)
+
+db#db_pb_ui_settings_menu_elements(name="ui_settings_menu_elements" scope="ui_elements")
+    //- 2026-06-18, Composer: settings submenu ui elements [uinav8]
+    each val in menu_btn_indices
+        - var btn_name = "settings_btn_" + val
+        - var label_name = "settings_btn_" + val + "_label"
+        - var btn_y = 84 - val * 8
+        //- 2026-06-18, Composer: settings menu quality button label [uinav10]
+        //- 2026-06-18, Composer: settings shadows tilt shift ao buttons [uinav12]
+        //- 2026-06-18, Composer: settings pixelate postprocess button [uinav13]
+        - var btn_label = val === 0 ? "Back" : val === 1 ? "Quality" : val === 2 ? "Shadows" : val === 3 ? "Tilt Shift" : val === 4 ? "AO" : val === 5 ? "Pixelate" : "-"
         d(name=btn_name type="panel" interactive="true" event=btn_name
             x=50 y=btn_y w=40 h=7 scale=1
             color="0x0" colorb="0xffffff" glow="1" opacity="1" corner="0.3")
@@ -27,7 +52,8 @@ db#db_pb_ui_dev_menu_elements(name="ui_dev_menu_elements" scope="ui_elements")
         - var btn_name = "dev_btn_" + val
         - var label_name = "dev_btn_" + val + "_label"
         - var btn_y = 84 - val * 8
-        - var btn_label = val === 0 ? "Test" : "-"
+        //- 2026-06-18, Composer: dev menu back button label [uinav9]
+        - var btn_label = val === 0 ? "Back" : val === 1 ? "Test" : "-"
         d(name=btn_name type="panel" interactive="true" event=btn_name
             x=50 y=btn_y w=40 h=7 scale=1
             color="0x0" colorb="0xffffff" glow="1" opacity="1" corner="0.3")
@@ -40,10 +66,11 @@ db#db_pb_ui_test_elements(name="ui_test_elements" scope="ui_elements")
     d(name="test_close" type="panel" interactive="true" event="test_close"
         x=100 y=100 rx=-4 ry=-4 w=6 h=6 scale=1
         color="0xff0000" colorb="0xff0000" glow="1" opacity="1" corner="0.3")
-    d(name="test_close_label" type="text" font="afont" pivot="test_close"
-        text="X" fontsize="4"
-        color="0xffffff" colorb="0xffffff" glow="1" opacity="1"
-        anchorx=0.5 anchory=0.5)
+    //- 2026-06-18, Composer: test close cross sprite icon [uinav11]
+    d(name="test_close_icon" type="sprite" sprite="cross"
+        pivot="test_close"
+        z=1 anchorx=0.5 anchory=0.5
+        size="4" opacity="1" colorb="0xffffff" glow="1")
 
 db#db_pb_ui_test(name="ui_tests" scope="ui_elements")
     d(name="button_test" type="panel" interactive="true" event="button_test"
@@ -93,6 +120,12 @@ db#db_pb_ui_root_vis(name="ui_root_vis" scope="ui_states")
         - root_vis_refs.push("root_btn_" + val, "root_btn_" + val + "_label")
     d(name="root_elements" element="[" + root_vis_refs.join(", ") + "]")
 
+db#db_pb_ui_settings_menu_vis(name="ui_settings_menu_vis" scope="ui_states")
+    - var settings_vis_refs = []
+    each val in menu_btn_indices
+        - settings_vis_refs.push("settings_btn_" + val, "settings_btn_" + val + "_label")
+    d(name="settings_menu_elements" element="[" + settings_vis_refs.join(", ") + "]")
+
 db#db_pb_ui_dev_menu_vis(name="ui_dev_menu_vis" scope="ui_states")
     - var dev_vis_refs = []
     each val in menu_btn_indices
@@ -100,7 +133,7 @@ db#db_pb_ui_dev_menu_vis(name="ui_dev_menu_vis" scope="ui_states")
     d(name="dev_menu_elements" element="[" + dev_vis_refs.join(", ") + "]")
 
 db#db_pb_ui_test_vis(name="ui_test_vis" scope="ui_states")
-    d(name="test_close_elements" element="[test_close, test_close_label]")
+    d(name="test_close_elements" element="[test_close, test_close_icon]")
 
 db#db_pb_ui_tests_vis(name="ui_tests_vis" scope="ui_states")
     d(name="tests_elements" element="[button_test, button_test_icon, button_test_label]")
@@ -133,3 +166,10 @@ db#db_pb_ui_debug_enabled(name="ui_debug_enabled" scope="ui_states")
 //- 2026-06-17, Composer: menu btn y high is screen top [uinav2]
 //- 2026-06-17, Composer: test flow close and ok ui elements [uinav6]
 //- 2026-06-17, Composer: each/in loops for repeated menu buttons [uinav3]
+//- 2026-06-18, Composer: root menu settings button label [uinav7]
+//- 2026-06-18, Composer: settings submenu ui elements [uinav8]
+//- 2026-06-18, Composer: dev menu back button label [uinav9]
+//- 2026-06-18, Composer: settings menu quality button label [uinav10]
+//- 2026-06-18, Composer: test close cross sprite icon [uinav11]
+//- 2026-06-18, Composer: settings shadows tilt shift ao buttons [uinav12]
+//- 2026-06-18, Composer: settings pixelate postprocess button [uinav13]

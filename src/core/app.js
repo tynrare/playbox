@@ -3,6 +3,7 @@
 // 2026-06-17, Composer: flows step in core drop play.step [appflw1]
 // 2026-06-17, Composer: app stop unwinds play then core [appstp1]
 // 2026-06-17, Composer: boot canvas after preload l1 [ldbt1]
+// 2026-06-18, Composer: step passes lerped dt and real dt [appdt1]
 import Core from "./core.js";
 import Play from "../play.js";
 import logger from "../logger.js";
@@ -84,14 +85,15 @@ class App {
 
   /**
    * @param {number} dt
+   * @param {number} rdt
    * @returns {number}
    */
-  step(dt) {
+  step(dt, rdt) {
     if (!this.active) {
       return 1;
     }
 
-    this.core.step(dt);
+    this.core.step(dt, rdt);
 
     return 0;
   }
@@ -105,3 +107,4 @@ export default App;
 // 2026-06-17, Composer: flows step in core drop play.step [appflw1]
 // 2026-06-17, Composer: app stop unwinds play then core [appstp1]
 // 2026-06-17, Composer: boot canvas after preload l1 [ldbt1]
+// 2026-06-18, Composer: step passes lerped dt and real dt [appdt1]

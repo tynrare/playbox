@@ -1,5 +1,6 @@
 /** @namespace ty */
 // 2026-06-17, Composer: dev menu flow lazy test swap [flwdmn1]
+// 2026-06-18, Composer: dev menu back button to root [flwdmn2]
 import FlowBase from "../core/flowbase.js";
 import TestFlow from "./test.js";
 
@@ -29,9 +30,15 @@ class DevMenuFlow extends FlowBase {
 	/** @returns {void} */
 	start() {
 		// 2026-06-17, Composer: dev menu flow lazy test swap [flwdmn1]
+		// 2026-06-18, Composer: dev menu back button to root [flwdmn2]
 		this._core.ui.setstate("ui_dev_menu_vis");
 		this._ui_click_id = this._core.eventsbus.on("ui.click", ({ event }) => {
 			if (event === "dev_btn_0") {
+				this._return_menu();
+				return;
+			}
+			// 2026-06-18, Composer: dev menu back button to root [flwdmn2]
+			if (event === "dev_btn_1") {
 				this._open_test();
 			}
 		});
@@ -70,7 +77,14 @@ class DevMenuFlow extends FlowBase {
 		this._core.flowbus.detach(this);
 		this._core.flowbus.attach(next);
 	}
+
+	/** @returns {void} */
+	_return_menu() {
+		this._core.flowbus.detach(this);
+		this._core.flowbus.attach(this._menu);
+	}
 }
 
 export default DevMenuFlow;
 // 2026-06-17, Composer: dev menu flow lazy test swap [flwdmn1]
+// 2026-06-18, Composer: dev menu back button to root [flwdmn2]

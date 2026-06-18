@@ -86,9 +86,10 @@ class TestFlow extends FlowBase {
 
 	/**
 	 * @param {number} dt
+	 * @param {number} _rdt
 	 * @returns {void}
 	 */
-	step(dt) {
+	step(dt, _rdt) {
 		this._apply_toy_positions();
 		this._update_camera_orbit(dt);
 		this._sync_toy_decor();

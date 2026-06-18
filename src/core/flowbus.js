@@ -137,21 +137,14 @@ class FlowBus {
 
 
 	/**
-
 	 * @param {number} dt
-
+	 * @param {number} _rdt
 	 * @returns {void}
-
 	 */
-
-	step(dt) {
-
+	step(dt, _rdt) {
 		for (let i = 0; i < this._flows.length; i++) {
-
-			this._flows[i].step(dt);
-
+			this._flows[i].step(dt, _rdt);
 		}
-
 	}
 
 

@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { N8AOPass } from "../lib/N8AO.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { RenderPixelatedPass } from "three/addons/postprocessing/RenderPixelatedPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
@@ -13,6 +14,7 @@ import { VerticalTiltShiftShader } from "three/addons/shaders/VerticalTiltShiftS
 import Drawcore from "../render/drawcore.js";
 
 const BLOOM_FACTOR = 0.9;
+const PIXELATE_SIZE = 6;
 
 // 2026-06-14, Composer: port RenderBoolingSandsphere into Draw [drwprt1]
 /**
@@ -32,8 +34,9 @@ class Draw {
     this._assets = assets;
     this.active = false;
     this.scale = 1;
-    this._width = 1;
-    this._height = 1;
+    this._window_w = 1;
+    this._window_h = 1;
+    this._size_cache = new THREE.Vector2();
 
     /** @type {Drawcore|null} */
     this.core = null;
@@ -47,6 +50,9 @@ class Draw {
     this.composer = null;
     /** @type {RenderPass|null} */
     this.scene_pass = null;
+    /** @type {RenderPixelatedPass|null} */
+    this.pixelated_pass = null;
+    this._pixelateEnabled = false;
     /** @type {RenderPass|null} */
     this.ui_pass = null;
     /** @type {N8AOPass|null} */
@@ -72,14 +78,14 @@ class Draw {
    * @returns {number}
    */
   get width() {
-    return this._width * this.scale;
+    return this._window_w;
   }
 
   /**
    * @returns {number}
    */
   get height() {
-    return this._height * this.scale;
+    return this._window_h;
   }
 
   /**
@@ -130,6 +136,14 @@ class Draw {
 
     const composer = new EffectComposer(render.renderer);
     const renderPass1 = new RenderPass(render.scene, render.camera);
+    // 2026-06-18, Composer: RenderPixelatedPass toggles with scene pass [drwpx1]
+    const pixelatedPass = new RenderPixelatedPass(
+      PIXELATE_SIZE,
+      render.scene,
+      render.camera,
+      { normalEdgeStrength: 0.3, depthEdgeStrength: 0.4 },
+    );
+    pixelatedPass.enabled = false;
     const renderPass2 = new RenderPass(this.sceneui, this.cameraui);
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(this.width * 0.5, this.height * 0.5),
@@ -171,6 +185,7 @@ class Draw {
     renderPass2.clear = false;
     renderPass2.clearDepth = true;
 
+    composer.addPass(pixelatedPass);
     composer.addPass(renderPass1);
     composer.addPass(n8aopass);
     composer.addPass(tiltShiftPassH);
@@ -181,6 +196,7 @@ class Draw {
 
     this.composer = composer;
     this.scene_pass = renderPass1;
+    this.pixelated_pass = pixelatedPass;
     this.ui_pass = renderPass2;
     this._bloomPass = bloomPass;
     this.n8aopass = n8aopass;
@@ -210,62 +226,88 @@ class Draw {
     this.tiltShiftPassH = null;
     this.tiltShiftPassV = null;
     this.scene_pass = null;
+    this.pixelated_pass = null;
     this.ui_pass = null;
   }
 
   /**
    * @returns {void}
    */
-  equalizer() {
-    const rw = document.body.clientWidth;
-    const rh = document.body.clientHeight;
+  _equalizer_render() {
     const render = this._render;
-
-    if (rw != this._width || rh != this._height) {
-      this._width = rw;
-      this._height = rh;
-
-      if (render.renderer && render.camera) {
-        render.renderer.setSize(this.width, this.height);
-        render.camera.aspect = this.width / this.height;
-        render.camera.updateProjectionMatrix();
-      }
-
-      // 2026-06-14, Composer: cameraui resize in equalizer [drweq1]
-      const hw = this.width * 0.5;
-      const hh = this.height * 0.5;
-      if (this.cameraui) {
-        this.cameraui.left = -hw;
-        this.cameraui.right = hw;
-        this.cameraui.top = hh;
-        this.cameraui.bottom = -hh;
-        this.cameraui.updateProjectionMatrix();
-      }
-
-      this.composer?.setSize(this.width, this.height);
-      this._bloomPass?.setSize(hw, hh);
-      if (this.tiltShiftPassH?.uniforms?.h) {
-        this.tiltShiftPassH.uniforms.h.value = 1 / Math.max(1, this.width);
-      }
-      if (this.tiltShiftPassV?.uniforms?.v) {
-        this.tiltShiftPassV.uniforms.v.value = 1 / Math.max(1, this.height);
-      }
+    const renderer = render.renderer;
+    if (!renderer) {
+      return;
     }
+
+    // 2026-06-18, Composer: booling render equalizer scaled buffer [drwsc3]
+    const w = window.innerWidth * this.scale;
+    const h = window.innerHeight * this.scale;
+    const size = renderer.getSize(this._size_cache);
+    if (size.width === w && size.height === h) {
+      return;
+    }
+
+    this._window_w = w;
+    this._window_h = h;
+    renderer.setSize(w, h, false);
+    if (render.camera) {
+      render.camera.aspect = w / h;
+      render.camera.updateProjectionMatrix();
+    }
+  }
+
+  /**
+   * @returns {void}
+   */
+  _sync_composer_ui() {
+    const hw = this._window_w * 0.5;
+    const hh = this._window_h * 0.5;
+    if (!this.cameraui || (this.cameraui.right === hw && this.cameraui.top === hh)) {
+      return;
+    }
+
+    // 2026-06-18, Composer: sandsphere cameraui composer resize [drwsc3]
+    this.cameraui.left = -hw;
+    this.cameraui.right = hw;
+    this.cameraui.top = hh;
+    this.cameraui.bottom = -hh;
+    this.cameraui.updateProjectionMatrix();
+
+    this.composer?.setSize(this._window_w, this._window_h);
+    this._bloomPass?.setSize(hw, hh);
+    if (this.tiltShiftPassH?.uniforms?.h) {
+      this.tiltShiftPassH.uniforms.h.value = 1 / Math.max(1, this._window_w);
+    }
+    if (this.tiltShiftPassV?.uniforms?.v) {
+      this.tiltShiftPassV.uniforms.v.value = 1 / Math.max(1, this._window_h);
+    }
+  }
+
+  /**
+   * @returns {void}
+   */
+  equalizer() {
+    this._equalizer_render();
+    this._sync_composer_ui();
   }
 
   /**
    * @param {number} dt
    * @returns {void}
    */
-  step(dt) {
+  step(dt, _rdt) {
     if (!this.active || !this.composer) {
       return;
     }
 
-    this.equalizer();
+    this._equalizer_render();
+    this._sync_composer_ui();
 
-    if (this.ui_pass && this.scene_pass) {
-      this.ui_pass.clear = !this.scene_pass.enabled;
+    if (this.ui_pass && (this.scene_pass || this.pixelated_pass)) {
+      this.ui_pass.clear = !(
+        this.scene_pass?.enabled || this.pixelated_pass?.enabled
+      );
     }
 
     if (
@@ -304,6 +346,21 @@ class Draw {
   }
 
   /**
+   * @param {number} scale
+   * @returns {void}
+   */
+  set_render_scale(scale) {
+    // 2026-06-18, Composer: booling render equalizer scaled buffer [drwsc3]
+    const next = Number(scale);
+    if (!Number.isFinite(next) || next <= 0) {
+      return;
+    }
+    this.scale = next;
+    this._equalizer_render();
+    this._sync_composer_ui();
+  }
+
+  /**
    * @param {boolean} enabled
    * @returns {void}
    */
@@ -335,9 +392,26 @@ class Draw {
   set_tiltshift_distance(distance) {
     this._tiltShiftDistance = Math.max(0, Number(distance) || 0);
   }
+
+  /**
+   * @param {boolean} enabled
+   * @returns {void}
+   */
+  set_pixelate_enabled(enabled) {
+    // 2026-06-18, Composer: RenderPixelatedPass toggles with scene pass [drwpx1]
+    this._pixelateEnabled = !!enabled;
+    if (this.scene_pass) {
+      this.scene_pass.enabled = !this._pixelateEnabled;
+    }
+    if (this.pixelated_pass) {
+      this.pixelated_pass.enabled = this._pixelateEnabled;
+    }
+  }
 }
 
 export default Draw;
 // 2026-06-15, Composer: wire N8AOPass from src/lib [n8aolib]
 // 2026-06-14, Composer: cameraui resize in equalizer [drweq1]
+// 2026-06-18, Composer: booling render equalizer scaled buffer [drwsc3]
 // 2026-06-14, Composer: port RenderBoolingSandsphere into Draw [drwprt1]
+// 2026-06-18, Composer: RenderPixelatedPass toggles with scene pass [drwpx1]

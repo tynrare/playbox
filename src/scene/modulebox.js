@@ -227,13 +227,12 @@ class Modulebox {
 		if (memtable_active || moduleactive) {
 			moduleindex = this._blackboard.read(index, BB_KEY_MODULE, modulevar);
 			const module = this.modulelist[modulei];
-			if (
-				!this._blackboard.read_chunk_flag(
-					moduleindex,
-					VAR_FLAGS_A,
-					VAR_FLAG_INITIALIZED,
-				)
-			) {
+			const chunkInit = this._blackboard.read_chunk_flag(
+				moduleindex,
+				VAR_FLAGS_A,
+				VAR_FLAG_INITIALIZED,
+			);
+			if (!chunkInit) {
 				module.init_module(index, moduleindex);
 				this._blackboard.write_chunk_flag(
 					moduleindex,

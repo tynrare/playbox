@@ -13,14 +13,13 @@ db#db_pb_files(name="files")
 db#db_pb_fonts(name="fonts")
    d(name="afont" id="1" source="afont" config="afont-config" msdf="true" boldness="0.2")
 
+//- 2026-06-18, Composer: collapse models_instanced into models [mdcol1]
 db#db_pb_models(name="models")
-   d(name="box_timber"            instanceof="box_instanced"              texture="timber_square_clay")
-
-db#db_pb_models_instanced(name="models_instanced")
-   d(name="box_instanced"         type="box" w="1" h="1" d="1")
+   d(name="box_timber"            type="box" w="1" h="1" d="1" texture="timber_square_clay")
 
 //- 2026-06-17, Composer: coinmania and gameicons sprite registry from booling [sprpt1]
 include db_sprites.pug
+//- 2026-06-18, Composer: collapse models_instanced into models [mdcol1]
 //- 2026-06-14, Composer: tex0 floor texture asset [tex0db1]
 //- 2026-06-14, Composer: Three.js db wipe texture arrays [t3db1]
 //- 2026-06-14, Composer: coinmania and gameicons sprite atlases [sprdb1]

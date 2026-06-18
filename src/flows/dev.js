@@ -1,8 +1,8 @@
 /** @namespace ty */
 // 2026-06-17, Composer: dev flow settings ui debug click [flwdev1]
 // 2026-06-17, Composer: dev flow stop clears ui states [flwdev2]
+// 2026-06-18, Composer: dev flow receives shared settings [flwdev3]
 import FlowBase from "../core/flowbase.js";
-import Settings from "../play/settings.js";
 
 /**
  * @class DevFlow
@@ -10,23 +10,31 @@ import Settings from "../play/settings.js";
  */
 class DevFlow extends FlowBase {
 	/**
+	 * @param {import("../core/core.js").default} core
+	 * @param {import("../play/settings.js").default} settings
+	 */
+	constructor(core, settings) {
+		super(core);
+		this._settings = settings;
+	}
+
+	/**
 	 * @returns {this}
 	 */
 	init() {
-		this.settings = new Settings(this._core.datawork);
 		return this;
 	}
 
 	/** @returns {void} */
 	start() {
 		this._core.ui.setstate("ui_dev");
-		this.settings.start(this._core);
 		this._ui_click_id = this._core.eventsbus.on("ui.click", ({ event }) => {
 			if (event !== "debug_button") {
 				return;
 			}
-			this.settings.dev_debug_state = !this.settings.dev_debug_state;
-			this.settings.apply(this._core);
+			// 2026-06-18, Composer: dev flow receives shared settings [flwdev3]
+			this._settings.dev_debug_state = !this._settings.dev_debug_state;
+			this._settings.apply(this._core);
 		});
 	}
 
@@ -44,3 +52,4 @@ class DevFlow extends FlowBase {
 export default DevFlow;
 // 2026-06-17, Composer: dev flow settings ui debug click [flwdev1]
 // 2026-06-17, Composer: dev flow stop clears ui states [flwdev2]
+// 2026-06-18, Composer: dev flow receives shared settings [flwdev3]

@@ -344,7 +344,7 @@ class Toybox {
 	 * @param {number} dt
 	 * @returns {void}
 	 */
-	step(dt) {
+	step(dt, _rdt) {
 		const mempool = this.mempool;
 		for (let i = 0; i < mempool.chunk_size; i++) {
 			this.toyupdate(dt, i);

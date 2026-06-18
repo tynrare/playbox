@@ -260,7 +260,7 @@ class TyntextCore {
 		return imesh;
 	}
 
-	step(dt) {
+	step(dt, _rdt) {
 		this.sources.forEach((s) => {
 			s.imesh.computeBoundingSphere();
 		});

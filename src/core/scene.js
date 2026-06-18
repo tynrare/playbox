@@ -248,19 +248,8 @@ class Scene {
       return null;
     }
 
-    const template_name = conf["instanceof"];
-    if (!template_name) {
-      logger.error(`Scene::model missing instanceof for ${name}`);
-      return null;
-    }
-
-    const tpl = this._db.get("models_instanced")?.getconfig(template_name);
-    if (!tpl) {
-      logger.error(`Scene::model instanced template not found: ${template_name}`);
-      return null;
-    }
-
-    const type = tpl["type"];
+    // 2026-06-18, Composer: imesh key is model name geometry+material [mdcol1]
+    const type = conf["type"];
     if (type !== "box") {
       logger.error(`Scene::model unsupported type: ${type}`);
       return null;
@@ -279,14 +268,14 @@ class Scene {
       return null;
     }
 
-    const w = tpl["w"] ?? 1;
-    const h = tpl["h"] ?? 1;
-    const d = tpl["d"] ?? 1;
+    const w = conf["w"] ?? 1;
+    const h = conf["h"] ?? 1;
+    const d = conf["d"] ?? 1;
     const geometry = new THREE.BoxGeometry(w, h, d);
     const material = new THREE.MeshStandardMaterial({ map });
 
-    if (!core.getimesh(template_name)) {
-      core.initimesh(template_name, geometry, material, {
+    if (!core.getimesh(name)) {
+      core.initimesh(name, geometry, material, {
         capacity: 8,
         renderer: this._draw._render.renderer,
         castShadow: true,
@@ -294,7 +283,7 @@ class Scene {
       }, this._draw.pivot);
     }
 
-    const entity = core.makemesh(template_name);
+    const entity = core.makemesh(name);
     if (!entity) {
       return null;
     }
@@ -547,7 +536,7 @@ class Scene {
    * @param {number} dt
    * @returns {void}
    */
-  step(dt) {
+  step(dt, _rdt) {
     this.tyntext.step(dt);
     this.environment.step(dt);
 
@@ -587,6 +576,7 @@ class Scene {
 }
 
 export default Scene;
+// 2026-06-18, Composer: imesh key is model name geometry+material [mdcol1]
 // 2026-06-14, Composer: pooled makebody delbody by bodies db name [scnbd1]
 // 2026-06-14, Composer: scene owns body pool and physics weld [scnbd2]
 // 2026-06-14, Composer: model returns entity only not wrapper [scnmd1]

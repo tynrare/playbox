@@ -133,7 +133,7 @@ class Core {
     this.render.stop();
   }
 
-  step(dt) {
+  step(dt, _rdt) {
     if (!this.active) {
       return 1;
     }
@@ -146,10 +146,11 @@ class Core {
     this.toybox.step(dt);
     // 2026-06-14, Composer: physics before draw for weld sync [crcyc3]
     this.physics.step(dt);
-    this.draw.step(dt);
-    this.ui?.step(dt);
-    this.scene.step(dt);
-    this.flowbus.step(dt);
+    this.draw.step(dt, _rdt);
+    this.ui?.step(dt, _rdt);
+    this.scene.step(dt, _rdt);
+    // 2026-06-18, Composer: step passes lerped dt and real dt [crdt1]
+    this.flowbus.step(dt, _rdt);
 
     return 0;
   }
@@ -182,3 +183,4 @@ export default Core;
 // 2026-06-17, Composer: dispose scene physics pools on teardown [crcyc4]
 // 2026-06-17, Composer: rename db start to init phase [dbinit1]
 // 2026-06-17, Composer: core init drives all children [crcyc5]
+// 2026-06-18, Composer: step passes lerped dt and real dt [crdt1]

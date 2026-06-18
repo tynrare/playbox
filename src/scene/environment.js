@@ -295,6 +295,16 @@ class Environment {
 	}
 
 	/**
+	 * @param {boolean} enabled
+	 * @returns {void}
+	 */
+	set_shadows_enabled(enabled) {
+		// 2026-06-18, Composer: runtime shadow toggle via render refresh [envsh1]
+		this.config.shadows = !!enabled;
+		this._render.refresh_shadows_runtime(enabled);
+	}
+
+	/**
 	 * @param {number} color
 	 * @param {number} [glow]
 	 * @returns {void}
@@ -314,7 +324,7 @@ class Environment {
 	 * @param {number} dt
 	 * @returns {void}
 	 */
-	step(dt) {
+	step(dt, _rdt) {
 		this.csm?.update();
 	}
 
@@ -343,3 +353,4 @@ Environment.config = DEFAULT_CONFIG;
 // 2026-06-14, Composer: floor plane hidden until floorstyle [env2]
 // 2026-06-14, Composer: always create hidden floor plane [env3]
 // 2026-06-14, Composer: run renamed start, config-only opts [env4]
+// 2026-06-18, Composer: runtime shadow toggle via render refresh [envsh1]
