@@ -237,10 +237,10 @@ class Settings {
 		core.draw.set_render_scale(this.render_scale);
 		// 2026-06-18, Composer: shadows tilt shift ao toggles persist [stgs4]
 		core.scene.environment.set_shadows_enabled(this.shadows);
-		core.draw.set_ultra_ao_enabled(this.ao);
-		core.draw.set_ultra_tiltshift_enabled(this.tilt_shift);
-		// 2026-06-18, Composer: pixelate postprocess toggle persist [stgs5]
 		core.draw.set_pixelate_enabled(this.pixelate);
+		core.draw.set_ultra_ao_enabled(this.ao);
+		// 2026-06-19, Composer: quality via render_scale only [stgs9]
+		core.draw.set_ultra_tiltshift_enabled(this.tilt_shift);
 	}
 }
 
@@ -251,3 +251,5 @@ export { RENDER_SCALE_LEVELS, RENDER_SCALE_DEFAULT };
 // 2026-06-18, Composer: render_scale quality cycle persist [stgs3]
 // 2026-06-18, Composer: shadows tilt shift ao toggles persist [stgs4]
 // 2026-06-18, Composer: pixelate postprocess toggle persist [stgs5]
+// 2026-06-19, Composer: quality via render_scale only [stgs9]
+// 2026-06-18, Composer: independent pixelate and ao toggles [stgs8]

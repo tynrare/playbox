@@ -11,10 +11,7 @@ const RigidBodyType = oimo.dynamics.rigidbody.RigidBodyType;
 const RigidBody = oimo.dynamics.rigidbody.RigidBody;
 
 const DEFAULT_CONFIG = {
-	ref_dt: 1 / 60,
-	fixed_step: false,
-	limit_step: true,
-	adjust_iterations: false,
+	ref_dt: 0.008,
 	debug: false,
 };
 
@@ -260,6 +257,7 @@ class Physics {
 		this._render = render;
 		this.config = config;
 		this.tds = 1;
+		this._acc = 0;
 		/** @type {oimo.dynamics.World|null} */
 		this.world = null;
 		/** @type {DebugDraw|null} */
@@ -297,11 +295,15 @@ class Physics {
 	 */
 	start() {
 		// 2026-06-14, Composer: Oimo world on start floor via toybox [phy3]
+		// 2026-06-18, Composer: fixed substep accumulator reset on start [phyacc1]
 		this.guids = 0;
+		this._acc = 0;
 		this.world = new oimo.dynamics.World(
 			oimo.collision.broadphase.BroadPhaseType.BVH,
 			new oimo.common.Vec3(0, -9.8, 0),
 		);
+		this.world.setNumVelocityIterations(10);
+		this.world.setNumPositionIterations(5);
 		this.utils = new PhysicsUtils(this, this._render.scene);
 		this.sync_debug_draw(this.config.debug);
 		return this;
@@ -316,6 +318,7 @@ class Physics {
 		this.bodylist = {};
 		this.meshlist = {};
 		this.attachopts = {};
+		this._acc = 0;
 	}
 
 	/** @returns {void} */
@@ -325,29 +328,26 @@ class Physics {
 	}
 
 	/**
-	 * @param {number} dt seconds
+	 * @param {number} _dt smoothed frame seconds (fallback clock)
+	 * @param {number} rdt real elapsed frame seconds
 	 * @returns {void}
 	 */
-	step(dt, _rdt) {
+	step(_dt, rdt) {
 		if (!this.world) {
 			return;
 		}
 
 		this.sync_debug_draw(this.config.debug);
 
-		const refdt = this.config.ref_dt;
-		let fdt = this.config.fixed_step ? refdt : dt;
-		if (this.config.limit_step && !this.config.fixed_step) {
-			fdt = Math.min(refdt, fdt);
-		}
+		// 2026-06-18, Composer: fixed substep accumulator drain all rdt [phyacc1]
+		const stepDt = this.config.ref_dt * this.tds;
+		const frameDt = rdt > 0 ? rdt : _dt;
+		this._acc += frameDt;
 
-		if (this.config.adjust_iterations) {
-			const iterationsf = Math.max(1, fdt / refdt);
-			this.world.setNumPositionIterations(Math.ceil(iterationsf * 5));
-			this.world.setNumVelocityIterations(Math.ceil(iterationsf * 10));
+		while (this._acc >= stepDt) {
+			this.world.step(stepDt);
+			this._acc -= stepDt;
 		}
-
-		this.world.step(fdt * this.tds);
 
 		if (this.debug_draw) {
 			const canvas = this._render.renderer?.domElement;
@@ -581,3 +581,4 @@ export { Physics, DebugDraw, PhysicsUtils, RigidBodyType, RigidBody };
 // 2026-06-14, Composer: Oimo physics DebugDraw PhysicsUtils port [phy1]
 // 2026-06-14, Composer: Oimo world on start floor via toybox [phy3]
 // 2026-06-17, Composer: physics dispose unwinds start [phydsp1]
+// 2026-06-18, Composer: fixed substep accumulator drain all rdt [phyacc1]

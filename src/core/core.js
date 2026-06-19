@@ -145,7 +145,8 @@ class Core {
     // 2026-06-14, Composer: toybox step before physics [tbxbb1]
     this.toybox.step(dt);
     // 2026-06-14, Composer: physics before draw for weld sync [crcyc3]
-    this.physics.step(dt);
+    // 2026-06-18, Composer: physics step uses real rdt for substeps [phyrdt1]
+    this.physics.step(dt, _rdt);
     this.draw.step(dt, _rdt);
     this.ui?.step(dt, _rdt);
     this.scene.step(dt, _rdt);
@@ -184,3 +185,4 @@ export default Core;
 // 2026-06-17, Composer: rename db start to init phase [dbinit1]
 // 2026-06-17, Composer: core init drives all children [crcyc5]
 // 2026-06-18, Composer: step passes lerped dt and real dt [crdt1]
+// 2026-06-18, Composer: physics step uses real rdt for substeps [phyrdt1]

@@ -17851,9 +17851,8 @@ oimo.dynamics.World = class oimo_dynamics_World {
 		}
 	}
 	step(timeStep) {
-		if(this._timeStep.dt > 0) {
-			this._timeStep.dtRatio = timeStep / this._timeStep.dt;
-		}
+		// playbox patch: disable variable-dt warm-start impulse scaling
+		this._timeStep.dtRatio = 1;
 		this._timeStep.dt = timeStep;
 		this._timeStep.invDt = 1 / timeStep;
 		let st = HxOverrides.now() / 1000;

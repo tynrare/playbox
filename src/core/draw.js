@@ -3,6 +3,7 @@
 import * as THREE from "three";
 // 2026-06-15, Composer: wire N8AOPass from src/lib [n8aolib]
 import { N8AOPass } from "../lib/N8AO.js";
+import PixelateAOFusedPass from "../lib/PixelateAOFusedPass.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { RenderPixelatedPass } from "three/addons/postprocessing/RenderPixelatedPass.js";
@@ -52,7 +53,10 @@ class Draw {
     this.scene_pass = null;
     /** @type {RenderPixelatedPass|null} */
     this.pixelated_pass = null;
+    /** @type {PixelateAOFusedPass|null} */
+    this.pixelate_ao_fused_pass = null;
     this._pixelateEnabled = false;
+    this._aoEnabled = false;
     /** @type {RenderPass|null} */
     this.ui_pass = null;
     /** @type {N8AOPass|null} */
@@ -120,11 +124,14 @@ class Draw {
     render.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     render.renderer.toneMappingExposure = 0.7;
 
+    // 2026-06-18, Composer: equalizer before composer sizing [drwao1]
+    this.equalizer();
+
     this.pivot = new THREE.Object3D();
     render.scene.add(this.pivot);
 
-    const hw = this.width * 0.5;
-    const hh = this.height * 0.5;
+    const hw = this._window_w * 0.5;
+    const hh = this._window_h * 0.5;
     this.cameraui = new THREE.OrthographicCamera(-hw, hw, hh, -hh, 1, 40);
     this.cameraui.position.z = 20;
     this.sceneui = new THREE.Scene();
@@ -135,8 +142,20 @@ class Draw {
     this.pivot.add(this.core.pivot);
 
     const composer = new EffectComposer(render.renderer);
+    composer.renderToScreen = true;
+    composer.setPixelRatio(render.renderer.getPixelRatio());
+    this.composer = composer;
+    // 2026-06-18, Composer: composer setSize always reattach depth [drwaofx]
+    this._composer_set_size(this._window_w, this._window_h);
+
     const renderPass1 = new RenderPass(render.scene, render.camera);
-    // 2026-06-18, Composer: RenderPixelatedPass toggles with scene pass [drwpx1]
+    // 2026-06-18, Composer: fused pixelate+AO when both toggles on [pxaof1]
+    const pixelateAOFusedPass = new PixelateAOFusedPass(
+      PIXELATE_SIZE,
+      render.scene,
+      render.camera,
+    );
+    pixelateAOFusedPass.enabled = false;
     const pixelatedPass = new RenderPixelatedPass(
       PIXELATE_SIZE,
       render.scene,
@@ -146,45 +165,46 @@ class Draw {
     pixelatedPass.enabled = false;
     const renderPass2 = new RenderPass(this.sceneui, this.cameraui);
     const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(this.width * 0.5, this.height * 0.5),
+      new THREE.Vector2(this._window_w * 0.5, this._window_h * 0.5),
       0.02,
       0.02,
       BLOOM_FACTOR,
     );
     const outputPass = new OutputPass();
 
-    const n8aopass = new N8AOPass(
-      render.scene,
-      render.camera,
-      this.width * 0.25,
-      this.height * 0.25,
-    );
+    const n8aopass = new N8AOPass(render.scene, render.camera, 1, 1);
     n8aopass.configuration.gammaCorrection = false;
     n8aopass.configuration.intensity = 2.0;
     n8aopass.configuration.colorMultiply = false;
-    n8aopass.configuration.halfRes = true;
+    n8aopass.configuration.halfRes = false;
+    n8aopass.configuration.aoBufferScale = 0.25;
     n8aopass.configuration.depthAwareUpsampling = false;
-    n8aopass.configuration.aoSamples = 8;
+    n8aopass.configuration.aoSamples = 16;
+    n8aopass.configuration.aoRadius = 2;
     n8aopass.configuration.denoiseSamples = 4;
     n8aopass.configuration.denoiseRadius = 16;
+    n8aopass.configuration.denoiseIterations = 1;
     n8aopass.configuration.aoTones = 0;
-    n8aopass.configuration.autoRenderBeauty = true;
+    n8aopass.configuration.autoRenderBeauty = false;
+    // 2026-06-19, Composer: skip per-frame transparency rerenders [drwao2]
+    n8aopass.autoDetectTransparency = false;
+    n8aopass.configuration.transparencyAware = false;
     n8aopass.enabled = false;
 
     const tiltShiftPassH = new ShaderPass(HorizontalTiltShiftShader);
     const tiltShiftPassV = new ShaderPass(VerticalTiltShiftShader);
     tiltShiftPassH.enabled = false;
     tiltShiftPassV.enabled = false;
-    tiltShiftPassH.uniforms.h.value = 1 / Math.max(1, this.width);
-    tiltShiftPassV.uniforms.v.value = 1 / Math.max(1, this.height);
+    tiltShiftPassH.uniforms.h.value = 1 / Math.max(1, this._window_w);
+    tiltShiftPassV.uniforms.v.value = 1 / Math.max(1, this._window_h);
     tiltShiftPassH.uniforms.r.value = 0.5;
     tiltShiftPassV.uniforms.r.value = 0.5;
 
-    composer.renderToScreen = true;
-    composer.setPixelRatio(render.renderer.getPixelRatio());
     renderPass2.clear = false;
     renderPass2.clearDepth = true;
 
+    // 2026-06-18, Composer: fused pixelate+AO when both toggles on [pxaof1]
+    composer.addPass(pixelateAOFusedPass);
     composer.addPass(pixelatedPass);
     composer.addPass(renderPass1);
     composer.addPass(n8aopass);
@@ -196,6 +216,7 @@ class Draw {
 
     this.composer = composer;
     this.scene_pass = renderPass1;
+    this.pixelate_ao_fused_pass = pixelateAOFusedPass;
     this.pixelated_pass = pixelatedPass;
     this.ui_pass = renderPass2;
     this._bloomPass = bloomPass;
@@ -203,6 +224,8 @@ class Draw {
     this.tiltShiftPassH = tiltShiftPassH;
     this.tiltShiftPassV = tiltShiftPassV;
 
+    // 2026-06-19, Composer: size passes after n8ao added to composer [drwao3]
+    this._composer_set_size(this._window_w, this._window_h);
     this.equalizer();
   }
 
@@ -226,8 +249,50 @@ class Draw {
     this.tiltShiftPassH = null;
     this.tiltShiftPassV = null;
     this.scene_pass = null;
+    this.pixelate_ao_fused_pass?.dispose();
+    this.pixelate_ao_fused_pass = null;
     this.pixelated_pass = null;
     this.ui_pass = null;
+  }
+
+  /**
+   * @param {number} w
+   * @param {number} h
+   * @returns {void}
+   */
+  _composer_set_size(w, h) {
+    if (!this.composer) {
+      return;
+    }
+    // 2026-06-18, Composer: composer setSize always reattach depth [drwaofx]
+    this.composer.setSize(w, h);
+    this._attach_composer_depth_textures();
+  }
+
+  /**
+   * @returns {void}
+   */
+  _attach_composer_depth_textures() {
+    const composer = this.composer;
+    if (!composer) {
+      return;
+    }
+    // 2026-06-18, Composer: depth for chained N8AOPass readBuffer [drwao1]
+    for (const rt of [composer.renderTarget1, composer.renderTarget2]) {
+      if (!rt) {
+        continue;
+      }
+      const needs_new =
+        !rt.depthTexture ||
+        rt.depthTexture.width !== rt.width ||
+        rt.depthTexture.height !== rt.height;
+      if (needs_new) {
+        rt.depthTexture?.dispose();
+        rt.depthTexture = new THREE.DepthTexture(rt.width, rt.height);
+        rt.depthTexture.format = THREE.DepthFormat;
+        rt.depthTexture.type = THREE.UnsignedIntType;
+      }
+    }
   }
 
   /**
@@ -274,7 +339,7 @@ class Draw {
     this.cameraui.bottom = -hh;
     this.cameraui.updateProjectionMatrix();
 
-    this.composer?.setSize(this._window_w, this._window_h);
+    this._composer_set_size(this._window_w, this._window_h);
     this._bloomPass?.setSize(hw, hh);
     if (this.tiltShiftPassH?.uniforms?.h) {
       this.tiltShiftPassH.uniforms.h.value = 1 / Math.max(1, this._window_w);
@@ -304,9 +369,14 @@ class Draw {
     this._equalizer_render();
     this._sync_composer_ui();
 
-    if (this.ui_pass && (this.scene_pass || this.pixelated_pass)) {
+    if (
+      this.ui_pass &&
+      (this.scene_pass || this.pixelated_pass || this.pixelate_ao_fused_pass)
+    ) {
       this.ui_pass.clear = !(
-        this.scene_pass?.enabled || this.pixelated_pass?.enabled
+        this.scene_pass?.enabled ||
+        this.pixelated_pass?.enabled ||
+        this.pixelate_ao_fused_pass?.enabled
       );
     }
 
@@ -326,6 +396,7 @@ class Draw {
         (1 / Math.max(1, this.height)) * (1 + blur_factor * 1.5);
     }
 
+    this._attach_composer_depth_textures();
     this.composer.render(dt);
   }
 
@@ -365,10 +436,8 @@ class Draw {
    * @returns {void}
    */
   set_ultra_ao_enabled(enabled) {
-    if (!this.n8aopass) {
-      return;
-    }
-    this.n8aopass.enabled = !!enabled;
+    this._aoEnabled = !!enabled;
+    this._reconcile_postprocess();
   }
 
   /**
@@ -398,20 +467,43 @@ class Draw {
    * @returns {void}
    */
   set_pixelate_enabled(enabled) {
-    // 2026-06-18, Composer: RenderPixelatedPass toggles with scene pass [drwpx1]
     this._pixelateEnabled = !!enabled;
-    if (this.scene_pass) {
-      this.scene_pass.enabled = !this._pixelateEnabled;
+    this._reconcile_postprocess();
+  }
+
+  /**
+   * @returns {void}
+   */
+  _reconcile_postprocess() {
+    const px = this._pixelateEnabled;
+    const ao = this._aoEnabled;
+    const fused = px && ao;
+
+    if (this.pixelate_ao_fused_pass) {
+      this.pixelate_ao_fused_pass.enabled = fused;
     }
     if (this.pixelated_pass) {
-      this.pixelated_pass.enabled = this._pixelateEnabled;
+      this.pixelated_pass.enabled = px && !ao;
+    }
+    if (this.scene_pass) {
+      this.scene_pass.enabled = !px;
+    }
+    if (this.n8aopass) {
+      this.n8aopass.enabled = ao && !px;
+    }
+
+    // 2026-06-18, Composer: four-path postprocess router [pxaof1]
+    if (fused) {
+      this.pixelate_ao_fused_pass?.firstFrame();
+    } else if (ao) {
+      this.n8aopass?.firstFrame();
     }
   }
 }
 
+// 2026-06-18, Composer: fused pixelate+AO when both toggles on [pxaof1]
+// 2026-06-18, Composer: four-path postprocess router [pxaof1]
+// 2026-06-19, Composer: skip per-frame transparency rerenders [drwao2]
+// 2026-06-19, Composer: size passes after n8ao added to composer [drwao3]
+// 2026-06-19, Composer: depthAwareUpsampling aligns low-res AO [drwao4]
 export default Draw;
-// 2026-06-15, Composer: wire N8AOPass from src/lib [n8aolib]
-// 2026-06-14, Composer: cameraui resize in equalizer [drweq1]
-// 2026-06-18, Composer: booling render equalizer scaled buffer [drwsc3]
-// 2026-06-14, Composer: port RenderBoolingSandsphere into Draw [drwprt1]
-// 2026-06-18, Composer: RenderPixelatedPass toggles with scene pass [drwpx1]

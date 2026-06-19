@@ -234,6 +234,10 @@ class TyntextCore {
 				// 2026-06-12, Composer: msdf_boldness from fonts db or JSON [tymsdf2]
 				materialProps.msdf_boldness =
 					fontconf["boldness"] ?? fontjson?.boldness ?? 0;
+				// 2026-06-19, Composer: nearest msdf atlas + tighter alphaTest [tymsdf4]
+				file.minFilter = THREE.NearestFilter;
+				file.magFilter = THREE.NearestFilter;
+				materialProps.alphaTest = 0.25;
 			}
 			const material = new ExtendedMaterial(
 				MeshSimplefontMaterial,
@@ -613,4 +617,5 @@ export { TyntextCore, Tyntext };
 // 2026-06-12, Composer: texture msdf/sdf flags select distance shader [tymsdf1]
 // 2026-06-12, Composer: msdf_boldness from fonts db or JSON [tymsdf2]
 // 2026-06-12, Composer: fonts db msdf/sdf flags select distance shader [tymsdf3]
+// 2026-06-19, Composer: nearest msdf atlas + tighter alphaTest [tymsdf4]
 // 2026-06-14, Composer: anchory 0=bottom 1=top like ui layout [tyan1]

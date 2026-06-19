@@ -14,6 +14,9 @@
 //- 2026-06-18, Composer: test close cross sprite icon [uinav11]
 //- 2026-06-18, Composer: settings shadows tilt shift ao buttons [uinav12]
 //- 2026-06-18, Composer: settings pixelate postprocess button [uinav13]
+//- 2026-06-18, Composer: settings menu half-size layout [uinav14]
+//- 2026-06-18, Composer: settings menu top-right anchor stack [uinav15]
+//- 2026-06-18, Composer: label rx/ry centers on anchor-1 panel [uinav16]
 - var menu_btn_indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 db#db_pb_ui_root_elements(name="ui_root_elements" scope="ui_elements")
@@ -32,19 +35,30 @@ db#db_pb_ui_root_elements(name="ui_root_elements" scope="ui_elements")
 
 db#db_pb_ui_settings_menu_elements(name="ui_settings_menu_elements" scope="ui_elements")
     //- 2026-06-18, Composer: settings submenu ui elements [uinav8]
+    //- 2026-06-18, Composer: settings menu half-size layout [uinav14]
+    //- 2026-06-18, Composer: settings menu top-right anchor stack [uinav15]
+    //- 2026-06-18, Composer: label rx/ry centers on anchor-1 panel [uinav16]
+    - var settings_btn_w = 20
+    - var settings_btn_h = 3.5
+    - var settings_btn_gap = 4
+    - var settings_label_rx = -(settings_btn_w * 0.5)
+    - var settings_label_ry = -(settings_btn_h * 0.5)
     each val in menu_btn_indices
         - var btn_name = "settings_btn_" + val
         - var label_name = "settings_btn_" + val + "_label"
-        - var btn_y = 84 - val * 8
+        - var btn_y = 100 - val * settings_btn_gap
         //- 2026-06-18, Composer: settings menu quality button label [uinav10]
         //- 2026-06-18, Composer: settings shadows tilt shift ao buttons [uinav12]
         //- 2026-06-18, Composer: settings pixelate postprocess button [uinav13]
+        //- 2026-06-18, Composer: label rx/ry centers on anchor-1 panel [uinav16]
         - var btn_label = val === 0 ? "Back" : val === 1 ? "Quality" : val === 2 ? "Shadows" : val === 3 ? "Tilt Shift" : val === 4 ? "AO" : val === 5 ? "Pixelate" : "-"
         d(name=btn_name type="panel" interactive="true" event=btn_name
-            x=50 y=btn_y w=40 h=7 scale=1
+            x=100 y=btn_y rx=-4 ry=-4 w=settings_btn_w h=settings_btn_h scale=1
+            anchorx=1 anchory=1
             color="0x0" colorb="0xffffff" glow="1" opacity="1" corner="0.3")
         d(name=label_name type="text" font="afont" pivot=btn_name
-            text=btn_label fontsize="4" color="0xffffff" colorb="0xffffff" glow="1" opacity="1"
+            rx=settings_label_rx ry=settings_label_ry
+            text=btn_label fontsize="2" color="0xffffff" colorb="0xffffff" glow="1" opacity="1"
             anchorx=0.5 anchory=0.5)
 
 db#db_pb_ui_dev_menu_elements(name="ui_dev_menu_elements" scope="ui_elements")
@@ -173,3 +187,6 @@ db#db_pb_ui_debug_enabled(name="ui_debug_enabled" scope="ui_states")
 //- 2026-06-18, Composer: test close cross sprite icon [uinav11]
 //- 2026-06-18, Composer: settings shadows tilt shift ao buttons [uinav12]
 //- 2026-06-18, Composer: settings pixelate postprocess button [uinav13]
+//- 2026-06-18, Composer: settings menu half-size layout [uinav14]
+//- 2026-06-18, Composer: settings menu top-right anchor stack [uinav15]
+//- 2026-06-18, Composer: label rx/ry centers on anchor-1 panel [uinav16]

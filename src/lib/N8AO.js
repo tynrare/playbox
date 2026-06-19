@@ -126,6 +126,7 @@ void main() {
   vUv = uv;
   gl_Position = vec4(position, 1);
 }`,
+    // 2026-06-18, Composer: pxGrad replaces fwidth for ANGLE loop warn [n8aofw1]
     fragmentShader: /* glsl */ `
     #define SAMPLES 16
     #define FSAMPLES 16.0
@@ -294,10 +295,19 @@ void main() {
       float distanceFalloffToUse =screenSpaceRadius ?
           radiusToUse * distanceFalloff
       : radiusToUse * distanceFalloff * 0.2;
+      float pxWorldX = distance(
+        worldPos,
+        getWorldPos(depth, vUv + vec2(1.0, 0.0) / resolution)
+      );
+      float pxWorldY = distance(
+        worldPos,
+        getWorldPos(depth, vUv + vec2(0.0, 1.0) / resolution)
+      );
+      float pxGrad = pxWorldX + pxWorldY;
       float bias = (min(
         0.1,
         distanceFalloffToUse * 0.1
-      ) / near) * fwidth(distance(worldPos, cameraPos)) / radiusToUse;
+      ) / near) * pxGrad / radiusToUse;
       bias = biasAdjustment.x + biasAdjustment.y * bias;
       mediump float offsetMove = noise.g;
       mediump float offsetMoveInv = 1.0 / FSAMPLES;
@@ -346,7 +356,8 @@ void main() {
           float distWorld = (farTimesNear) / (far - offset.z * farMinusNear);
       #endif
           
-          mediump float rangeCheck = smoothstep(0.0, 1.0, distanceFalloffToUse / (abs(distSample - distWorld)));
+          float rangeT = clamp(distanceFalloffToUse / (abs(distSample - distWorld)), 0.0, 1.0);
+          mediump float rangeCheck = rangeT * rangeT * (3.0 - 2.0 * rangeT);
           vec2 diff = gl_FragCoord.xy - floor(offset.xy * resolution);
           occluded += rangeCheck * float(distSample != distWorld) * float(sampleDepth != depth) * step(distSample + bias, distWorld) * step(
             1.0,
@@ -463,6 +474,10 @@ const $12b21d24d1192a04$export$a815acccbd2c9a49 = {
         },
         "aoTones": {
             value: 0.0
+        },
+        // 2026-06-19, Composer: HALFRES upsample uses aoBufferScale not 0.5 [n8ao026]
+        "aoBufferScale": {
+            value: 1.0
         }
     },
     depthWrite: false,
@@ -503,6 +518,7 @@ const $12b21d24d1192a04$export$a815acccbd2c9a49 = {
     uniform float fogFar;
     uniform float radius;
     uniform float distanceFalloff;
+    uniform float aoBufferScale;
     uniform vec3 cameraPos;
     varying vec2 vUv;
     highp float linearize_depth(highp float d, highp float zNear,highp float zFar)
@@ -592,6 +608,7 @@ const $12b21d24d1192a04$export$a815acccbd2c9a49 = {
   }
 
     #include <common>
+    // 2026-06-18, Composer: textureLod in denoise loop for ANGLE warn [n8aofw2]
     #include <dithering_pars_fragment>
     void main() {
         //vec4 texel = texture2D(tDiffuse, vUv);//vec3(0.0);
@@ -618,14 +635,14 @@ const $12b21d24d1192a04$export$a815acccbd2c9a49 = {
       ) : radius;
       float distanceFalloffToUse =screenSpaceRadius ?
           radiusToUse * distanceFalloff
-      : distanceFalloff;
-        for(float x = -1.0; x <= 1.0; x++) {
-            for(float y = -1.0; y <= 1.0; y++) {
-                vec2 offset = vec2(x, y);
+      : radiusToUse * distanceFalloff * 0.2;
+        for(int x = -1; x <= 1; x++) {
+            for(int y = -1; y <= 1; y++) {
+                vec2 offset = vec2(float(x), float(y));
                 ivec2 p = ivec2(
-                    (vUv * resolution * 0.5) + offset
+                    (vUv * resolution * aoBufferScale) + offset
                 );
-                vec2 pUv = vec2(p) / (resolution * 0.5);
+                vec2 pUv = vec2(p) / (resolution * aoBufferScale);
                 float sampleDepth = texelFetch(downsampledDepth,p, 0).x;
                 vec4 sampleInfo = texelFetch(tDiffuse, p, 0);
                 vec3 normalSample = sampleInfo.gba * 2.0 - 1.0;
@@ -897,10 +914,11 @@ const $e52378cd0f5a973d$export$57856b59f317262e = {
         float invDistance = (1.0 / distanceFalloffToUse);
         for(int i = 0; i < NUM_SAMPLES; i++) {
             vec2 offset = (rotationMatrix * poissonDisk[i]) * texelSize * size;
-            vec4 dataSample = texture2D(tDiffuse, uv + offset);
+            vec2 sampleUv = uv + offset;
+            vec4 dataSample = textureLod(tDiffuse, sampleUv, 0.0);
             float occSample = dataSample.r;
             vec3 normalSample = dataSample.gba * 2.0 - 1.0;
-            float dSample = texture2D(sceneDepth, uv + offset).x;
+            float dSample = textureLod(sceneDepth, sampleUv, 0.0).x;
             vec3 worldPosSample = getWorldPos(dSample, uv + offset);
             float tangentPlaneDist = abs(dot(worldPosSample - worldPos, normal));
             float rangeCheck = float(dSample != 1.0) * exp(-1.0 * tangentPlaneDist * invDistance ) * max(dot(normal, normalSample), 0.0);
@@ -1063,11 +1081,12 @@ const $26aca173e0984d99$export$1efdf491687cd442 = {
         samples[1] = depth10;
         samples[2] = depth01;
         samples[3] = depth11;
-        for(int i = 0; i < 4; ++i) {
-            if (samples[i] == targetDepth) {
-                chosenIndex = i;
-                break;
-            }
+        if (samples[1] == targetDepth) {
+            chosenIndex = 1;
+        } else if (samples[2] == targetDepth) {
+            chosenIndex = 2;
+        } else if (samples[3] == targetDepth) {
+            chosenIndex = 3;
         }
         gl_FragColor = vec4(samples[chosenIndex], 0.0, 0.0, 1.0);
         gNormal = vec4(computeNormal(
@@ -1166,6 +1185,20 @@ const $ff9437d9c7577f11$export$156f6a58f569aa09 = $ff9437d9c7577f11$var$version 
         $87431ee93b037844$var$checkTimerQuery(timerQuery, gl, pass);
     }, 1);
 }
+// 2026-06-18, Composer: aoBufferScale replaces halfRes fixed 0.5 [n8ao025]
+function $05f6997e4b65da14$var$aoBufferScaleValue(configuration) {
+    const s = configuration.aoBufferScale;
+    if (Number.isFinite(s) && s > 0) return s;
+    return configuration.halfRes ? 0.5 : 1;
+}
+function $05f6997e4b65da14$var$aoBufferDownsampled(configuration) {
+    return $05f6997e4b65da14$var$aoBufferScaleValue(configuration) < 1;
+}
+function $05f6997e4b65da14$var$aoBufferInternalDims(width, height, configuration, out) {
+    const s = $05f6997e4b65da14$var$aoBufferScaleValue(configuration);
+    out.set(Math.max(1, Math.floor(width * s)), Math.max(1, Math.floor(height * s)));
+    return out;
+}
 class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
     /**
      * 
@@ -1200,6 +1233,7 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
          * depthBufferType: 1 | 2 | 3,
          * screenSpaceRadius: boolean,
          * halfRes: boolean,
+         * aoBufferScale: number,
          * depthAwareUpsampling: boolean
          * colorMultiply: boolean
          * }
@@ -1221,6 +1255,7 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
             depthBufferType: (0, $05f6997e4b65da14$export$ed4ee5d1e55474a5).Default,
             screenSpaceRadius: false,
             halfRes: false,
+            aoBufferScale: 1.0,
             depthAwareUpsampling: true,
             colorMultiply: true,
             transparencyAware: false,
@@ -1234,9 +1269,9 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
                 } else if (oldProp !== value) this.firstFrame();
                 if (propName === "aoSamples" && oldProp !== value) this.configureAOPass(this.configuration.depthBufferType, this.camera.isOrthographicCamera);
                 if (propName === "denoiseSamples" && oldProp !== value) this.configureDenoisePass(this.configuration.depthBufferType, this.camera.isOrthographicCamera);
-                if (propName === "halfRes" && oldProp !== value) {
+                if ((propName === "halfRes" || propName === "aoBufferScale") && oldProp !== value) {
                     this.configureAOPass(this.configuration.depthBufferType, this.camera.isOrthographicCamera);
-                    this.configureHalfResTargets();
+                    this.configureDownsampleTargets();
                     this.configureEffectCompositer(this.configuration.depthBufferType, this.camera.isOrthographicCamera);
                     this.setSize(this.width, this.height);
                 }
@@ -1257,7 +1292,7 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
         this.lastProjectionMatrix = new $5Whe3$Matrix4();
         this.configureEffectCompositer(this.configuration.depthBufferType);
         this.configureSampleDependentPasses();
-        this.configureHalfResTargets();
+        this.configureDownsampleTargets();
         this.detectTransparency();
         this.configureTransparencyTarget();
         //   this.effectCompisterQuad = new FullScreenTriangle(new THREE.ShaderMaterial(EffectCompositer));
@@ -1349,12 +1384,15 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
         this.needsDepthTexture = true;
         this.needsSwap = true;
         this._r = new $5Whe3$Vector2();
+        this._aoR = new $5Whe3$Vector2();
         this._c = new $5Whe3$Color();
     }
-    configureHalfResTargets() {
+    configureDownsampleTargets() {
         this.firstFrame();
-        if (this.configuration.halfRes) {
-            this.depthDownsampleTarget = new (0, $ff9437d9c7577f11$export$156f6a58f569aa09)(this.width / 2, this.height / 2, 2);
+        if ($05f6997e4b65da14$var$aoBufferDownsampled(this.configuration)) {
+            const aw = Math.max(1, Math.floor(this.width * $05f6997e4b65da14$var$aoBufferScaleValue(this.configuration)));
+            const ah = Math.max(1, Math.floor(this.height * $05f6997e4b65da14$var$aoBufferScaleValue(this.configuration)));
+            this.depthDownsampleTarget = new (0, $ff9437d9c7577f11$export$156f6a58f569aa09)(aw, ah, 2);
             if ($5Whe3$REVISION <= 161) this.depthDownsampleTarget.textures = this.depthDownsampleTarget.texture;
             this.depthDownsampleTarget.textures[0].format = $5Whe3$RedFormat;
             this.depthDownsampleTarget.textures[0].type = $5Whe3$FloatType;
@@ -1504,7 +1542,7 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
         if (depthBufferType === (0, $05f6997e4b65da14$export$ed4ee5d1e55474a5).Log) e.fragmentShader = "#define LOGDEPTH\n" + e.fragmentShader;
         else if (depthBufferType === (0, $05f6997e4b65da14$export$ed4ee5d1e55474a5).Reverse) e.fragmentShader = "#define REVERSEDEPTH\n" + e.fragmentShader;
         if (ortho) e.fragmentShader = "#define ORTHO\n" + e.fragmentShader;
-        if (this.configuration.halfRes) e.fragmentShader = "#define HALFRES\n" + e.fragmentShader;
+        if ($05f6997e4b65da14$var$aoBufferDownsampled(this.configuration)) e.fragmentShader = "#define HALFRES\n" + e.fragmentShader;
         if (this.effectShaderQuad) {
             this.effectShaderQuad.material.dispose();
             this.effectShaderQuad.material = new $5Whe3$ShaderMaterial(e);
@@ -1533,7 +1571,7 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
         if (depthBufferType === (0, $05f6997e4b65da14$export$ed4ee5d1e55474a5).Log) e.fragmentShader = "#define LOGDEPTH\n" + e.fragmentShader;
         else if (depthBufferType === (0, $05f6997e4b65da14$export$ed4ee5d1e55474a5).Reverse) e.fragmentShader = "#define REVERSEDEPTH\n" + e.fragmentShader;
         if (ortho) e.fragmentShader = "#define ORTHO\n" + e.fragmentShader;
-        if (this.configuration.halfRes && this.configuration.depthAwareUpsampling) e.fragmentShader = "#define HALFRES\n" + e.fragmentShader;
+        if ($05f6997e4b65da14$var$aoBufferDownsampled(this.configuration) && this.configuration.depthAwareUpsampling) e.fragmentShader = "#define HALFRES\n" + e.fragmentShader;
         if (this.effectCompositerQuad) {
             this.effectCompositerQuad.material.dispose();
             this.effectCompositerQuad.material = new $5Whe3$ShaderMaterial(e);
@@ -1579,11 +1617,13 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
         this.firstFrame();
         this.width = width;
         this.height = height;
-        const c = this.configuration.halfRes ? 0.5 : 1;
-        this.writeTargetInternal.setSize(width * c, height * c);
-        this.readTargetInternal.setSize(width * c, height * c);
-        this.accumulationRenderTarget.setSize(width * c, height * c);
-        if (this.configuration.halfRes) this.depthDownsampleTarget.setSize(width * c, height * c);
+        const s = $05f6997e4b65da14$var$aoBufferScaleValue(this.configuration);
+        const aw = Math.max(1, Math.floor(width * s));
+        const ah = Math.max(1, Math.floor(height * s));
+        this.writeTargetInternal.setSize(aw, ah);
+        this.readTargetInternal.setSize(aw, ah);
+        this.accumulationRenderTarget.setSize(aw, ah);
+        if ($05f6997e4b65da14$var$aoBufferDownsampled(this.configuration) && this.depthDownsampleTarget) this.depthDownsampleTarget.setSize(aw, ah);
         if (this.configuration.transparencyAware) {
             this.transparencyRenderTargetDWFalse.setSize(width, height);
             this.transparencyRenderTargetDWTrue.setSize(width, height);
@@ -1644,10 +1684,12 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
         }
         if (this.configuration.transparencyAware) this.renderTransparency(renderer);
         this._r.set(this.width, this.height);
+        const aoScale = $05f6997e4b65da14$var$aoBufferScaleValue(this.configuration);
+        const aoDownsampled = $05f6997e4b65da14$var$aoBufferDownsampled(this.configuration);
         let trueRadius = this.configuration.aoRadius;
-        if (this.configuration.halfRes && this.configuration.screenSpaceRadius) trueRadius *= 0.5;
+        if (aoDownsampled && this.configuration.screenSpaceRadius) trueRadius *= aoScale;
         if (this.frame < 1024 / this.configuration.aoSamples) {
-            if (this.configuration.halfRes) {
+            if (aoDownsampled) {
                 renderer.setRenderTarget(this.depthDownsampleTarget);
                 this.depthDownsampleQuad.material.uniforms.sceneDepth.value = this.depthTexture;
                 this.depthDownsampleQuad.material.uniforms.resolution.value = this._r;
@@ -1660,8 +1702,8 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
                 this.depthDownsampleQuad.render(renderer);
             }
             this.effectShaderQuad.material.uniforms["sceneDiffuse"].value = inputBuffer.texture;
-            this.effectShaderQuad.material.uniforms["sceneDepth"].value = this.configuration.halfRes ? this.depthDownsampleTarget.textures[0] : this.depthTexture;
-            this.effectShaderQuad.material.uniforms["sceneNormal"].value = this.configuration.halfRes ? this.depthDownsampleTarget.textures[1] : null;
+            this.effectShaderQuad.material.uniforms["sceneDepth"].value = aoDownsampled ? this.depthDownsampleTarget.textures[0] : this.depthTexture;
+            this.effectShaderQuad.material.uniforms["sceneNormal"].value = aoDownsampled ? this.depthDownsampleTarget.textures[1] : null;
             this.effectShaderQuad.material.uniforms["projMat"].value = this.camera.projectionMatrix;
             this.effectShaderQuad.material.uniforms["viewMat"].value = this.camera.matrixWorldInverse;
             this.effectShaderQuad.material.uniforms["projViewMat"].value = this.camera.projectionMatrix.clone().multiply(this.camera.matrixWorldInverse.clone());
@@ -1669,7 +1711,7 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
             this.effectShaderQuad.material.uniforms["viewMatrixInv"].value = this.camera.matrixWorld;
             this.effectShaderQuad.material.uniforms["cameraPos"].value = this.camera.getWorldPosition(new $5Whe3$Vector3());
             this.effectShaderQuad.material.uniforms["biasAdjustment"].value = new $5Whe3$Vector2(this.configuration.biasOffset, this.configuration.biasMultiplier);
-            this.effectShaderQuad.material.uniforms["resolution"].value = this.configuration.halfRes ? this._r.clone().multiplyScalar(0.5).floor() : this._r;
+            this.effectShaderQuad.material.uniforms["resolution"].value = aoDownsampled ? $05f6997e4b65da14$var$aoBufferInternalDims(this.width, this.height, this.configuration, this._aoR) : this._r;
             this.effectShaderQuad.material.uniforms["time"].value = performance.now() / 1000;
             this.effectShaderQuad.material.uniforms["samples"].value = this.samples;
             this.effectShaderQuad.material.uniforms["bluenoise"].value = this.bluenoise;
@@ -1691,16 +1733,16 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
                     this.writeTargetInternal
                 ];
                 this.poissonBlurQuad.material.uniforms["tDiffuse"].value = this.readTargetInternal.texture;
-                this.poissonBlurQuad.material.uniforms["sceneDepth"].value = this.configuration.halfRes ? this.depthDownsampleTarget.textures[0] : this.depthTexture;
+                this.poissonBlurQuad.material.uniforms["sceneDepth"].value = aoDownsampled ? this.depthDownsampleTarget.textures[0] : this.depthTexture;
                 this.poissonBlurQuad.material.uniforms["projMat"].value = this.camera.projectionMatrix;
                 this.poissonBlurQuad.material.uniforms["viewMat"].value = this.camera.matrixWorldInverse;
                 this.poissonBlurQuad.material.uniforms["projectionMatrixInv"].value = this.camera.projectionMatrixInverse;
                 this.poissonBlurQuad.material.uniforms["viewMatrixInv"].value = this.camera.matrixWorld;
                 this.poissonBlurQuad.material.uniforms["cameraPos"].value = this.camera.getWorldPosition(new $5Whe3$Vector3());
-                this.poissonBlurQuad.material.uniforms["resolution"].value = this.configuration.halfRes ? this._r.clone().multiplyScalar(0.5).floor() : this._r;
+                this.poissonBlurQuad.material.uniforms["resolution"].value = aoDownsampled ? $05f6997e4b65da14$var$aoBufferInternalDims(this.width, this.height, this.configuration, this._aoR) : this._r;
                 this.poissonBlurQuad.material.uniforms["time"].value = performance.now() / 1000;
                 this.poissonBlurQuad.material.uniforms["blueNoise"].value = this.bluenoise;
-                this.poissonBlurQuad.material.uniforms["radius"].value = this.configuration.denoiseRadius * (this.configuration.halfRes ? 0.5 : 1);
+                this.poissonBlurQuad.material.uniforms["radius"].value = this.configuration.denoiseRadius * (aoDownsampled ? aoScale : 1);
                 this.poissonBlurQuad.material.uniforms["worldRadius"].value = trueRadius;
                 this.poissonBlurQuad.material.uniforms["distanceFalloff"].value = this.configuration.distanceFalloff;
                 this.poissonBlurQuad.material.uniforms["index"].value = i;
@@ -1736,8 +1778,9 @@ class $87431ee93b037844$export$2489f9981ab0fa82 extends (0, $5Whe3$Pass1) {
         this.effectCompositerQuad.material.uniforms["projectionMatrixInv"].value = this.camera.projectionMatrixInverse;
         this.effectCompositerQuad.material.uniforms["viewMatrixInv"].value = this.camera.matrixWorld;
         this.effectCompositerQuad.material.uniforms["ortho"].value = this.camera.isOrthographicCamera;
-        this.effectCompositerQuad.material.uniforms["downsampledDepth"].value = this.configuration.halfRes ? this.depthDownsampleTarget.textures[0] : this.depthTexture;
+        this.effectCompositerQuad.material.uniforms["downsampledDepth"].value = aoDownsampled ? this.depthDownsampleTarget.textures[0] : this.depthTexture;
         this.effectCompositerQuad.material.uniforms["resolution"].value = this._r;
+        this.effectCompositerQuad.material.uniforms["aoBufferScale"].value = aoScale;
         this.effectCompositerQuad.material.uniforms["blueNoise"].value = this.bluenoise;
         this.effectCompositerQuad.material.uniforms["intensity"].value = this.configuration.intensity;
         this.effectCompositerQuad.material.uniforms["renderMode"].value = this.configuration.renderMode;
@@ -1880,6 +1923,7 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
          * depthBufferType: 1 | 2 | 3,
          * screenSpaceRadius: boolean,
          * halfRes: boolean,
+         * aoBufferScale: number,
          * depthAwareUpsampling: boolean,
          * autoRenderBeauty: boolean
          * colorMultiply: boolean
@@ -1901,6 +1945,7 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
             depthBufferType: $05f6997e4b65da14$export$ed4ee5d1e55474a5.Default,
             screenSpaceRadius: false,
             halfRes: false,
+            aoBufferScale: 0.25,
             depthAwareUpsampling: true,
             autoRenderBeauty: true,
             colorMultiply: true,
@@ -1916,9 +1961,9 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
                 } else if (oldProp !== value) this.firstFrame();
                 if (propName === "aoSamples" && oldProp !== value) this.configureAOPass(this.configuration.depthBufferType, this.camera.isOrthographicCamera);
                 if (propName === "denoiseSamples" && oldProp !== value) this.configureDenoisePass(this.configuration.depthBufferType, this.camera.isOrthographicCamera);
-                if (propName === "halfRes" && oldProp !== value) {
+                if ((propName === "halfRes" || propName === "aoBufferScale") && oldProp !== value) {
                     this.configureAOPass(this.configuration.depthBufferType, this.camera.isOrthographicCamera);
-                    this.configureHalfResTargets();
+                    this.configureDownsampleTargets();
                     this.configureEffectCompositer(this.configuration.depthBufferType, this.camera.isOrthographicCamera);
                     this.setSize(this.width, this.height);
                 }
@@ -1963,7 +2008,7 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
         this.beautyRenderTarget.depthTexture.format = $5Whe3$DepthFormat;
         this.configureEffectCompositer(this.configuration.depthBufferType, this.camera.isOrthographicCamera);
         this.configureSampleDependentPasses();
-        this.configureHalfResTargets();
+        this.configureDownsampleTargets();
         this.detectTransparency();
         this.configureTransparencyTarget();
         this.writeTargetInternal = new $5Whe3$WebGLRenderTarget(this.width, this.height, {
@@ -2025,12 +2070,15 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
         this.lastTime = 0;
         this.timeRollingAverage = 0.99;
         this._r = new $5Whe3$Vector2();
+        this._aoR = new $5Whe3$Vector2();
         this._c = new $5Whe3$Color();
     }
-    configureHalfResTargets() {
+    configureDownsampleTargets() {
         this.firstFrame();
-        if (this.configuration.halfRes) {
-            this.depthDownsampleTarget = new (0, $ff9437d9c7577f11$export$156f6a58f569aa09)(this.width / 2, this.height / 2, 2);
+        if ($05f6997e4b65da14$var$aoBufferDownsampled(this.configuration)) {
+            const aw = Math.max(1, Math.floor(this.width * $05f6997e4b65da14$var$aoBufferScaleValue(this.configuration)));
+            const ah = Math.max(1, Math.floor(this.height * $05f6997e4b65da14$var$aoBufferScaleValue(this.configuration)));
+            this.depthDownsampleTarget = new (0, $ff9437d9c7577f11$export$156f6a58f569aa09)(aw, ah, 2);
             if ($5Whe3$REVISION <= 161) this.depthDownsampleTarget.textures = this.depthDownsampleTarget.texture;
             this.depthDownsampleTarget.textures[0].format = $5Whe3$RedFormat;
             this.depthDownsampleTarget.textures[0].type = $5Whe3$FloatType;
@@ -2131,7 +2179,7 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
             }
         }
     }
-    renderTransparency(renderer) {
+    renderTransparency(renderer, beautyDepth) {
         const oldBackground = this.scene.background;
         const oldClearColor = renderer.getClearColor(new $5Whe3$Color());
         const oldClearAlpha = renderer.getClearAlpha();
@@ -2144,7 +2192,7 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
         this.scene.background = null;
         renderer.autoClearDepth = false;
         renderer.setClearColor(new $5Whe3$Color(0, 0, 0), 0);
-        this.depthCopyPass.material.uniforms.depthTexture.value = this.beautyRenderTarget.depthTexture;
+        this.depthCopyPass.material.uniforms.depthTexture.value = beautyDepth;
         this.depthCopyPass.material.uniforms.reverseDepthBuffer.value = this.configuration.depthBufferType === $05f6997e4b65da14$export$ed4ee5d1e55474a5.Reverse;
         // Render out transparent objects WITHOUT depth write
         renderer.setRenderTarget(this.transparencyRenderTargetDWFalse);
@@ -2185,7 +2233,7 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
         if (depthBufferType === $05f6997e4b65da14$export$ed4ee5d1e55474a5.Log) e.fragmentShader = "#define LOGDEPTH\n" + e.fragmentShader;
         else if (depthBufferType === $05f6997e4b65da14$export$ed4ee5d1e55474a5.Reverse) e.fragmentShader = "#define REVERSEDEPTH\n" + e.fragmentShader;
         if (ortho) e.fragmentShader = "#define ORTHO\n" + e.fragmentShader;
-        if (this.configuration.halfRes) e.fragmentShader = "#define HALFRES\n" + e.fragmentShader;
+        if ($05f6997e4b65da14$var$aoBufferDownsampled(this.configuration)) e.fragmentShader = "#define HALFRES\n" + e.fragmentShader;
         if (this.effectShaderQuad) {
             this.effectShaderQuad.material.dispose();
             this.effectShaderQuad.material = new $5Whe3$ShaderMaterial(e);
@@ -2214,7 +2262,7 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
         if (depthBufferType === $05f6997e4b65da14$export$ed4ee5d1e55474a5.Log) e.fragmentShader = "#define LOGDEPTH\n" + e.fragmentShader;
         else if (depthBufferType === $05f6997e4b65da14$export$ed4ee5d1e55474a5.Reverse) e.fragmentShader = "#define REVERSEDEPTH\n" + e.fragmentShader;
         if (ortho) e.fragmentShader = "#define ORTHO\n" + e.fragmentShader;
-        if (this.configuration.halfRes && this.configuration.depthAwareUpsampling) e.fragmentShader = "#define HALFRES\n" + e.fragmentShader;
+        if ($05f6997e4b65da14$var$aoBufferDownsampled(this.configuration) && this.configuration.depthAwareUpsampling) e.fragmentShader = "#define HALFRES\n" + e.fragmentShader;
         if (this.effectCompositerQuad) {
             this.effectCompositerQuad.material.dispose();
             this.effectCompositerQuad.material = new $5Whe3$ShaderMaterial(e);
@@ -2260,12 +2308,14 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
         this.firstFrame();
         this.width = width;
         this.height = height;
-        const c = this.configuration.halfRes ? 0.5 : 1;
-        this.beautyRenderTarget.setSize(width, height);
-        this.writeTargetInternal.setSize(width * c, height * c);
-        this.readTargetInternal.setSize(width * c, height * c);
-        this.accumulationRenderTarget.setSize(width * c, height * c);
-        if (this.configuration.halfRes) this.depthDownsampleTarget.setSize(width * c, height * c);
+        const s = $05f6997e4b65da14$var$aoBufferScaleValue(this.configuration);
+        const aw = Math.max(1, Math.floor(width * s));
+        const ah = Math.max(1, Math.floor(height * s));
+        if (this.configuration.autoRenderBeauty) this.beautyRenderTarget.setSize(width, height);
+        this.writeTargetInternal.setSize(aw, ah);
+        this.readTargetInternal.setSize(aw, ah);
+        this.accumulationRenderTarget.setSize(aw, ah);
+        if ($05f6997e4b65da14$var$aoBufferDownsampled(this.configuration) && this.depthDownsampleTarget) this.depthDownsampleTarget.setSize(aw, ah);
         if (this.configuration.transparencyAware) {
             this.transparencyRenderTargetDWFalse.setSize(width, height);
             this.transparencyRenderTargetDWTrue.setSize(width, height);
@@ -2308,8 +2358,12 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
         if (this.configuration.autoRenderBeauty) {
             renderer.setRenderTarget(this.beautyRenderTarget);
             renderer.render(this.scene, this.camera);
-            if (this.configuration.transparencyAware) this.renderTransparency(renderer);
+            if (this.configuration.transparencyAware) this.renderTransparency(renderer, this.beautyRenderTarget.depthTexture);
         }
+        // 2026-06-18, Composer: chained beauty from composer readBuffer [n8ao025]
+        const beautyColor = this.configuration.autoRenderBeauty ? this.beautyRenderTarget.texture : readBuffer.texture;
+        const beautyDepth = this.configuration.autoRenderBeauty ? this.beautyRenderTarget.depthTexture : readBuffer.depthTexture;
+        if (!this.configuration.autoRenderBeauty && this.configuration.transparencyAware) this.renderTransparency(renderer, beautyDepth);
         if (this.debugMode) {
             timerQuery = gl.createQuery();
             gl.beginQuery(ext.TIME_ELAPSED_EXT, timerQuery);
@@ -2317,12 +2371,14 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
         const xrEnabled = renderer.xr.enabled;
         renderer.xr.enabled = false;
         this._r.set(this.width, this.height);
+        const aoScale = $05f6997e4b65da14$var$aoBufferScaleValue(this.configuration);
+        const aoDownsampled = $05f6997e4b65da14$var$aoBufferDownsampled(this.configuration);
         let trueRadius = this.configuration.aoRadius;
-        if (this.configuration.halfRes && this.configuration.screenSpaceRadius) trueRadius *= 0.5;
+        if (aoDownsampled && this.configuration.screenSpaceRadius) trueRadius *= aoScale;
         if (this.frame < 1024 / this.configuration.aoSamples) {
-            if (this.configuration.halfRes) {
+            if (aoDownsampled) {
                 renderer.setRenderTarget(this.depthDownsampleTarget);
-                this.depthDownsampleQuad.material.uniforms.sceneDepth.value = this.beautyRenderTarget.depthTexture;
+                this.depthDownsampleQuad.material.uniforms.sceneDepth.value = beautyDepth;
                 this.depthDownsampleQuad.material.uniforms.resolution.value = this._r;
                 this.depthDownsampleQuad.material.uniforms["near"].value = this.camera.near;
                 this.depthDownsampleQuad.material.uniforms["far"].value = this.camera.far;
@@ -2332,9 +2388,9 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
                 this.depthDownsampleQuad.material.uniforms["ortho"].value = this.camera.isOrthographicCamera;
                 this.depthDownsampleQuad.render(renderer);
             }
-            this.effectShaderQuad.material.uniforms["sceneDiffuse"].value = this.beautyRenderTarget.texture;
-            this.effectShaderQuad.material.uniforms["sceneDepth"].value = this.configuration.halfRes ? this.depthDownsampleTarget.textures[0] : this.beautyRenderTarget.depthTexture;
-            this.effectShaderQuad.material.uniforms["sceneNormal"].value = this.configuration.halfRes ? this.depthDownsampleTarget.textures[1] : null;
+            this.effectShaderQuad.material.uniforms["sceneDiffuse"].value = beautyColor;
+            this.effectShaderQuad.material.uniforms["sceneDepth"].value = aoDownsampled ? this.depthDownsampleTarget.textures[0] : beautyDepth;
+            this.effectShaderQuad.material.uniforms["sceneNormal"].value = aoDownsampled ? this.depthDownsampleTarget.textures[1] : null;
             this.effectShaderQuad.material.uniforms["projMat"].value = this.camera.projectionMatrix;
             this.effectShaderQuad.material.uniforms["viewMat"].value = this.camera.matrixWorldInverse;
             this.effectShaderQuad.material.uniforms["projViewMat"].value = this.camera.projectionMatrix.clone().multiply(this.camera.matrixWorldInverse.clone());
@@ -2342,7 +2398,7 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
             this.effectShaderQuad.material.uniforms["viewMatrixInv"].value = this.camera.matrixWorld;
             this.effectShaderQuad.material.uniforms["cameraPos"].value = this.camera.getWorldPosition(new $5Whe3$Vector3());
             this.effectShaderQuad.material.uniforms["biasAdjustment"].value = new $5Whe3$Vector2(this.configuration.biasOffset, this.configuration.biasMultiplier);
-            this.effectShaderQuad.material.uniforms["resolution"].value = this.configuration.halfRes ? this._r.clone().multiplyScalar(0.5).floor() : this._r;
+            this.effectShaderQuad.material.uniforms["resolution"].value = aoDownsampled ? $05f6997e4b65da14$var$aoBufferInternalDims(this.width, this.height, this.configuration, this._aoR) : this._r;
             this.effectShaderQuad.material.uniforms["time"].value = performance.now() / 1000;
             this.effectShaderQuad.material.uniforms["samples"].value = this.samples;
             this.effectShaderQuad.material.uniforms["bluenoise"].value = this.bluenoise;
@@ -2364,16 +2420,16 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
                     this.writeTargetInternal
                 ];
                 this.poissonBlurQuad.material.uniforms["tDiffuse"].value = this.readTargetInternal.texture;
-                this.poissonBlurQuad.material.uniforms["sceneDepth"].value = this.configuration.halfRes ? this.depthDownsampleTarget.textures[0] : this.beautyRenderTarget.depthTexture;
+                this.poissonBlurQuad.material.uniforms["sceneDepth"].value = aoDownsampled ? this.depthDownsampleTarget.textures[0] : beautyDepth;
                 this.poissonBlurQuad.material.uniforms["projMat"].value = this.camera.projectionMatrix;
                 this.poissonBlurQuad.material.uniforms["viewMat"].value = this.camera.matrixWorldInverse;
                 this.poissonBlurQuad.material.uniforms["projectionMatrixInv"].value = this.camera.projectionMatrixInverse;
                 this.poissonBlurQuad.material.uniforms["viewMatrixInv"].value = this.camera.matrixWorld;
                 this.poissonBlurQuad.material.uniforms["cameraPos"].value = this.camera.getWorldPosition(new $5Whe3$Vector3());
-                this.poissonBlurQuad.material.uniforms["resolution"].value = this.configuration.halfRes ? this._r.clone().multiplyScalar(0.5).floor() : this._r;
+                this.poissonBlurQuad.material.uniforms["resolution"].value = aoDownsampled ? $05f6997e4b65da14$var$aoBufferInternalDims(this.width, this.height, this.configuration, this._aoR) : this._r;
                 this.poissonBlurQuad.material.uniforms["time"].value = performance.now() / 1000;
                 this.poissonBlurQuad.material.uniforms["blueNoise"].value = this.bluenoise;
-                this.poissonBlurQuad.material.uniforms["radius"].value = this.configuration.denoiseRadius * (this.configuration.halfRes ? 0.5 : 1);
+                this.poissonBlurQuad.material.uniforms["radius"].value = this.configuration.denoiseRadius * (aoDownsampled ? aoScale : 1);
                 this.poissonBlurQuad.material.uniforms["worldRadius"].value = trueRadius;
                 this.poissonBlurQuad.material.uniforms["distanceFalloff"].value = this.configuration.distanceFalloff;
                 this.poissonBlurQuad.material.uniforms["index"].value = i;
@@ -2401,16 +2457,17 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
             this.effectCompositerQuad.material.uniforms["transparencyDWTrueDepth"].value = this.transparencyRenderTargetDWTrue.depthTexture;
             this.effectCompositerQuad.material.uniforms["transparencyAware"].value = true;
         }
-        this.effectCompositerQuad.material.uniforms["sceneDiffuse"].value = this.beautyRenderTarget.texture;
-        this.effectCompositerQuad.material.uniforms["sceneDepth"].value = this.beautyRenderTarget.depthTexture;
+        this.effectCompositerQuad.material.uniforms["sceneDiffuse"].value = beautyColor;
+        this.effectCompositerQuad.material.uniforms["sceneDepth"].value = beautyDepth;
         this.effectCompositerQuad.material.uniforms["aoTones"].value = this.configuration.aoTones;
         this.effectCompositerQuad.material.uniforms["near"].value = this.camera.near;
         this.effectCompositerQuad.material.uniforms["far"].value = this.camera.far;
         this.effectCompositerQuad.material.uniforms["projectionMatrixInv"].value = this.camera.projectionMatrixInverse;
         this.effectCompositerQuad.material.uniforms["viewMatrixInv"].value = this.camera.matrixWorld;
         this.effectCompositerQuad.material.uniforms["ortho"].value = this.camera.isOrthographicCamera;
-        this.effectCompositerQuad.material.uniforms["downsampledDepth"].value = this.configuration.halfRes ? this.depthDownsampleTarget.textures[0] : this.beautyRenderTarget.depthTexture;
+        this.effectCompositerQuad.material.uniforms["downsampledDepth"].value = aoDownsampled ? this.depthDownsampleTarget.textures[0] : beautyDepth;
         this.effectCompositerQuad.material.uniforms["resolution"].value = this._r;
+        this.effectCompositerQuad.material.uniforms["aoBufferScale"].value = aoScale;
         this.effectCompositerQuad.material.uniforms["blueNoise"].value = this.bluenoise;
         this.effectCompositerQuad.material.uniforms["intensity"].value = this.configuration.intensity;
         this.effectCompositerQuad.material.uniforms["renderMode"].value = this.configuration.renderMode;
@@ -2491,6 +2548,10 @@ class $05f6997e4b65da14$export$2d57db20b5eb5e0a extends (0, $5Whe3$Pass) {
     }
 }
 
-
+// 2026-06-18, Composer: aoBufferScale replaces halfRes fixed 0.5 [n8ao025]
+// 2026-06-18, Composer: chained beauty from composer readBuffer [n8ao025]
+// 2026-06-18, Composer: pxGrad replaces fwidth for ANGLE loop warn [n8aofw1]
+// 2026-06-18, Composer: textureLod in denoise loop for ANGLE warn [n8aofw2]
+// 2026-06-19, Composer: HALFRES upsample uses aoBufferScale not 0.5 [n8ao026]
 export {$05f6997e4b65da14$export$ed4ee5d1e55474a5 as DepthType, $05f6997e4b65da14$export$2d57db20b5eb5e0a as N8AOPass, $87431ee93b037844$export$2489f9981ab0fa82 as N8AOPostPass};
 //# sourceMappingURL=N8AO.js.map
