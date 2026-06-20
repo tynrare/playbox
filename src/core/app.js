@@ -1,20 +1,19 @@
 /** @namespace ty */
+// App boot phases for boot-launch (steps 5, 10–11). Touchpoint order: src/index.js.
+// Scope in: start (l1 + core + splash), startplay (l2 + play attach).
+// Scope out: DOM preload, loop, canvas visibility (src/index.js).
+// Gateway role: nested | Scope id: boot-scope | Flow id: boot-launch | Upstream gateway: src/index.js
 // 2026-06-14, Composer: move app into src/core [a1c3e7]
 // 2026-06-17, Composer: flows step in core drop play.step [appflw1]
 // 2026-06-17, Composer: app stop unwinds play then core [appstp1]
 // 2026-06-17, Composer: boot canvas after preload l1 [ldbt1]
 // 2026-06-18, Composer: step passes lerped dt and real dt [appdt1]
+// 2026-06-20, Composer: boot launch playbook nested gateway [bootpb1]
 import Core from "./core.js";
 import Play from "../play.js";
 import logger from "../logger.js";
 
 // 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]
-/**
- * @typedef {Object} AppStartOptions
- * @property {(loaded: number, total: number) => void} [onProgress]
- * @property {() => void} [onCanvasReady]
- */
-
 /**
  * @class App
  * @memberof pb.app
@@ -66,17 +65,25 @@ class App {
   }
 
   /**
-   * @param {AppStartOptions} [options]
    * @returns {Promise<void>}
    */
-  async start(options = {}) {
-    const { onProgress, onCanvasReady } = options;
+  async start() {
+    // boot-launch step 5
+    // 2026-06-20, Composer: start boot preload l1 and core [appst1]
     this.active = true;
-    await this.core.assets.preload(1, onProgress);
+    await this.core.assets.preload(1);
     this.core.start();
     this.play.splashscreen(true);
-    onCanvasReady?.();
-    await this.core.assets.preload(2, onProgress);
+  }
+
+  /**
+   * @returns {Promise<void>}
+   */
+  async startplay() {
+    // boot-launch step 10
+    // 2026-06-20, Composer: startplay preload l2 and attach flows [appsp1]
+    await this.core.assets.preload(2);
+    // boot-launch step 11
     this.play.start();
     this.ready = true;
     // 2026-06-14, Composer: rename pureplay to playbox [r7n2p4]
@@ -88,7 +95,7 @@ class App {
    * @param {number} rdt
    * @returns {number}
    */
-  step(dt, rdt) {
+  step(dt, rdt = dt) {
     if (!this.active) {
       return 1;
     }
@@ -108,3 +115,6 @@ export default App;
 // 2026-06-17, Composer: app stop unwinds play then core [appstp1]
 // 2026-06-17, Composer: boot canvas after preload l1 [ldbt1]
 // 2026-06-18, Composer: step passes lerped dt and real dt [appdt1]
+// 2026-06-20, Composer: start boot preload l1 and core [appst1]
+// 2026-06-20, Composer: startplay preload l2 and attach flows [appsp1]
+// 2026-06-20, Composer: boot launch playbook nested gateway [bootpb1]

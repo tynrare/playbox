@@ -1,4 +1,4 @@
-// 2026-06-17, Composer: dom preload square symbol bottom-right [ldsq1]
+// 2026-06-20, Composer: simple centered preload message [ldsim1]
 // 2026-06-18, Composer: canvas fill pixelated upscale [cvspx1]
 
 body.active #app {
@@ -12,44 +12,21 @@ body.active #app {
   position: fixed;
   inset: 0;
   z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
+  background: #000000;
 }
 
 #preload.done {
   display: none;
 }
 
-#preload_indicator {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-#preload_square {
-  width: 1rem;
-  height: 1rem;
-  background: #ffffff;
-  animation: preload-spin 1s linear infinite;
-}
-
-@keyframes preload-spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-#preload_symbol {
+#preload_msg {
   font-family: monospace;
   font-size: 1rem;
   color: #ffffff;
-  min-width: 1ch;
 }
 
 #app > canvas#canvas_pb {
@@ -66,5 +43,5 @@ body.active #app {
 }
 
 // 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]
-// 2026-06-17, Composer: dom preload square symbol bottom-right [ldsq1]
+// 2026-06-20, Composer: simple centered preload message [ldsim1]
 // 2026-06-18, Composer: canvas fill pixelated upscale [cvspx1]

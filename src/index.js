@@ -1,13 +1,32 @@
+// Boot entry gateway: DOM preload messages, loop ownership, app boot phase order.
+// Scope in: preload overlay, #app/canvas visibility, rAF loop, main() orchestration.
+// Scope out: core/play boot internals (src/core/app.js), asset registry (assets.js).
+// Related: index.html, index.less, src/core/app.js, src/core/loop.js
+// Gateway role: index | Scope id: boot-scope | Flow id: boot-launch
+// Downstream gateways: src/core/app.js (boot-launch steps 5, 10–11)
+//
+// boot-launch flow:
+// 1) index.html → preload_msg "loading" before JS
+// 2) main → setPreloadMessage "starting"
+// 3) main → #app.active; App.init; Loop alloc
+// 4) main → setPreloadMessage "booting"
+// 5) app.start → l1 preload, core.start, splash ui_loading (app.js step 5)
+// 6) main → #app.ready so canvas is displayable
+// 7) main → bootDraw one app.step paints ui_loading on canvas
+// 8) main → #preload.done hides dom overlay
+// 9) main → startLoop rAF drives app.step
+// 10) app.startplay → l2 preload; loop keeps ui_loading visible (app.js step 10)
+// 11) app.startplay → play.start clears splash; app.ready (app.js step 11)
+// Branches / invariants: loop owned here not App; .ready before bootDraw;
+//   bootDraw before preload hide; splash until play.start inside startplay
 // 2026-06-14, Composer: import app from src/core [f6b8d2]
-// 2026-06-17, Composer: await async start before rAF loop [idxaw1]
-// 2026-06-17, Composer: dom preload progress then canvas loop [ldidx1]
 // 2026-06-18, Composer: booling loop lerp dt step dt rdt [idxlp1]
+// 2026-06-20, Composer: boot launch playbook gateway index [bootpb1]
 import App from "./core/app.js";
 import Loop from "./core/loop.js";
 import logger from "./logger.js";
 
 const DT_MAX = 100;
-const PROGRESS_SYMBOLS = " .:-=+*#%@";
 
 /**
  * @param {App} app
@@ -28,55 +47,46 @@ function startLoop(app, loop) {
 }
 
 /**
- * @param {number} loaded
- * @param {number} total
+ * @param {string} text
  * @returns {void}
  */
-function setPreloadProgress(loaded, total) {
-	const symbol = document.getElementById("preload_symbol");
-	if (!symbol) {
-		return;
+function setPreloadMessage(text) {
+	const msg = document.getElementById("preload_msg");
+	if (msg) {
+		msg.textContent = text;
 	}
-	if (total <= 0) {
-		symbol.textContent = PROGRESS_SYMBOLS[0];
-		return;
-	}
-	const i = Math.min(
-		PROGRESS_SYMBOLS.length - 1,
-		Math.floor((loaded / total) * PROGRESS_SYMBOLS.length),
-	);
-	symbol.textContent = PROGRESS_SYMBOLS[i];
 }
 
 async function main() {
+	// boot-launch step 2
+	setPreloadMessage("starting");
+
 	const appEl = document.getElementById("app");
 	const preloadEl = document.getElementById("preload");
+	// boot-launch step 3
 	appEl?.classList.add("active");
 
 	const app = new App();
 	app.init();
-
-	let loopStarted = false;
 	const loop = new Loop();
-	// 2026-06-17, Composer: dom preload progress then canvas loop [ldidx1]
-	await app.start({
-		onProgress: setPreloadProgress,
-		onCanvasReady: () => {
-			preloadEl?.classList.add("done");
-			appEl?.classList.add("loading");
-			if (!loopStarted) {
-				loopStarted = true;
-				startLoop(app, loop);
-			}
-		},
-	});
 
+	// boot-launch step 4
+	setPreloadMessage("booting");
+	// boot-launch step 5
+	await app.start();
+	// boot-launch step 6
 	appEl?.classList.add("ready");
-	appEl?.classList.remove("loading");
+	app.step(16e-3);
+	// boot-launch step 8
+	preloadEl?.classList.add("done");
+	// boot-launch step 9
+	startLoop(app, loop);
+	// boot-launch steps 10–11
+	await app.startplay();
 }
 
 window.main = main;
 // 2026-06-14, Composer: import app from src/core [f6b8d2]
-// 2026-06-17, Composer: await async start before rAF loop [idxaw1]
-// 2026-06-17, Composer: dom preload progress then canvas loop [ldidx1]
 // 2026-06-18, Composer: booling loop lerp dt step dt rdt [idxlp1]
+// 2026-06-20, Composer: boot launch playbook gateway index [bootpb1]
+// 2026-06-20, Composer: one step draws ui_loading before preload hide [idxdr1]

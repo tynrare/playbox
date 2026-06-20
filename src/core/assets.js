@@ -66,10 +66,9 @@ class Assets {
 
   /**
    * @param {number} level
-   * @param {(loaded: number, total: number) => void} [onProgress]
    * @returns {Promise<void>}
    */
-  async preload(level, onProgress) {
+  async preload(level) {
     logger.log(`Assets::preload l${level}.`);
     const files = this._db.get("files");
     const filelist = files.getkeys();
@@ -85,18 +84,8 @@ class Assets {
       names.push(conf["name"]);
     }
 
-    const total = jobs.length;
-    let loaded = 0;
-    // 2026-06-17, Composer: preload per-file progress callback [ldprg1]
-    onProgress?.(loaded, total);
-
-    await Promise.all(
-      jobs.map(async (conf) => {
-        await this.load_file(conf);
-        loaded++;
-        onProgress?.(loaded, total);
-      }),
-    );
+    // 2026-06-20, Composer: preload without progress callback [ldsim1]
+    await Promise.all(jobs.map((conf) => this.load_file(conf)));
 
     const wasntload = [];
     for (const i in names) {
@@ -190,4 +179,4 @@ export default Assets;
 // 2026-06-14, Composer: cache THREE.Texture at preload, drop three_texture [t3cch1]
 // 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]
 // 2026-06-14, Composer: move assets into src/core [b2d4f8]
-// 2026-06-17, Composer: preload per-file progress callback [ldprg1]
+// 2026-06-20, Composer: preload without progress callback [ldsim1]
