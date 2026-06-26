@@ -2,10 +2,11 @@ db#db_pb_items(name="items")
    //- 2026-06-14, Composer: mesh-less floor collision item [flit1]
    d(name="floor_item"               id="0" body="floor")
    d(name="box_test_item"            id="1" body="box" mesh="box_timber")
+   d(name="coin_a_item"              id="2" body="coin_a" mesh="coin_a")
 
 db#db_pb_toys(name="toys")
    d(name="box_test_toy"            id="1" item="box_test_item"
       modules="[lifespan]" lifespan="10")
    d(name="box_just_toy"            id="2" item="box_test_item")
-
+   d(name="coin_a_toy"              id="3" item="coin_a_item")
 //- 2026-06-14, Composer: mesh-less floor collision item [flit1]

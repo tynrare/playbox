@@ -110,10 +110,33 @@ class Assets {
    */
   async load_file(conf) {
     const path = conf["path"];
+    // 2026-06-26, Composer: route glb/gltf preload to load_file_gltf [assglt1]
+    if (path.endsWith(".glb") || path.endsWith(".gltf")) {
+      return await this.load_file_gltf(conf);
+    }
     if (path.endsWith(".json")) {
       return await this.load_file_json(conf);
     }
     return await this.load_file_texture(conf);
+  }
+
+  /**
+   * @param {Object} conf
+   * @param {string} conf.name
+   * @param {string} conf.path
+   * @returns {Promise<object|null>}
+   */
+  async load_file_gltf(conf) {
+    const name = conf["name"];
+    const path = conf["path"];
+    try {
+      const gltf = await Loader.instance.get_gltf(path);
+      this.filecache.set(name, gltf);
+      return gltf;
+    } catch (err) {
+      logger.error(`Assets::load_file_gltf error loading ${path}: ${err}`);
+      return null;
+    }
   }
 
   /**
@@ -175,6 +198,7 @@ class Assets {
 }
 
 export default Assets;
+// 2026-06-26, Composer: route glb/gltf preload to load_file_gltf [assglt1]
 // 2026-06-14, Composer: stop is no-op, dispose clears texture cache [asscyc1]
 // 2026-06-14, Composer: cache THREE.Texture at preload, drop three_texture [t3cch1]
 // 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]

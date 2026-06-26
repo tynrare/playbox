@@ -41,7 +41,7 @@ function createFloorPlane(map = null, size = 64) {
 		map.wrapT = THREE.RepeatWrapping;
 	}
 	const plane = new THREE.Mesh(geometry, material);
-	plane.receiveShadow = true;
+	plane.receiveShadow = false;
 	return plane;
 }
 

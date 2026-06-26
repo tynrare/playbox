@@ -52,6 +52,8 @@ class Scene {
       vec3: new oimo.common.Vec3(),
       transform: new oimo.common.Transform(),
     };
+    /** @type {Record<string, THREE.Material>} */
+    this._cache_materials = {};
   }
 
   /**
@@ -100,6 +102,11 @@ class Scene {
    */
   dispose() {
     // 2026-06-17, Composer: dispose scene physics pools on teardown [crcyc4]
+    // 2026-06-26, Composer: dispose cached scene materials [scnmat1]
+    for (const key in this._cache_materials) {
+      this._cache_materials[key]?.dispose?.();
+    }
+    this._cache_materials = {};
     this.stop();
   }
 
@@ -249,6 +256,11 @@ class Scene {
     }
 
     // 2026-06-18, Composer: imesh key is model name geometry+material [mdcol1]
+    // 2026-06-26, Composer: makemodel gltf source/object branch [scnglt1]
+    if (conf["source"] && conf["object"]) {
+      return this._makemodel_gltf(name, conf);
+    }
+
     const type = conf["type"];
     if (type !== "box") {
       logger.error(`Scene::model unsupported type: ${type}`);
@@ -279,7 +291,7 @@ class Scene {
         capacity: 8,
         renderer: this._draw._render.renderer,
         castShadow: true,
-        receiveShadow: true,
+        receiveShadow: false,
       }, this._draw.pivot);
     }
 
@@ -289,6 +301,163 @@ class Scene {
     }
 
     // 2026-06-14, Composer: model returns entity only not wrapper [scnmd1]
+    return entity;
+  }
+
+  /**
+   * @param {Record<string, any>} meshconf
+   * @param {THREE.Material|THREE.Material[]|null} sourcematerial
+   * @returns {THREE.Material}
+   */
+  _get_material(meshconf, sourcematerial) {
+    const sourcekey = meshconf["source"];
+    const srcMat = Array.isArray(sourcematerial)
+      ? sourcematerial[0]
+      : sourcematerial;
+    const __materialkey = meshconf["material"];
+    const __smaterialkey = srcMat?.name ? `${sourcekey}-${srcMat.name}` : null;
+    const materialconf = __materialkey
+      ? this._db.get("materials")?.getconfig(__materialkey)
+      : null;
+    const _materialkey = materialconf ? __materialkey : __smaterialkey;
+
+    const use_scenematerial = !_materialkey;
+    const materialkey = use_scenematerial ? "scenematerial" : _materialkey;
+    let material = this._cache_materials[materialkey];
+    if (!material) {
+      const scenematerialconf = use_scenematerial
+        ? this._db.get("materials")?.getconfig("scenematerial")
+        : materialconf;
+      const activeconf = scenematerialconf ?? materialconf;
+      const map =
+        (use_scenematerial && activeconf?.map
+          ? this._assets.file(activeconf.map)
+          : null) ||
+        (materialconf?.map ? this._assets.file(materialconf.map) : null) ||
+        srcMat?.map ||
+        null;
+      const emissive =
+        activeconf?.emissive ??
+        materialconf?.emissive ??
+        srcMat?.emissive?.getHex?.() ??
+        0xffffff;
+      const color =
+        activeconf?.color ??
+        materialconf?.color ??
+        srcMat?.color?.getHex?.() ??
+        0xffffff;
+      const glow =
+        activeconf?.glow ??
+        materialconf?.glow ??
+        srcMat?.emissiveIntensity ??
+        0;
+      const materialclass = this._get_material_class(
+        activeconf?.type ?? materialconf?.type,
+      );
+      const shininess = activeconf?.shininess ?? materialconf?.shininess;
+      // 2026-06-26, Composer: cached ExtendedMaterial DitheredOpacity CSM [scnmat1]
+      // 2026-06-26, Composer: material shininess for MeshPhongMaterial [scnph1]
+      this._cache_materials[materialkey] = material = new ExtendedMaterial(
+        materialclass,
+        [DitheredOpacity],
+        {
+          map: map ?? null,
+          emissiveMap: map ?? null,
+          emissive: cache.color0.setHex(emissive),
+          color: cache.color1.setHex(color),
+          emissiveIntensity: glow,
+          opacity: activeconf?.opacity ?? materialconf?.opacity ?? 1,
+          ...(shininess != null ? { shininess } : {}),
+        },
+      );
+      material.side = THREE.DoubleSide;
+      this.environment.csm?.setupMaterial(material);
+    }
+
+    return material;
+  }
+
+  /**
+   * @param {string} [name]
+   * @returns {typeof THREE.MeshStandardMaterial}
+   */
+  _get_material_class(name) {
+    switch (name) {
+      case "basic":
+        return THREE.MeshBasicMaterial;
+      case "toon":
+        return THREE.MeshToonMaterial;
+      case "standard":
+        return THREE.MeshStandardMaterial;
+      case "lambert":
+        return THREE.MeshLambertMaterial;
+      case "phong":
+        return THREE.MeshPhongMaterial;
+      default:
+        return THREE.MeshStandardMaterial;
+    }
+  }
+
+  /**
+   * @param {string} name
+   * @param {Record<string, any>} conf
+   * @returns {import("@three.ez/instanced-mesh").InstancedEntity|null}
+   */
+  _makemodel_gltf(name, conf) {
+    const sourcekey = conf["source"];
+    const objectkey = conf["object"];
+    const gltf = this._assets.file(sourcekey);
+    if (!gltf?.scene) {
+      logger.error(
+        `Scene::_makemodel_gltf "${name}" error: no source "${sourcekey}" preloaded`,
+      );
+      return null;
+    }
+
+    const sourcemesh = gltf.scene.getObjectByName(objectkey);
+    if (!sourcemesh?.isMesh) {
+      logger.error(
+        `Scene::_makemodel_gltf "${name}" error: no mesh "${objectkey}" in "${sourcekey}"`,
+      );
+      return null;
+    }
+
+    const core = this._draw.core;
+    if (!core) {
+      logger.error(`Scene::_makemodel_gltf drawcore not ready`);
+      return null;
+    }
+
+    const geometry = sourcemesh.geometry.clone();
+    const srcMaterial = sourcemesh.material;
+    const material = this._get_material(conf, srcMaterial);
+
+    if (!core.getimesh(name)) {
+      core.initimesh(name, geometry, material, {
+        capacity: 8,
+        renderer: this._draw._render.renderer,
+        castShadow: true,
+        receiveShadow: false,
+      }, this._draw.pivot);
+      core.inituniforms(name, {
+        color: "vec3",
+        emissive: "vec3",
+        opacity: "float",
+      });
+    }
+
+    const entity = core.makemesh(name);
+    if (!entity) {
+      return null;
+    }
+
+    entity.setUniform("opacity", material.opacity);
+    entity.setUniform(
+      "emissive",
+      cache.color0.copy(material.emissive ?? cache.color0.setHex(0xffffff)).multiplyScalar(material.emissiveIntensity ?? 0),
+    );
+    entity.setUniform("color", cache.color1.copy(material.color));
+
     return entity;
   }
 
@@ -370,6 +539,16 @@ class Scene {
   }
 
   /**
+   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {import("three").Quaternion} rotation
+   * @returns {void}
+   */
+  // 2026-06-26, Composer: set_bodyrotation via physics [scnrot1]
+  set_bodyrotation(body, rotation) {
+    this._physics.setBodyRotation(body, rotation);
+  }
+
+  /**
    * @param {number} index
    * @returns {import("@three.ez/instanced-mesh").InstancedEntity|null}
    */
@@ -392,17 +571,35 @@ class Scene {
 
   /**
    * @param {number} index
-   * @param {number} x
-   * @param {number} y
-   * @param {number} z
+   * @param {number|import("three").Vector3} x
+   * @param {number} [y]
+   * @param {number} [z]
    * @returns {void}
    */
+  // 2026-06-26, Composer: set_itemposition accepts Vector3 [scnpos1]
   set_itemposition(index, x, y, z) {
+    if (x != null && typeof x === "object") {
+      return this.set_itemposition(index, x.x, x.y, x.z);
+    }
     const body = this.get_itembody(index);
     if (!body) {
       return;
     }
     this.set_bodyposition(body, x, y, z);
+  }
+
+  /**
+   * @param {number} index
+   * @param {import("three").Quaternion} rotation
+   * @returns {void}
+   */
+  // 2026-06-26, Composer: set_itemrotation via body quaternion [scnrot1]
+  set_itemrotation(index, rotation) {
+    const body = this.get_itembody(index);
+    if (!body) {
+      return;
+    }
+    this.set_bodyrotation(body, rotation);
   }
 
   /**
@@ -477,6 +674,16 @@ class Scene {
     rbody_config.linearDamping = bodyconf.ldamping ?? 1;
 
     const body = new RigidBody(rbody_config);
+
+    // 2026-06-26, Composer: bounds body from model mesh bbox [scnbnd1]
+    if (bodyconf.type === "bounds") {
+      if (!this._makebodyshape_bounds(bodyconf, body)) {
+        return null;
+      }
+      body.setGravityScale(bodyconf.gravityscale ?? 1);
+      return body;
+    }
+
     let geometry = null;
 
     switch (bodyconf.shape) {
@@ -487,6 +694,12 @@ class Scene {
             (bodyconf.h ?? 1) * 0.5,
             (bodyconf.l ?? 1) * 0.5,
           ),
+        );
+        break;
+      case "cylinder":
+        geometry = new oimo.collision.geometry.CylinderGeometry(
+          bodyconf.r ?? 0.5,
+          (bodyconf.h ?? 1) * 0.5,
         );
         break;
       default:
@@ -508,6 +721,151 @@ class Scene {
 
     body.setGravityScale(bodyconf.gravityscale ?? 1);
     return body;
+  }
+
+  /**
+   * @param {Record<string, any>} bodyconf
+   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @returns {boolean}
+   */
+  _makebodyshape_bounds(bodyconf, body) {
+    const modelkey = bodyconf.source;
+    const modelconf = this._db.get("models")?.getconfig(modelkey);
+    if (!modelconf) {
+      logger.error(
+        `Scene::_makebodyshape_bounds error: no model "${modelkey}" declared`,
+      );
+      return false;
+    }
+
+    const gltf = this._assets.file(modelconf.source);
+    if (!gltf?.scene) {
+      logger.error(
+        `Scene::_makebodyshape_bounds error: no gltf "${modelconf.source}" preloaded`,
+      );
+      return false;
+    }
+
+    const objectkey = modelconf.object;
+    const sourceobject = gltf.scene.getObjectByName(objectkey);
+    if (!sourceobject) {
+      logger.error(
+        `Scene::_makebodyshape_bounds error: no object "${objectkey}" in "${modelconf.source}"`,
+      );
+      return false;
+    }
+
+    let added = false;
+    sourceobject.traverse((o) => {
+      /** @type {THREE.Mesh} */
+      const mesh = /** @type {any} */ (o);
+      if (!mesh.isMesh) {
+        return;
+      }
+
+      const count = mesh.count ?? 1;
+      for (let i = 0; i < count; i++) {
+        if (mesh.isInstancedMesh) {
+          if (this.create_instanced_mesh_shape(mesh, i, body, bodyconf)) {
+            added = true;
+          }
+        } else if (this.create_mesh_shape(mesh, body, bodyconf)) {
+          added = true;
+        }
+      }
+    });
+
+    return added;
+  }
+
+  /**
+   * @param {THREE.InstancedMesh} mesh
+   * @param {number} index
+   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {Record<string, any>} bodyconf
+   * @returns {oimo.dynamics.rigidbody.Shape|null}
+   */
+  create_instanced_mesh_shape(mesh, index, body, bodyconf) {
+    if (!mesh.geometry.boundingBox) {
+      mesh.geometry.computeBoundingBox();
+    }
+
+    const bb = cache.box3.copy(mesh.geometry.boundingBox);
+    const matrix = cache.mat4;
+    mesh.getMatrixAt(index, matrix);
+    bb.applyMatrix4(mesh.matrixWorld);
+
+    return this.create_shape(bb, matrix, body, bodyconf);
+  }
+
+  /**
+   * @param {THREE.Mesh} mesh
+   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {Record<string, any>} bodyconf
+   * @returns {oimo.dynamics.rigidbody.Shape|null}
+   */
+  create_mesh_shape(mesh, body, bodyconf) {
+    if (!mesh.geometry.boundingBox) {
+      mesh.geometry.computeBoundingBox();
+    }
+
+    return this.create_shape(
+      mesh.geometry.boundingBox,
+      mesh.matrixWorld,
+      body,
+      bodyconf,
+    );
+  }
+
+  /**
+   * @param {THREE.Box3} boundbox
+   * @param {THREE.Matrix4} matrix
+   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {Record<string, any>} bodyconf
+   * @returns {oimo.dynamics.rigidbody.Shape|null}
+   */
+  create_shape(boundbox, matrix, body, bodyconf) {
+    const size = boundbox.getSize(cache.vec3.v0);
+    const center = boundbox.getCenter(cache.vec3.v1);
+    const pos = cache.vec3.v2;
+    const rot = cache.quat.q0;
+    const scale = cache.vec3.v4;
+    matrix.decompose(pos, rot, scale);
+    pos.add(center);
+    size.x *= scale.x;
+    size.y *= scale.y;
+    size.z *= scale.z;
+
+    let geometry = null;
+    if (bodyconf.shape === "cylinder") {
+      const radius = Math.max(size.x, size.z) * 0.5;
+      const halfHeight = size.y * 0.5;
+      geometry = new oimo.collision.geometry.CylinderGeometry(radius, halfHeight);
+    } else {
+      geometry = new oimo.collision.geometry.BoxGeometry(
+        this._body_cache.vec3.init(size.x * 0.5, size.y * 0.5, size.z * 0.5),
+      );
+    }
+
+    const rshape_config = new oimo.dynamics.rigidbody.ShapeConfig();
+    rshape_config.geometry = geometry;
+    rshape_config.density = bodyconf.density ?? 1;
+    rshape_config.friction = bodyconf.friction ?? 1;
+    rshape_config.restitution = bodyconf.restitution ?? 0;
+    const rshape = new oimo.dynamics.rigidbody.Shape(rshape_config);
+    body.addShape(rshape);
+
+    const t = this._body_cache.transform;
+    const oq = this._physics.cache.quat;
+    oq.x = rot.x;
+    oq.y = rot.y;
+    oq.z = rot.z;
+    oq.w = rot.w;
+    t.setPosition(this._body_cache.vec3.init(pos.x, pos.y, pos.z));
+    t.setOrientation(oq);
+    rshape.setLocalTransform(t);
+
+    return rshape;
   }
 
   /**
@@ -592,3 +950,9 @@ export default Scene;
 // 2026-06-14, Composer: item events pass index scalar [itmhp1]
 // 2026-06-14, Composer: snake_case scene method names [snkcs1]
 // 2026-06-17, Composer: dispose scene physics pools on teardown [crcyc4]
+// 2026-06-26, Composer: set_itemposition accepts Vector3 [scnpos1]
+// 2026-06-26, Composer: set_itemrotation via body quaternion [scnrot1]
+// 2026-06-26, Composer: makemodel gltf source/object branch [scnglt1]
+// 2026-06-26, Composer: bounds body from model mesh bbox [scnbnd1]
+// 2026-06-26, Composer: cached ExtendedMaterial DitheredOpacity CSM [scnmat1]
+// 2026-06-26, Composer: material shininess for MeshPhongMaterial [scnph1]

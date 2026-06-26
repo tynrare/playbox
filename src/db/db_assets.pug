@@ -1,21 +1,30 @@
 //- 2026-06-14, Composer: Three.js db wipe texture arrays [t3db1]
 db#db_pb_files(name="files")
-   d(name="afont"                 path="fonts/simplestfont-msdf.png"       preload="1" pixelate="false")
-   d(name="afont-config"          path="fonts/simplestfont-msdf.json"      preload="1")
+   d(name="afont"                   path="fonts/simplestfont-msdf.png"        preload="1" pixelate="false")
+   d(name="afont-config"            path="fonts/simplestfont-msdf.json"       preload="1")
    //- 2026-06-14, Composer: coinmania and gameicons sprite atlases [sprdb1]
-   d(name="coinmania"             path="sprites/coinmania.png"             preload="1" pixelate="false"
-                                    frames="255" w="21" h="13")
-   d(name="gameicons"             path="sprites/gameicons.png"             preload="1" pixelate="false"
-                                    frames="106" w="11" h="10")
-   d(name="floor"                  path="textures/tex1.png"                 preload="2")
-   d(name="timber_square_clay"    path="textures/timber_square_clay.png"   preload="2")
+   d(name="coinmania"               path="sprites/coinmania.png"              preload="1" pixelate="false"
+                                       frames="255" w="21" h="13")
+   d(name="gameicons"               path="sprites/gameicons.png"              preload="1" pixelate="false"
+                                       frames="106" w="11" h="10")
+   d(name="floor"                   path="textures/tex2.png"                  preload="2")
+   d(name="timber_square_clay"      path="textures/timber_square_clay.png"    preload="2")
+   d(name="props"                   path="models/props.glb"                   preload="2")
 
 db#db_pb_fonts(name="fonts")
    d(name="afont" id="1" source="afont" config="afont-config" msdf="true" boldness="0.2")
 
+//- 2026-06-26, Composer: materials db for scene _get_material [matdb1]
+//- 2026-06-26, Composer: coin_a phong material shininess 10 [matcn1]
+db#db_pb_materials(name="materials")
+   d(name="material_proto" id="0")
+   d(name="scenematerial" type="standard" color="0xffffff" glow="0" opacity="1")
+   d(name="coin_a" type="phong" shininess="10" emissive="0xffffff" glow="1")
+
 //- 2026-06-18, Composer: collapse models_instanced into models [mdcol1]
 db#db_pb_models(name="models")
    d(name="box_timber"            type="box" w="1" h="1" d="1" texture="timber_square_clay")
+   d(name="coin_a"                source="props" object="coin_a" material="coin_a")
 
 //- 2026-06-17, Composer: coinmania and gameicons sprite registry from booling [sprpt1]
 include db_sprites.pug
@@ -24,3 +33,5 @@ include db_sprites.pug
 //- 2026-06-14, Composer: Three.js db wipe texture arrays [t3db1]
 //- 2026-06-14, Composer: coinmania and gameicons sprite atlases [sprdb1]
 //- 2026-06-17, Composer: coinmania and gameicons sprite registry from booling [sprpt1]
+//- 2026-06-26, Composer: materials db for scene _get_material [matdb1]
+//- 2026-06-26, Composer: coin_a phong material shininess 10 [matcn1]

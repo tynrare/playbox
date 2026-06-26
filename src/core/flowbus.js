@@ -24,10 +24,13 @@
 
 // Branches: late attach after bus.start auto-starts flow
 
+// Touchpoints: flow.state open/close via emitFlowState (flw-mnu router)
+
 /** @namespace ty */
 
 // 2026-06-17, Composer: flowbus attach detach running flag [flwatt1]
 // 2026-06-17, Composer: flowbus start idempotent guard [flwidp1]
+// 2026-06-26, Composer: flowbus emitFlowState flow.state [flwflw1]
 
 import FlowBase from "./flowbase.js";
 
@@ -115,7 +118,16 @@ class FlowBus {
 
 	}
 
-
+	/**
+	 * @brief Emit attached-flow open/close for router subscribers.
+	 * @param {"open"|"close"} action
+	 * @param {"root"|"dev"|"settings"|"test"|"arcade"} key
+	 * @returns {void}
+	 */
+	emitFlowState(action, key) {
+		// 2026-06-26, Composer: flowbus arcade flow.state key [flwflw2]
+		this._eventsbus.emit("flow.state", { action, key });
+	}
 
 	/** @returns {void} */
 
@@ -186,7 +198,8 @@ class FlowBus {
 
 
 export default FlowBus;
-
+// 2026-06-26, Composer: flowbus arcade flow.state key [flwflw2]
+// 2026-06-26, Composer: flowbus emitFlowState flow.state [flwflw1]
 // 2026-06-17, Composer: flowbus attach detach running flag [flwatt1]
 // 2026-06-17, Composer: flowbus start idempotent guard [flwidp1]
 

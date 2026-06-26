@@ -1,10 +1,9 @@
 /** @namespace ty */
 // 2026-06-14, Composer: import core from src/core [g7c9e3]
 // 2026-06-17, Composer: play boot attaches menu flow only [plmn1]
-// 2026-06-17, Composer: play keeps dev flow always attached [pldev1]
 // 2026-06-18, Composer: play owns settings inject flows [plstg1]
+// 2026-06-26, Composer: play attaches menu flow only no dev [plmn2]
 import Core from "./core/core.js";
-import DevFlow from "./flows/dev.js";
 import MenuFlow from "./flows/menu.js";
 import Settings from "./play/settings.js";
 
@@ -18,8 +17,6 @@ class Play {
 	 */
 	constructor(core) {
 		this._core = core;
-		/** @type {DevFlow|null} */
-		this._dev = null;
 		/** @type {MenuFlow|null} */
 		this._menu = null;
 		/** @type {Settings|null} */
@@ -30,10 +27,9 @@ class Play {
 	 * @returns {Play}
 	 */
 	init() {
-		// 2026-06-17, Composer: play keeps dev flow always attached [pldev1]
 		// 2026-06-18, Composer: play owns settings inject flows [plstg1]
+		// 2026-06-26, Composer: play attaches menu flow only no dev [plmn2]
 		this._settings = new Settings(this._core.datawork);
-		this._dev = new DevFlow(this._core, this._settings).init();
 		this._menu = new MenuFlow(this._core, this._settings).init();
 		return this;
 	}
@@ -54,20 +50,15 @@ class Play {
 	start() {
 		this.splashscreen(false);
 		this._settings?.start(this._core);
-		if (this._dev) {
-			this._core.flowbus.attach(this._dev);
-		}
 		if (this._menu) {
 			this._core.flowbus.attach(this._menu);
+			this._menu.navigate("arcade");
 		}
 	}
 
 	/** @returns {void} */
 	stop() {
 		this._menu?.teardown();
-		if (this._dev) {
-			this._core.flowbus.detach(this._dev);
-		}
 	}
 
 	/** @returns {void} */
@@ -77,7 +68,5 @@ class Play {
 }
 
 export default Play;
-// 2026-06-14, Composer: import core from src/core [g7c9e3]
-// 2026-06-17, Composer: play boot attaches menu flow only [plmn1]
-// 2026-06-17, Composer: play keeps dev flow always attached [pldev1]
+// 2026-06-26, Composer: play attaches menu flow only no dev [plmn2]
 // 2026-06-18, Composer: play owns settings inject flows [plstg1]

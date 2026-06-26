@@ -1,8 +1,9 @@
 /** @namespace ty */
 // 2026-06-17, Composer: dev menu flow lazy test swap [flwdmn1]
 // 2026-06-18, Composer: dev menu back button to root [flwdmn2]
+// 2026-06-26, Composer: dev menu settings button swap [flwdmn3]
+// 2026-06-26, Composer: dev menu navigate events no parent ctor [flwdmn4]
 import FlowBase from "../core/flowbase.js";
-import TestFlow from "./test.js";
 
 /**
  * @class DevMenuFlow
@@ -11,35 +12,33 @@ import TestFlow from "./test.js";
 class DevMenuFlow extends FlowBase {
 	/**
 	 * @param {import("../core/core.js").default} core
-	 * @param {import("./menu.js").default} menuFlow
 	 */
-	constructor(core, menuFlow) {
+	constructor(core) {
 		super(core);
-		this._menu = menuFlow;
 	}
 
 	/**
 	 * @returns {this}
 	 */
 	init() {
-		/** @type {TestFlow|null} */
-		this._test = null;
 		return this;
 	}
 
 	/** @returns {void} */
 	start() {
-		// 2026-06-17, Composer: dev menu flow lazy test swap [flwdmn1]
-		// 2026-06-18, Composer: dev menu back button to root [flwdmn2]
+		// 2026-06-26, Composer: dev menu navigate events no parent ctor [flwdmn4]
 		this._core.ui.setstate("ui_dev_menu_vis");
 		this._ui_click_id = this._core.eventsbus.on("ui.click", ({ event }) => {
 			if (event === "dev_btn_0") {
-				this._return_menu();
+				this._core.eventsbus.emit("flow.navigate", { to: "root" });
 				return;
 			}
-			// 2026-06-18, Composer: dev menu back button to root [flwdmn2]
 			if (event === "dev_btn_1") {
-				this._open_test();
+				this._core.eventsbus.emit("flow.navigate", { to: "test" });
+				return;
+			}
+			if (event === "dev_btn_2") {
+				this._core.eventsbus.emit("flow.navigate", { to: "settings" });
 			}
 		});
 	}
@@ -52,39 +51,8 @@ class DevMenuFlow extends FlowBase {
 		}
 		this._core.ui.delstate("ui_dev_menu_vis");
 	}
-
-	/** @returns {void} */
-	_open_test() {
-		if (!this._test) {
-			this._test = new TestFlow(this._core, this._menu).init();
-		}
-		this._swap(this._test);
-	}
-
-	/** @returns {void} */
-	teardown_active() {
-		if (this._test) {
-			this._core.flowbus.detach(this._test);
-		}
-		this._core.flowbus.detach(this);
-	}
-
-	/**
-	 * @param {FlowBase} next
-	 * @returns {void}
-	 */
-	_swap(next) {
-		this._core.flowbus.detach(this);
-		this._core.flowbus.attach(next);
-	}
-
-	/** @returns {void} */
-	_return_menu() {
-		this._core.flowbus.detach(this);
-		this._core.flowbus.attach(this._menu);
-	}
 }
 
 export default DevMenuFlow;
-// 2026-06-17, Composer: dev menu flow lazy test swap [flwdmn1]
-// 2026-06-18, Composer: dev menu back button to root [flwdmn2]
+// 2026-06-26, Composer: dev menu navigate events no parent ctor [flwdmn4]
+// 2026-06-26, Composer: dev menu settings button swap [flwdmn3]

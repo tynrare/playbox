@@ -1,10 +1,11 @@
 /** @namespace ty */
-// 2026-06-18, Composer: settings menu flow back to root [flwstg1]
+// 2026-06-18, Composer: settings menu flow back to dev menu [flwstg7]
 // 2026-06-18, Composer: settings menu floor toy stack [flwstg2]
 // 2026-06-18, Composer: settings menu distant orbit camera [flwstg3]
 // 2026-06-18, Composer: settings menu quality cycle button [flwstg4]
 // 2026-06-18, Composer: settings shadows tilt shift ao toggles [flwstg5]
 // 2026-06-18, Composer: settings pixelate postprocess toggle [flwstg6]
+// 2026-06-26, Composer: settings menu navigate events no parent [flwstg8]
 import FlowBase from "../core/flowbase.js";
 
 const TOY_STACK_COUNT = 10;
@@ -21,12 +22,10 @@ const ORBIT_LOOK_Y = 5;
 class SettingsMenuFlow extends FlowBase {
 	/**
 	 * @param {import("../core/core.js").default} core
-	 * @param {import("./menu.js").default} menuFlow
 	 * @param {import("../play/settings.js").default} settings
 	 */
-	constructor(core, menuFlow, settings) {
+	constructor(core, settings) {
 		super(core);
-		this._menu = menuFlow;
 		this._settings = settings;
 	}
 
@@ -47,7 +46,7 @@ class SettingsMenuFlow extends FlowBase {
 
 	/** @returns {void} */
 	start() {
-		// 2026-06-18, Composer: settings menu flow back to root [flwstg1]
+		// 2026-06-18, Composer: settings menu flow back to dev menu [flwstg7]
 		// 2026-06-18, Composer: settings menu floor toy stack [flwstg2]
 		// 2026-06-18, Composer: settings menu distant orbit camera [flwstg3]
 		const camera = this._core.render?.camera;
@@ -56,6 +55,7 @@ class SettingsMenuFlow extends FlowBase {
 		}
 
 		this._core.scene.environment.floorstyle("floor", 0xffffff);
+		this._core.scene.environment.shadowstyle(0x0, 0.5);
 		this._floor_index = this._core.itembox.spawn("floor_item");
 		this._toy_indices = [];
 		for (let i = 0; i < TOY_STACK_COUNT; i++) {
@@ -70,7 +70,8 @@ class SettingsMenuFlow extends FlowBase {
 		this._sync_settings_labels();
 		this._ui_click_id = this._core.eventsbus.on("ui.click", ({ event }) => {
 			if (event === "settings_btn_0") {
-				this._return_menu();
+				// 2026-06-26, Composer: settings menu navigate events no parent [flwstg8]
+				this._core.eventsbus.emit("flow.navigate", { to: "dev" });
 				return;
 			}
 			// 2026-06-18, Composer: settings menu quality cycle button [flwstg4]
@@ -145,17 +146,6 @@ class SettingsMenuFlow extends FlowBase {
 	}
 
 	/** @returns {void} */
-	teardown_active() {
-		this._core.flowbus.detach(this);
-	}
-
-	/** @returns {void} */
-	_return_menu() {
-		this._core.flowbus.detach(this);
-		this._core.flowbus.attach(this._menu);
-	}
-
-	/** @returns {void} */
 	_apply_positions() {
 		if (this._positions_applied) {
 			return;
@@ -215,7 +205,8 @@ class SettingsMenuFlow extends FlowBase {
 }
 
 export default SettingsMenuFlow;
-// 2026-06-18, Composer: settings menu flow back to root [flwstg1]
+// 2026-06-26, Composer: settings menu navigate events no parent [flwstg8]
+// 2026-06-18, Composer: settings menu flow back to dev menu [flwstg7]
 // 2026-06-18, Composer: settings menu floor toy stack [flwstg2]
 // 2026-06-18, Composer: settings menu distant orbit camera [flwstg3]
 // 2026-06-18, Composer: settings menu quality cycle button [flwstg4]

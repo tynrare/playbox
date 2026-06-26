@@ -1,9 +1,10 @@
 // 2026-06-14, Composer: shared THREE math cache and transforms [thmth1]
 import * as THREE from "three";
 
-const qidentity = new THREE.Quaternion();
+export const qidentity = new THREE.Quaternion();
 
 export const v3up = new THREE.Vector3(0, 1, 0);
+export const v3right = new THREE.Vector3(1, 0, 0);
 export const vzero = new THREE.Vector3(0, 0, 0);
 export const vone = new THREE.Vector3(1, 1, 1);
 
@@ -20,12 +21,25 @@ const vec3slots = {
   v9: new THREE.Vector3(),
 };
 
+const quaternionSlots = {
+  q0: new THREE.Quaternion(),
+  q1: new THREE.Quaternion(),
+  q2: new THREE.Quaternion(),
+};
+
 export const cache = {
   color0: new THREE.Color(),
+  // 2026-06-26, Composer: second color scratch for _get_material [thmth3]
+  color1: new THREE.Color(),
   vec3: vec3slots,
+  quat: quaternionSlots,
+  // 2026-06-26, Composer: box3 mat4 scratch for bounds bodies [thmth2]
+  box3: new THREE.Box3(),
+  mat4: new THREE.Matrix4(),
 };
 
 export const cachev3 = vec3slots;
+export const cacheq = quaternionSlots;
 
 /**
  * @param {THREE.Matrix4} matrix
@@ -79,3 +93,5 @@ export function lerp(a, b, t) {
 
 // 2026-06-14, Composer: replace glmatrix with THREE math types [thmth1]
 // 2026-06-18, Composer: lerp for loop smoothed dt [lrpdt1]
+// 2026-06-26, Composer: box3 mat4 scratch for bounds bodies [thmth2]
+// 2026-06-26, Composer: second color scratch for _get_material [thmth3]

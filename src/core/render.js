@@ -33,7 +33,7 @@ class Render {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x66c0dc);
 
-    this.camera = new THREE.PerspectiveCamera(90, 1, 0.1, 1000);
+    this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 1000);
     this.camera.position.set(1, 1, 1);
     this.camera.lookAt(0, 0, 0);
 

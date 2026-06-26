@@ -16,6 +16,9 @@ import Drawcore from "../render/drawcore.js";
 
 const BLOOM_FACTOR = 0.9;
 const PIXELATE_SIZE = 6;
+// 2026-06-26, Composer: reference vertical FOV at landscape aspect [drwfov1]
+const CAMERA_BASE_FOV = 42;
+const CAMERA_REF_ASPECT = 16 / 9;
 
 // 2026-06-14, Composer: port RenderBoolingSandsphere into Draw [drwprt1]
 /**
@@ -296,6 +299,20 @@ class Draw {
   }
 
   /**
+   * @param {number} w
+   * @param {number} h
+   * @returns {number}
+   */
+  _get_camera_vfov(w, h) {
+    const aspect = w / h;
+    const halfBase = THREE.MathUtils.degToRad(CAMERA_BASE_FOV) * 0.5;
+    // 2026-06-26, Composer: lock horizontal FOV across aspect changes [drwfov1]
+    return THREE.MathUtils.radToDeg(
+      2 * Math.atan(Math.tan(halfBase) * CAMERA_REF_ASPECT / aspect),
+    );
+  }
+
+  /**
    * @returns {void}
    */
   _equalizer_render() {
@@ -318,6 +335,7 @@ class Draw {
     renderer.setSize(w, h, false);
     if (render.camera) {
       render.camera.aspect = w / h;
+      render.camera.fov = this._get_camera_vfov(w, h);
       render.camera.updateProjectionMatrix();
     }
   }
@@ -506,4 +524,5 @@ class Draw {
 // 2026-06-19, Composer: skip per-frame transparency rerenders [drwao2]
 // 2026-06-19, Composer: size passes after n8ao added to composer [drwao3]
 // 2026-06-19, Composer: depthAwareUpsampling aligns low-res AO [drwao4]
+// 2026-06-26, Composer: lock horizontal FOV across aspect changes [drwfov1]
 export default Draw;

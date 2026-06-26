@@ -7,7 +7,7 @@
 //- 2026-06-17, Composer: root dev menu test nav ui elements [uinav1]
 //- 2026-06-17, Composer: menu btn y high is screen top [uinav2]
 //- 2026-06-17, Composer: each/in loops for repeated menu buttons [uinav3]
-//- 2026-06-18, Composer: root menu settings button label [uinav7]
+//- 2026-06-26, Composer: dev menu settings button label [uinav17]
 //- 2026-06-18, Composer: settings submenu ui elements [uinav8]
 //- 2026-06-18, Composer: dev menu back button label [uinav9]
 //- 2026-06-18, Composer: settings menu quality button label [uinav10]
@@ -16,6 +16,8 @@
 //- 2026-06-18, Composer: settings pixelate postprocess button [uinav13]
 //- 2026-06-18, Composer: settings menu half-size layout [uinav14]
 //- 2026-06-18, Composer: settings menu top-right anchor stack [uinav15]
+//- 2026-06-26, Composer: root menu arcade button label [uinav18]
+//- 2026-06-26, Composer: arcade flow close ui elements [uinav19]
 //- 2026-06-18, Composer: label rx/ry centers on anchor-1 panel [uinav16]
 - var menu_btn_indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
@@ -24,8 +26,8 @@ db#db_pb_ui_root_elements(name="ui_root_elements" scope="ui_elements")
         - var btn_name = "root_btn_" + val
         - var label_name = "root_btn_" + val + "_label"
         - var btn_y = 84 - val * 8
-        //- 2026-06-18, Composer: root menu settings button label [uinav7]
-        - var btn_label = val === 0 ? "Dev" : val === 1 ? "Settings" : "-"
+        //- 2026-06-26, Composer: root menu arcade button label [uinav18]
+        - var btn_label = val === 0 ? "Dev" : val === 1 ? "Arcade" : "-"
         d(name=btn_name type="panel" interactive="true" event=btn_name
             x=50 y=btn_y w=40 h=7 scale=1
             color="0x0" colorb="0xffffff" glow="1" opacity="1" corner="0.3")
@@ -67,13 +69,24 @@ db#db_pb_ui_dev_menu_elements(name="ui_dev_menu_elements" scope="ui_elements")
         - var label_name = "dev_btn_" + val + "_label"
         - var btn_y = 84 - val * 8
         //- 2026-06-18, Composer: dev menu back button label [uinav9]
-        - var btn_label = val === 0 ? "Back" : val === 1 ? "Test" : "-"
+        //- 2026-06-26, Composer: dev menu settings button label [uinav17]
+        - var btn_label = val === 0 ? "Back" : val === 1 ? "Test" : val === 2 ? "Settings" : "-"
         d(name=btn_name type="panel" interactive="true" event=btn_name
             x=50 y=btn_y w=40 h=7 scale=1
             color="0x0" colorb="0xffffff" glow="1" opacity="1" corner="0.3")
         d(name=label_name type="text" font="afont" pivot=btn_name
             text=btn_label fontsize="4" color="0xffffff" colorb="0xffffff" glow="1" opacity="1"
             anchorx=0.5 anchory=0.5)
+
+db#db_pb_ui_arcade_elements(name="ui_arcade_elements" scope="ui_elements")
+    //- 2026-06-26, Composer: arcade flow close ui elements [uinav19]
+    d(name="arcade_close" type="panel" interactive="true" event="arcade_close"
+        x=100 y=100 rx=-4 ry=-4 w=6 h=6 scale=1
+        color="0xff0000" colorb="0xff0000" glow="1" opacity="1" corner="0.3")
+    d(name="arcade_close_icon" type="sprite" sprite="cross"
+        pivot="arcade_close"
+        z=1 anchorx=0.5 anchory=0.5
+        size="4" opacity="1" colorb="0xffffff" glow="1")
 
 db#db_pb_ui_test_elements(name="ui_test_elements" scope="ui_elements")
     //- 2026-06-17, Composer: test flow close and ok ui elements [uinav6]
@@ -146,6 +159,9 @@ db#db_pb_ui_dev_menu_vis(name="ui_dev_menu_vis" scope="ui_states")
         - dev_vis_refs.push("dev_btn_" + val, "dev_btn_" + val + "_label")
     d(name="dev_menu_elements" element="[" + dev_vis_refs.join(", ") + "]")
 
+db#db_pb_ui_arcade_vis(name="ui_arcade_vis" scope="ui_states")
+    d(name="arcade_close_elements" element="[arcade_close, arcade_close_icon]")
+
 db#db_pb_ui_test_vis(name="ui_test_vis" scope="ui_states")
     d(name="test_close_elements" element="[test_close, test_close_icon]")
 
@@ -180,7 +196,7 @@ db#db_pb_ui_debug_enabled(name="ui_debug_enabled" scope="ui_states")
 //- 2026-06-17, Composer: menu btn y high is screen top [uinav2]
 //- 2026-06-17, Composer: test flow close and ok ui elements [uinav6]
 //- 2026-06-17, Composer: each/in loops for repeated menu buttons [uinav3]
-//- 2026-06-18, Composer: root menu settings button label [uinav7]
+//- 2026-06-26, Composer: dev menu settings button label [uinav17]
 //- 2026-06-18, Composer: settings submenu ui elements [uinav8]
 //- 2026-06-18, Composer: dev menu back button label [uinav9]
 //- 2026-06-18, Composer: settings menu quality button label [uinav10]
@@ -189,4 +205,6 @@ db#db_pb_ui_debug_enabled(name="ui_debug_enabled" scope="ui_states")
 //- 2026-06-18, Composer: settings pixelate postprocess button [uinav13]
 //- 2026-06-18, Composer: settings menu half-size layout [uinav14]
 //- 2026-06-18, Composer: settings menu top-right anchor stack [uinav15]
+//- 2026-06-26, Composer: root menu arcade button label [uinav18]
+//- 2026-06-26, Composer: arcade flow close ui elements [uinav19]
 //- 2026-06-18, Composer: label rx/ry centers on anchor-1 panel [uinav16]

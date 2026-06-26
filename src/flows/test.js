@@ -3,6 +3,7 @@
 // 2026-06-17, Composer: test flow stop despawns decor resets camera [flwtst2]
 // 2026-06-17, Composer: test flow close btn returns menu [flwtst3]
 // 2026-06-17, Composer: test ok button despawns toy [flwtst4]
+// 2026-06-26, Composer: test flow navigate events no parent ctor [flwtst7]
 import FlowBase from "../core/flowbase.js";
 
 /**
@@ -12,11 +13,9 @@ import FlowBase from "../core/flowbase.js";
 class TestFlow extends FlowBase {
 	/**
 	 * @param {import("../core/core.js").default} core
-	 * @param {import("./menu.js").default} menuFlow
 	 */
-	constructor(core, menuFlow) {
+	constructor(core) {
 		super(core);
-		this._menu = menuFlow;
 	}
 
 	/**
@@ -74,7 +73,8 @@ class TestFlow extends FlowBase {
 				return;
 			}
 			if (event === "test_close") {
-				this._return_menu();
+				// 2026-06-26, Composer: test flow navigate events no parent ctor [flwtst7]
+				this._core.eventsbus.emit("flow.navigate", { to: "dev" });
 				return;
 			}
 			// 2026-06-17, Composer: test ok button despawns toy [flwtst4]
@@ -124,12 +124,6 @@ class TestFlow extends FlowBase {
 			camera.position.copy(this._camera_home);
 			camera.lookAt(0, 0, 0);
 		}
-	}
-
-	/** @returns {void} */
-	_return_menu() {
-		this._core.flowbus.detach(this);
-		this._core.flowbus.attach(this._menu);
 	}
 
 	/** @returns {void} */
@@ -187,6 +181,7 @@ class TestFlow extends FlowBase {
 }
 
 export default TestFlow;
+// 2026-06-26, Composer: test flow navigate events no parent ctor [flwtst7]
 // 2026-06-17, Composer: test flow spawn orbit decor despawn [flwtst1]
 // 2026-06-17, Composer: test flow stop despawns decor resets camera [flwtst2]
 // 2026-06-17, Composer: test flow close btn returns menu [flwtst3]

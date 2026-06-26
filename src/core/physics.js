@@ -530,6 +530,25 @@ class Physics {
 
 	/**
 	 * @param {oimo.dynamics.rigidbody.RigidBody} body
+	 * @param {import("three").Quaternion} rotation
+	 */
+	// 2026-06-26, Composer: setBodyRotation preserves position [phyrot1]
+	setBodyRotation(body, rotation) {
+		const t = this.cache.transformZero;
+		body.getTransformTo(t);
+		const oq = this.cache.quat;
+		oq.x = rotation.x;
+		oq.y = rotation.y;
+		oq.z = rotation.z;
+		oq.w = rotation.w;
+		t.setOrientation(oq);
+		body.setTransform(t);
+		body.setAngularVelocity(this.cache.vec3_2.init(0, 0, 0));
+		this.step_attach(body.id);
+	}
+
+	/**
+	 * @param {oimo.dynamics.rigidbody.RigidBody} body
 	 */
 	remove(body) {
 		if (!body) {
@@ -582,3 +601,4 @@ export { Physics, DebugDraw, PhysicsUtils, RigidBodyType, RigidBody };
 // 2026-06-14, Composer: Oimo world on start floor via toybox [phy3]
 // 2026-06-17, Composer: physics dispose unwinds start [phydsp1]
 // 2026-06-18, Composer: fixed substep accumulator drain all rdt [phyacc1]
+// 2026-06-26, Composer: setBodyRotation preserves position [phyrot1]
