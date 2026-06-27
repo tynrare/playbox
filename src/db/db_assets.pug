@@ -25,6 +25,10 @@ db#db_pb_materials(name="materials")
 db#db_pb_models(name="models")
    d(name="box_timber"            type="box" w="1" h="1" d="1" texture="timber_square_clay")
    d(name="coin_a"                source="props" object="coin_a" material="coin_a")
+   //- 2026-06-26, Composer: coin_b model inherits coin_a object coin_b [mdcnb1]
+   d(name="coin_b"                inherits="coin_a" object="coin_b")
+   //- 2026-06-26, Composer: coin_c model inherits coin_a object coin_c [mdcnc1]
+   d(name="coin_c"                inherits="coin_a" object="coin_c")
 
 //- 2026-06-17, Composer: coinmania and gameicons sprite registry from booling [sprpt1]
 include db_sprites.pug
@@ -35,3 +39,5 @@ include db_sprites.pug
 //- 2026-06-17, Composer: coinmania and gameicons sprite registry from booling [sprpt1]
 //- 2026-06-26, Composer: materials db for scene _get_material [matdb1]
 //- 2026-06-26, Composer: coin_a phong material shininess 10 [matcn1]
+//- 2026-06-26, Composer: coin_b model inherits coin_a object coin_b [mdcnb1]
+//- 2026-06-26, Composer: coin_c model inherits coin_a object coin_c [mdcnc1]

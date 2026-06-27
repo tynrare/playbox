@@ -142,8 +142,7 @@ class Core {
     // 2026-06-14, Composer: ui layout before bounds and billboards [crcyc2]
     // 2026-06-14, Composer: itembox step before physics [itmbx1]
     this.itembox.step(dt);
-    // 2026-06-14, Composer: toybox step before physics [tbxbb1]
-    this.toybox.step(dt);
+    // 2026-06-26, Composer: toy tick via itembox.on_itemupdate hook [tbxhook1]
     // 2026-06-14, Composer: physics before draw for weld sync [crcyc3]
     // 2026-06-18, Composer: physics step uses real rdt for substeps [phyrdt1]
     this.physics.step(dt, _rdt);
@@ -186,3 +185,4 @@ export default Core;
 // 2026-06-17, Composer: core init drives all children [crcyc5]
 // 2026-06-18, Composer: step passes lerped dt and real dt [crdt1]
 // 2026-06-18, Composer: physics step uses real rdt for substeps [phyrdt1]
+// 2026-06-26, Composer: toy tick via itembox.on_itemupdate hook [tbxhook1]

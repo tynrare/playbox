@@ -13,7 +13,8 @@
 //   tbx-module        → modulebox.js + toys/* — module tick; storage via blackboard
 //   tbx-bb-chunks     → blackboard.js — merged chunk pool; root via VAR_ENTITY_BB_ROOT
 //
-// touchpoints (core.step order): itembox.step → toybox.step → physics.step
+// touchpoints (core.step order): itembox.step → physics.step
+//   toy tick: itembox.on_itemupdate → toyupdate via item VAR_TOY_INDEX
 //   spawn: toybox spawns item via itembox; stores VAR_ITEM_INDEX
 //   init gate: toy init waits linked item INITIALIZED (item.initialize frame)
 //   dispose cascade: toy.dispose → itembox.despawn(linked item)
@@ -21,16 +22,15 @@
 // invariants: toy row ≠ item row; floor/items-only have no toy slot; playbox dt is seconds;
 //   module configure runs after init_modules; lifespan converts dt to ms internally
 //   despawn before toy init: !initialized && disposed → item despawn → DISPOSED_L2 (no toy.dispose)
-//   bulk spawn/despawn: omit immediate; one itembox.step + toybox.step per frame drains pipeline
-//   toy.* / item.* events pass index scalar; toy.update gated via eventsbus.has
+//   bulk spawn/despawn: omit immediate; one itembox.step per frame drains pipeline
+//   toy callbacks: on_toypreupdate before lifecycle; on_toyupdate when !DISPOSED
 //
 // tbx-lifecycle flow:
-// 1) spawn(toy_key) → allocate toy slot; itembox.spawn(conf.item); VAR_TOY_DB_ID, VAR_ITEM_INDEX, module flags; no bb yet
+// 1) spawn → allocate toy + item; VAR_ITEM_INDEX ↔ item VAR_TOY_INDEX
 // 2) itembox.step → linked item item.initialize → scene.spawn_item (itm-scene-sidefx); toy still !initialized
 // 3) toyupdate !initialized → wait item INITIALIZED → toy.initialize → ensure_root → init_modules → configure
-// 4) toyupdate active → toy.update → modulebox.update(dt); modules may set toy DISPOSED (e.g. lifespan)
-// 5) despawn(immediate?) → DISPOSED; next toyupdate: toy.dispose → itembox.despawn(item_index) → DISPOSED_L2
-// 6) toyupdate DISPOSED_L2 → blackboard.dispose_entity → mempool.free toy slot
+// 4) toyupdate active → modulebox.update(dt) → on_toyupdate
+// 5) despawn → lifecycle sets DISPOSED_L2 → tail _finalize_toy_slot same call
 // Branches: immediate spawn/despawn runs toyupdate(0) same call; stop() despawn(all, immediate=true)
 /** @namespace ty */
 // 2026-06-14, Composer: toy-scope root gateway playbook [tbxgw1]
@@ -40,6 +40,10 @@ import logger from "../logger.js";
 import Mempool, { VAR_FLAGS_A, VAR_FLAG_ACTIVE } from "../core/mempool.js";
 import Blackboard, { BB_INVALID } from "./blackboard.js";
 import Modulebox, { VAR_FLAGS_MODULES, modulenames } from "./modulebox.js";
+import {
+	TOY_INDEX_INVALID,
+	VAR_TOY_INDEX,
+} from "./itembox.js";
 
 const TOY_ENTITY_BYTES = 16;
 const TOY_POOL_SIZE = 256;
@@ -69,6 +73,10 @@ class Toybox {
 		this.modulebox = new Modulebox(this.blackboard, this.mempool);
 		/** @type {Record<number, Record<string, any>>} */
 		this._toy_by_id = {};
+		/** @type {((dt: number, index: number) => void)|null} */
+		this.on_toypreupdate = null;
+		/** @type {((dt: number, index: number) => void)|null} */
+		this.on_toyupdate = null;
 	}
 
 	/** @returns {this} */
@@ -78,6 +86,22 @@ class Toybox {
 		this.blackboard.init();
 		this.modulebox.init();
 		this._build_toy_by_id();
+		// 2026-06-26, Composer: item hook drives toyupdate via VAR_TOY_INDEX [tbxhook1]
+		this._itembox.on_itemupdate = (dt, itemIndex) => {
+			const itemMempool = this._itembox.mempool;
+			const toyIndex = itemMempool.read_ui16(itemIndex, VAR_TOY_INDEX);
+			if (toyIndex === TOY_INDEX_INVALID) {
+				return;
+			}
+			this.toyupdate(dt, toyIndex);
+			if (
+				itemMempool.read_flag(itemIndex, VAR_FLAGS_A, VAR_FLAG_ACTIVE) &&
+				itemMempool.read_flag(itemIndex, VAR_FLAGS_A, VAR_FLAG_DISPOSED) &&
+				!itemMempool.read_flag(itemIndex, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2)
+			) {
+				this._itembox.itemupdate(dt, itemIndex);
+			}
+		};
 		return this;
 	}
 
@@ -235,7 +259,7 @@ class Toybox {
 			return null;
 		}
 
-		const item_index = this._itembox.spawn_conf(item_conf, immediate);
+		const item_index = this._itembox.spawn_conf(item_conf, false);
 		if (item_index == null) {
 			this.mempool.free(index);
 			return null;
@@ -243,10 +267,12 @@ class Toybox {
 
 		this.mempool.write_ui16(index, VAR_TOY_DB_ID, conf.id ?? 0);
 		this.mempool.write_ui16(index, VAR_ITEM_INDEX, item_index);
+		this._itembox.mempool.write_ui16(item_index, VAR_TOY_INDEX, index);
 		this._init_slot(index);
 		this._enable_modules(index, conf);
 
 		if (immediate) {
+			this._itembox.itemupdate(0, item_index);
 			this.toyupdate(0, index);
 		}
 
@@ -274,22 +300,23 @@ class Toybox {
 	}
 
 	/**
-	 * @param {number} dt
 	 * @param {number} index
 	 * @returns {void}
 	 */
-	toyupdate(dt, index) {
-		const mempool = this.mempool;
-		if (!mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_ACTIVE)) {
-			return;
-		}
-		if (mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2)) {
-			// tbx-lifecycle step 6)
-			this.blackboard.dispose_entity(index);
-			mempool.free(index);
-			return;
-		}
+	_finalize_toy_slot(index) {
+		const item_index = this.get_item_index(index);
+		this._itembox.mempool.write_ui16(item_index, VAR_TOY_INDEX, TOY_INDEX_INVALID);
+		this.blackboard.dispose_entity(index);
+		this.mempool.free(index);
+	}
 
+	/**
+	 * @param {number} dt
+	 * @param {number} index
+	 * @returns {boolean} false when waiting for linked item init
+	 */
+	_toy_lifecycle_core(dt, index) {
+		const mempool = this.mempool;
 		const initialized = mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED);
 		const disposed = mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED);
 
@@ -303,15 +330,14 @@ class Toybox {
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED, false);
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED, true);
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, true);
-			return;
+			return true;
 		}
 
 		if (!initialized && !disposed) {
 			// tbx-lifecycle step 3)
 			const item_index = this.get_item_index(index);
-			// 2026-06-14, Composer: modules blackboard after item initialized [tbxit1]
 			if (!this._is_item_initialized(item_index)) {
-				return;
+				return false;
 			}
 			this._eventsbus.emit("toy.initialize", index);
 			this.blackboard.ensure_root(index);
@@ -321,35 +347,53 @@ class Toybox {
 				this.modulebox.configure(index, conf);
 			}
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED, true);
-			return;
+			return true;
 		}
 
-		// 2026-06-14, Composer: despawn before init still cascades item [tbxds1]
-// 2026-06-14, Composer: spawn_conf scalar events gated toy.update [tbxhp1]
 		if (!initialized && disposed) {
 			const item_index = this.get_item_index(index);
 			this._itembox.despawn(item_index);
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, true);
+			return true;
+		}
+
+		return true;
+	}
+
+	/**
+	 * @param {number} dt
+	 * @param {number} index
+	 * @returns {void}
+	 */
+	toyupdate(dt, index) {
+		const mempool = this.mempool;
+		if (!mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_ACTIVE)) {
 			return;
 		}
 
-		if (this._eventsbus.has("toy.update")) {
-			this._eventsbus.emit("toy.update", index);
+		// 2026-06-26, Composer: ATanks pre/core/post/tail toyupdate [tbxatu1]
+		this.on_toypreupdate?.(dt, index);
+
+		if (!this._toy_lifecycle_core(dt, index)) {
+			return;
 		}
-		// tbx-lifecycle step 4)
+
 		this.modulebox.update(dt, index);
+
+		if (!mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED)) {
+			this.on_toyupdate?.(dt, index);
+		}
+
+		if (mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2)) {
+			this._finalize_toy_slot(index);
+		}
 	}
 
 	/**
 	 * @param {number} dt
 	 * @returns {void}
 	 */
-	step(dt, _rdt) {
-		const mempool = this.mempool;
-		for (let i = 0; i < mempool.chunk_size; i++) {
-			this.toyupdate(dt, i);
-		}
-	}
+	step(_dt, _rdt) {}
 }
 
 export default Toybox;
@@ -369,4 +413,5 @@ export {
 // 2026-06-14, Composer: despawn before init still cascades item [tbxds1]
 // 2026-06-14, Composer: spawn_conf scalar events gated toy.update [tbxhp1]
 // 2026-06-17, Composer: toybox dispose unwinds start [tbxdsp1]
-// 2026-06-17, Composer: toybox pool alloc in init [tbxinit1]
+// 2026-06-26, Composer: item hook drives toyupdate via VAR_TOY_INDEX [tbxhook1]
+// 2026-06-26, Composer: ATanks pre/core/post/tail toyupdate [tbxatu1]

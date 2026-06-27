@@ -15,6 +15,7 @@ import { oimo } from "../lib/OimoPhysics.js";
 import { RigidBody, RigidBodyType } from "./physics.js";
 
 const _billboardMatrix = new THREE.Matrix4();
+const _boundsSrcInv = new THREE.Matrix4();
 
 // 2026-06-14, Composer: Scene facade for model and text [scnfac1]
 /**
@@ -755,6 +756,10 @@ class Scene {
       return false;
     }
 
+    // 2026-06-27, Composer: bounds shape matrix relative to sourceobject [scnbnd2]
+    gltf.scene.updateMatrixWorld(true);
+    _boundsSrcInv.copy(sourceobject.matrixWorld).invert();
+
     let added = false;
     sourceobject.traverse((o) => {
       /** @type {THREE.Mesh} */
@@ -766,10 +771,10 @@ class Scene {
       const count = mesh.count ?? 1;
       for (let i = 0; i < count; i++) {
         if (mesh.isInstancedMesh) {
-          if (this.create_instanced_mesh_shape(mesh, i, body, bodyconf)) {
+          if (this.create_instanced_mesh_shape(mesh, i, body, bodyconf, _boundsSrcInv)) {
             added = true;
           }
-        } else if (this.create_mesh_shape(mesh, body, bodyconf)) {
+        } else if (this.create_mesh_shape(mesh, body, bodyconf, _boundsSrcInv)) {
           added = true;
         }
       }
@@ -783,35 +788,41 @@ class Scene {
    * @param {number} index
    * @param {oimo.dynamics.rigidbody.RigidBody} body
    * @param {Record<string, any>} bodyconf
+   * @param {THREE.Matrix4} srcInv
    * @returns {oimo.dynamics.rigidbody.Shape|null}
    */
-  create_instanced_mesh_shape(mesh, index, body, bodyconf) {
+  create_instanced_mesh_shape(mesh, index, body, bodyconf, srcInv) {
     if (!mesh.geometry.boundingBox) {
       mesh.geometry.computeBoundingBox();
     }
 
-    const bb = cache.box3.copy(mesh.geometry.boundingBox);
+    // 2026-06-27, Composer: bounds shape matrix relative to sourceobject [scnbnd2]
     const matrix = cache.mat4;
     mesh.getMatrixAt(index, matrix);
-    bb.applyMatrix4(mesh.matrixWorld);
+    matrix.premultiply(mesh.matrixWorld);
+    matrix.premultiply(srcInv);
 
-    return this.create_shape(bb, matrix, body, bodyconf);
+    return this.create_shape(mesh.geometry.boundingBox, matrix, body, bodyconf);
   }
 
   /**
    * @param {THREE.Mesh} mesh
    * @param {oimo.dynamics.rigidbody.RigidBody} body
    * @param {Record<string, any>} bodyconf
+   * @param {THREE.Matrix4} srcInv
    * @returns {oimo.dynamics.rigidbody.Shape|null}
    */
-  create_mesh_shape(mesh, body, bodyconf) {
+  create_mesh_shape(mesh, body, bodyconf, srcInv) {
     if (!mesh.geometry.boundingBox) {
       mesh.geometry.computeBoundingBox();
     }
 
+    // 2026-06-27, Composer: bounds shape matrix relative to sourceobject [scnbnd2]
+    const matrix = cache.mat4.copy(mesh.matrixWorld).premultiply(srcInv);
+
     return this.create_shape(
       mesh.geometry.boundingBox,
-      mesh.matrixWorld,
+      matrix,
       body,
       bodyconf,
     );
@@ -954,5 +965,6 @@ export default Scene;
 // 2026-06-26, Composer: set_itemrotation via body quaternion [scnrot1]
 // 2026-06-26, Composer: makemodel gltf source/object branch [scnglt1]
 // 2026-06-26, Composer: bounds body from model mesh bbox [scnbnd1]
+// 2026-06-27, Composer: bounds shape matrix relative to sourceobject [scnbnd2]
 // 2026-06-26, Composer: cached ExtendedMaterial DitheredOpacity CSM [scnmat1]
 // 2026-06-26, Composer: material shininess for MeshPhongMaterial [scnph1]

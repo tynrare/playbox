@@ -9,6 +9,9 @@ const ITEM_ENTITY_BYTES = 16;
 const ITEM_POOL_SIZE = 256;
 const VAR_ITEM_DB_ID = 3;
 const VAR_BODY_ID = 4;
+// 2026-06-26, Composer: item VAR_TOY_INDEX bidirectional toy link [itmtoy1]
+const VAR_TOY_INDEX = 5;
+const TOY_INDEX_INVALID = 0xffff;
 const VAR_FLAG_INITIALIZED = 1;
 const VAR_FLAG_DISPOSED = 3;
 const VAR_FLAG_DISPOSED_L2 = 4;
@@ -30,6 +33,8 @@ class Itembox {
 		this._item_by_id = {};
 		/** @type {Record<string, Record<string, any>>} */
 		this._item_by_key = {};
+		/** @type {((dt: number, index: number) => void)|null} */
+		this.on_itemupdate = null;
 	}
 
 	/** @returns {this} */
@@ -108,6 +113,7 @@ class Itembox {
 		mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED, false);
 		mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED, false);
 		mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, false);
+		mempool.write_ui16(index, VAR_TOY_INDEX, TOY_INDEX_INVALID);
 	}
 
 	/**
@@ -207,20 +213,18 @@ class Itembox {
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED, false);
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED, true);
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, true);
-			return;
-		}
-
-		if (!initialized && !disposed) {
+		} else if (!initialized && !disposed) {
 			// tbx-lifecycle step 2) item.initialize gate for toy init
 			this._eventsbus.emit("item.initialize", index);
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED, true);
-			return;
+		} else if (!initialized && disposed) {
+			// 2026-06-14, Composer: despawn before init advances to DISPOSED_L2 [itmds1]
+			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, true);
 		}
 
-		// 2026-06-14, Composer: despawn before init advances to DISPOSED_L2 [itmds1]
-		if (!initialized && disposed) {
-			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_DISPOSED_L2, true);
-			return;
+		// 2026-06-26, Composer: on_itemupdate hook after item lifecycle [itmhook1]
+		if (mempool.read_flag(index, VAR_FLAGS_A, VAR_FLAG_ACTIVE)) {
+			this.on_itemupdate?.(dt, index);
 		}
 	}
 
@@ -245,8 +249,12 @@ export {
 	VAR_FLAG_DISPOSED_L2,
 	VAR_ITEM_DB_ID,
 	VAR_BODY_ID,
+	VAR_TOY_INDEX,
+	TOY_INDEX_INVALID,
 };
 // 2026-06-14, Composer: itembox mempool data worker eventbus [itmbx1]
+// 2026-06-26, Composer: item VAR_TOY_INDEX bidirectional toy link [itmtoy1]
+// 2026-06-26, Composer: on_itemupdate hook after item lifecycle [itmhook1]
 // 2026-06-14, Composer: despawn before init advances to DISPOSED_L2 [itmds1]
 // 2026-06-14, Composer: spawn_conf scalar item events no item.update [itmhp1]
 // 2026-06-17, Composer: itembox dispose unwinds start [itmdsp1]

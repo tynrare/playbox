@@ -1,5 +1,6 @@
 // Headless harness for toybox lifecycle stress tests in Node.
 // 2026-06-14, Composer: mock db harness for toybox stress tests [tbxst1]
+// 2026-06-26, Composer: harness init and item-only step tick [tbxst2]
 import EventsBus from "../../src/core/eventsbus.js";
 import { VAR_FLAGS_A, VAR_FLAG_ACTIVE } from "../../src/core/mempool.js";
 import Itembox from "../../src/scene/itembox.js";
@@ -91,6 +92,8 @@ export function create_harness(opts = {}) {
 		}),
 	];
 
+	itembox.init();
+	toybox.init();
 	itembox.start();
 	toybox.start();
 
@@ -106,7 +109,6 @@ export function create_harness(opts = {}) {
 		DT_FRAME,
 		tick(dt) {
 			itembox.step(dt);
-			toybox.step(dt);
 		},
 		drain(maxFrames = 512) {
 			for (let i = 0; i < maxFrames; i++) {
@@ -144,3 +146,4 @@ export function create_harness(opts = {}) {
 }
 
 // 2026-06-14, Composer: mock db harness for toybox stress tests [tbxst1]
+// 2026-06-26, Composer: harness init and item-only step tick [tbxst2]

@@ -4,6 +4,8 @@ import Mempool, { VAR_FLAGS_A, VAR_FLAG_ACTIVE } from "../core/mempool.js";
 
 const BB_INVALID = 0xffff;
 const BB_KEY_MODULE = 0;
+// 2026-06-26, Composer: BB_KEY_PLAY chunk for arcade stack metadata [bbply1]
+const BB_KEY_PLAY = 1;
 // 2026-06-18, Composer: bb root slots after mempool header fields [bbfix1]
 const BB_SLOT_BASE = 3;
 const BB_MAX_KEYS = 8;
@@ -194,6 +196,41 @@ class Blackboard {
 	 * @param {number} entity_index
 	 * @param {number} key_index
 	 * @param {number} field
+	 * @returns {number}
+	 */
+	read_i16(entity_index, key_index, field) {
+		const child = this.get_slot(entity_index, key_index);
+		if (child === BB_INVALID) {
+			return 0;
+		}
+		let n = this._bb_pool.read_ui16(child, field);
+		if (n > 0x7fff) {
+			n -= 0x10000;
+		}
+		return n;
+	}
+
+	/**
+	 * @param {number} entity_index
+	 * @param {number} key_index
+	 * @param {number} field
+	 * @param {number} v world units; stored as signed deci-units
+	 * @returns {void}
+	 */
+	write_i16(entity_index, key_index, field, v) {
+		// 2026-06-26, Composer: signed deci-units in ui16 slot [bbi161]
+		const child = this.ensure_slot(entity_index, key_index);
+		if (child === BB_INVALID) {
+			return;
+		}
+		const deci = Math.round(v * 10);
+		this._bb_pool.write_ui16(child, field, deci & 0xffff);
+	}
+
+	/**
+	 * @param {number} entity_index
+	 * @param {number} key_index
+	 * @param {number} field
 	 * @param {number} flag
 	 * @returns {boolean}
 	 */
@@ -313,6 +350,7 @@ export default Blackboard;
 export {
 	BB_INVALID,
 	BB_KEY_MODULE,
+	BB_KEY_PLAY,
 	VAR_MTBL_FLAGS,
 	VAR_FLAG_INITIALIZED,
 	VAR_FLAG_DISPOSED,
@@ -321,3 +359,5 @@ export {
 // 2026-06-17, Composer: blackboard ensure renamed init [bbinit1]
 // 2026-06-18, Composer: bb root slots after mempool header fields [bbfix1]
 // 2026-06-18, Composer: zero recycled chunk payload on spawn/free [bbclr1]
+// 2026-06-26, Composer: BB_KEY_PLAY chunk for arcade stack metadata [bbply1]
+// 2026-06-26, Composer: signed deci-units in ui16 slot [bbi161]
