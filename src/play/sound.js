@@ -1,8 +1,7 @@
 /** @namespace ty */
-// Purpose: arcade scene.contact sfx — kind map, impact volume, eventsbus wiring.
+// Purpose: arcade contact sfx — kind map, impact volume, play API.
 
 import { TOY_INDEX_INVALID } from "../scene/itembox.js";
-import { CONTACT_PHASE_BEGIN } from "../scene/contact_router.js";
 import { VAR_TOY_DB_ID } from "../scene/toybox.js";
 
 // 2026-06-27, Composer: toy db id to contact sfx kind map [plsfx1]
@@ -12,18 +11,20 @@ const TOY_CONTACT_KIND_BY_DB_ID = new Map([
 	[4, "coin"],
 	[5, "coin"],
 	[6, "dice"],
+	[7, "weight"],
 ]);
 /** @type {Readonly<Record<string, string>>} */
 const CONTACT_SFX_BY_KIND = {
 	coin: "chips-collide-2",
 	dice: "impactWood_light_000",
+	weight: "impactPunch_heavy_000",
 };
 /** @type {Readonly<string[]>} */
 const CONTACT_KIND_PRIORITY = ["dice", "coin"];
 // 2026-06-27, Composer: contact approach speed to sfx volume [plimp1]
-const CONTACT_SPEED_MIN = 0.5;
-const CONTACT_SPEED_MAX = 4.0;
-const CONTACT_VOL_MIN = 0.15;
+const CONTACT_SPEED_MIN = 1.0;
+const CONTACT_SPEED_MAX = 16.0;
+const CONTACT_VOL_MIN = 0.10;
 const CONTACT_VOL_MAX = 1.0;
 
 /**
@@ -42,27 +43,14 @@ class ArcadeSound {
 	 * @returns {this}
 	 */
 	init() {
-		/** @type {number|null} */
-		this._scene_contact_id = null;
 		return this;
 	}
 
 	/** @returns {void} */
-	// 2026-06-27, Composer: fix listener id vs handler name clash [plsnd2]
-	start() {
-		this._scene_contact_id = this._core.eventsbus.on(
-			"scene.contact",
-			this._on_scene_contact.bind(this),
-		);
-	}
+	start() {}
 
 	/** @returns {void} */
-	stop() {
-		if (this._scene_contact_id != null) {
-			this._core.eventsbus.off(this._scene_contact_id);
-			this._scene_contact_id = null;
-		}
-	}
+	stop() {}
 
 	/**
 	 * @param {number} toyIndex
@@ -96,23 +84,6 @@ class ArcadeSound {
 	}
 
 	/**
-	 * @param {import("../lib/OimoPhysics.js").oimo.dynamics.Contact} contact
-	 * @returns {number}
-	 */
-	_contact_approach_speed(contact) {
-		const b1 = contact.getShape1().getRigidBody();
-		const b2 = contact.getShape2().getRigidBody();
-		const n = contact.getManifold().getNormal();
-		const v1 = b1.getLinearVelocity();
-		const v2 = b2.getLinearVelocity();
-		const relN =
-			(v1.x - v2.x) * n.x +
-			(v1.y - v2.y) * n.y +
-			(v1.z - v2.z) * n.z;
-		return Math.max(0, -relN);
-	}
-
-	/**
 	 * @param {number} speed
 	 * @returns {number|null}
 	 */
@@ -129,21 +100,17 @@ class ArcadeSound {
 	}
 
 	/**
-	 * @param {{ phase: number, toyIndex: number, otherToyIndex: number, contact: import("../lib/OimoPhysics.js").oimo.dynamics.Contact }} payload
+	 * @param {number} toyIndex
+	 * @param {number} otherToyIndex
+	 * @param {number} speed
 	 * @returns {void}
 	 */
-	_on_scene_contact(payload) {
-		if (payload.phase !== CONTACT_PHASE_BEGIN) {
-			return;
-		}
-		const sfx = this._resolve_contact_sfx(
-			payload.toyIndex,
-			payload.otherToyIndex,
-		);
+	// 2026-06-27, Composer: contact sfx play API called from arcade [plsnd3]
+	play_contact(toyIndex, otherToyIndex, speed) {
+		const sfx = this._resolve_contact_sfx(toyIndex, otherToyIndex);
 		if (sfx == null) {
 			return;
 		}
-		const speed = this._contact_approach_speed(payload.contact);
 		const vol = this._impact_volume(speed);
 		if (vol == null) {
 			return;
@@ -157,3 +124,4 @@ export default ArcadeSound;
 // 2026-06-27, Composer: arcade sound scene.contact listener [plsnd1]
 // 2026-06-27, Composer: toy db id to contact sfx kind map [plsfx1]
 // 2026-06-27, Composer: contact approach speed to sfx volume [plimp1]
+// 2026-06-27, Composer: contact sfx play API called from arcade [plsnd3]

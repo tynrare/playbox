@@ -9,11 +9,40 @@ import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js
 
 const RigidBodyType = oimo.dynamics.rigidbody.RigidBodyType;
 const RigidBody = oimo.dynamics.rigidbody.RigidBody;
+const PositionCorrectionAlgorithm =
+	oimo.dynamics.constraint.PositionCorrectionAlgorithm;
+
+// 2026-06-27, Composer: Oimo contact solver tuning [physlv1]
+const SOLVER_VELOCITY_ITERATIONS = 10;
+const SOLVER_POSITION_ITERATIONS = 5;
+const SOLVER_LINEAR_SLOP = 0.005;
+const SOLVER_DEFAULT_CONTACT_POSITION_ALG =
+	PositionCorrectionAlgorithm.BAUMGARTE;
+const SOLVER_ALT_CONTACT_POSITION_ALG = PositionCorrectionAlgorithm.SPLIT_IMPULSE;
+const SOLVER_CONTACT_ALT_DEPTH_THRESHOLD = 0.05;
+const SOLVER_VELOCITY_BAUMGARTE = 0.2;
+const SOLVER_POSITION_SPLIT_IMPULSE_BAUMGARTE = 0.4;
+const SOLVER_POSITION_NGS_BAUMGARTE = 1.0;
 
 const DEFAULT_CONFIG = {
 	ref_dt: 0.008,
 	debug: false,
 };
+
+/** @returns {void} */
+function apply_solver_settings() {
+	const s = oimo.common.Setting;
+	s.linearSlop = SOLVER_LINEAR_SLOP;
+	s.defaultContactPositionCorrectionAlgorithm =
+		SOLVER_DEFAULT_CONTACT_POSITION_ALG;
+	s.alternativeContactPositionCorrectionAlgorithm =
+		SOLVER_ALT_CONTACT_POSITION_ALG;
+	s.contactUseAlternativePositionCorrectionAlgorithmDepthThreshold =
+		SOLVER_CONTACT_ALT_DEPTH_THRESHOLD;
+	s.velocityBaumgarte = SOLVER_VELOCITY_BAUMGARTE;
+	s.positionSplitImpulseBaumgarte = SOLVER_POSITION_SPLIT_IMPULSE_BAUMGARTE;
+	s.positionNgsBaumgarte = SOLVER_POSITION_NGS_BAUMGARTE;
+}
 
 /**
  * @class DebugDraw
@@ -296,14 +325,16 @@ class Physics {
 	start() {
 		// 2026-06-14, Composer: Oimo world on start floor via toybox [phy3]
 		// 2026-06-18, Composer: fixed substep accumulator reset on start [phyacc1]
+		// 2026-06-27, Composer: Oimo contact solver tuning [physlv1]
 		this.guids = 0;
 		this._acc = 0;
+		apply_solver_settings();
 		this.world = new oimo.dynamics.World(
 			oimo.collision.broadphase.BroadPhaseType.BVH,
 			new oimo.common.Vec3(0, -9.8, 0),
 		);
-		this.world.setNumVelocityIterations(10);
-		this.world.setNumPositionIterations(5);
+		this.world.setNumVelocityIterations(SOLVER_VELOCITY_ITERATIONS);
+		this.world.setNumPositionIterations(SOLVER_POSITION_ITERATIONS);
 		this.utils = new PhysicsUtils(this, this._render.scene);
 		this.sync_debug_draw(this.config.debug);
 		return this;
@@ -602,3 +633,4 @@ export { Physics, DebugDraw, PhysicsUtils, RigidBodyType, RigidBody };
 // 2026-06-17, Composer: physics dispose unwinds start [phydsp1]
 // 2026-06-18, Composer: fixed substep accumulator drain all rdt [phyacc1]
 // 2026-06-26, Composer: setBodyRotation preserves position [phyrot1]
+// 2026-06-27, Composer: Oimo contact solver tuning [physlv1]

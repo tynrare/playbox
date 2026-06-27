@@ -46,6 +46,7 @@ class TestFlow extends FlowBase {
 		this._core.scene.environment.floorstyle("floor", 0xffffff);
 		this._floor_index = this._core.itembox.spawn("floor_item");
 		this._toy_index = this._core.toybox.spawn("box_test_toy");
+		this._coin_index = this._core.toybox.spawn("coin_a_toy");
 		this._toy_positions_applied = false;
 
 		this.label3d = this._core.scene.text("afont", false);
@@ -112,6 +113,10 @@ class TestFlow extends FlowBase {
 		if (this._toy_index != null) {
 			this._core.toybox.despawn(this._toy_index, true);
 			this._toy_index = null;
+		}
+		if (this._coin_index != null) {
+			this._core.toybox.despawn(this._coin_index, true);
+			this._coin_index = null;
 		}
 		if (this._floor_index != null) {
 			this._core.itembox.despawn(this._floor_index, true);
