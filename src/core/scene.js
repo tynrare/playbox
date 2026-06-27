@@ -12,6 +12,7 @@ import {
 import Environment from "../scene/environment.js";
 import Audio from "../scene/audio.js";
 import ContactRouter from "../scene/contact_router.js";
+import RigidModel from "../scene/rigid_model.js";
 import { VAR_FLAGS_MODULES, VAR_MFLAG_CONTACTS } from "../scene/modulebox.js";
 import { VAR_BODY_ID } from "../scene/itembox.js";
 import { oimo } from "../lib/OimoPhysics.js";
@@ -19,6 +20,8 @@ import { RigidBody, RigidBodyType } from "./physics.js";
 
 const _billboardMatrix = new THREE.Matrix4();
 const _boundsSrcInv = new THREE.Matrix4();
+const _rigidRootInv = new THREE.Matrix4();
+const _rigidLocalMat = new THREE.Matrix4();
 
 // 2026-06-14, Composer: Scene facade for model and text [scnfac1]
 /**
@@ -68,6 +71,16 @@ class Scene {
     };
     /** @type {Record<string, THREE.Material>} */
     this._cache_materials = {};
+    /** @type {WeakMap<THREE.Object3D, RigidModel>} */
+    this._rigid_by_root = new WeakMap();
+    /** @type {Record<string, RigidModel[]>} */
+    this._rigid_model_pool = {};
+    /** @type {RigidModel[]} */
+    this._rigid_active = [];
+    /** @type {Record<string, { parts: object[] }>} */
+    this._rigid_defs = {};
+    /** @type {{ list: THREE.Mesh[], seen: Record<string, number> }} */
+    this._mesh_collect_scratch = { list: [], seen: {} };
   }
 
   /**
@@ -307,6 +320,10 @@ class Scene {
 
     // 2026-06-18, Composer: imesh key is model name geometry+material [mdcol1]
     // 2026-06-26, Composer: makemodel gltf source/object branch [scnglt1]
+    // 2026-06-27, Composer: models db parts triggers RigidModel [rgmd2]
+    if (conf.parts != null && conf["source"] && conf["object"]) {
+      return this._makemodel_rigid(name, conf);
+    }
     if (conf["source"] && conf["object"]) {
       return this._makemodel_gltf(name, conf);
     }
@@ -512,7 +529,312 @@ class Scene {
   }
 
   /**
-   * @param {import("@three.ez/instanced-mesh").InstancedEntity|null} entity
+   * @param {string} partsFilter
+   * @param {string} slot
+   * @returns {boolean}
+   */
+  _matches_parts_filter(partsFilter, slot) {
+    if (partsFilter === "*") {
+      return true;
+    }
+    if (Array.isArray(partsFilter)) {
+      return partsFilter.includes(slot);
+    }
+    return false;
+  }
+
+  /**
+   * @param {THREE.Object3D} sourceobject
+   * @param {string|string[]|undefined} partsFilter
+   * @returns {THREE.Mesh[]}
+   */
+  // 2026-06-27, Composer: traverse-only collect dedupes self-mesh objects [rgmd7]
+  _collect_meshes(sourceobject, partsFilter) {
+    const scratch = this._mesh_collect_scratch;
+    const meshes = scratch.list;
+    meshes.length = 0;
+    const seen = scratch.seen;
+    for (const k in seen) {
+      delete seen[k];
+    }
+    sourceobject.traverse((o) => {
+      /** @type {THREE.Mesh} */
+      const mesh = /** @type {any} */ (o);
+      if (!mesh.isMesh || seen[mesh.uuid]) {
+        return;
+      }
+      seen[mesh.uuid] = 1;
+      const slot = mesh.name || `mesh_${meshes.length}`;
+      if (this._matches_parts_filter(partsFilter ?? "*", slot)) {
+        meshes.push(mesh);
+      }
+    });
+    return meshes;
+  }
+
+  /**
+   * @param {import("@three.ez/instanced-mesh").InstancedEntity} entity
+   * @param {THREE.Material} material
+   * @returns {void}
+   */
+  _apply_gltf_entity_uniforms(entity, material) {
+    entity.setUniform("opacity", material.opacity);
+    entity.setUniform(
+      "emissive",
+      cache.color0
+        .copy(material.emissive ?? cache.color0.setHex(0xffffff))
+        .multiplyScalar(material.emissiveIntensity ?? 0),
+    );
+    entity.setUniform("color", cache.color1.copy(material.color));
+  }
+
+  /**
+   * @param {string} modelName
+   * @param {string} slot
+   * @param {THREE.Mesh} sourcemesh
+   * @param {Record<string, any>} conf
+   * @returns {boolean}
+   */
+  _ensure_rigid_part_imesh(modelName, slot, sourcemesh, conf) {
+    const core = this._draw.core;
+    if (!core) {
+      return false;
+    }
+
+    const partKey = `${modelName}__${slot}`;
+    if (core.getimesh(partKey)) {
+      return true;
+    }
+
+    const geometry = sourcemesh.geometry.clone();
+    const srcMaterial = sourcemesh.material;
+    const material = this._get_material(conf, srcMaterial);
+    core.initimesh(
+      partKey,
+      geometry,
+      material,
+      {
+        capacity: 8,
+        renderer: this._draw._render.renderer,
+        castShadow: true,
+        receiveShadow: false,
+      },
+      this._draw.pivot,
+    );
+    core.inituniforms(partKey, {
+      color: "vec3",
+      emissive: "vec3",
+      opacity: "float",
+    });
+    return true;
+  }
+
+  /**
+   * @param {string} modelName
+   * @param {string} slot
+   * @param {THREE.Mesh} sourcemesh
+   * @param {Record<string, any>} conf
+   * @returns {import("@three.ez/instanced-mesh").InstancedEntity|null}
+   */
+  _acquire_rigid_part_entity(modelName, slot, sourcemesh, conf) {
+    const core = this._draw.core;
+    if (!core) {
+      return null;
+    }
+
+    const partKey = `${modelName}__${slot}`;
+    if (!this._ensure_rigid_part_imesh(modelName, slot, sourcemesh, conf)) {
+      return null;
+    }
+
+    const entity = core.makemesh(partKey);
+    if (!entity) {
+      return null;
+    }
+    const srcMaterial = sourcemesh.material;
+    const material = this._get_material(conf, srcMaterial);
+    this._apply_gltf_entity_uniforms(entity, material);
+    return entity;
+  }
+
+  /**
+   * @param {string} name
+   * @param {Record<string, any>} conf
+   * @returns {{ parts: object[] }|null}
+   */
+  _ensure_rigid_def(name, conf) {
+    const cached = this._rigid_defs[name];
+    if (cached) {
+      return cached;
+    }
+
+    const sourcekey = conf["source"];
+    const objectkey = conf["object"];
+    const gltf = this._assets.file(sourcekey);
+    if (!gltf?.scene) {
+      logger.error(
+        `Scene::_ensure_rigid_def "${name}" error: no source "${sourcekey}" preloaded`,
+      );
+      return null;
+    }
+
+    const sourceobject = gltf.scene.getObjectByName(objectkey);
+    if (!sourceobject) {
+      logger.error(
+        `Scene::_ensure_rigid_def "${name}" error: no object "${objectkey}" in "${sourcekey}"`,
+      );
+      return null;
+    }
+
+    const meshes = this._collect_meshes(sourceobject, conf.parts);
+    if (!meshes.length) {
+      logger.error(
+        `Scene::_ensure_rigid_def "${name}" error: no meshes matched parts filter`,
+      );
+      return null;
+    }
+
+    gltf.scene.updateMatrixWorld(true);
+    _rigidRootInv.copy(sourceobject.matrixWorld).invert();
+
+    /** @type {object[]} */
+    const parts = [];
+    for (let i = 0; i < meshes.length; i++) {
+      const sourcemesh = meshes[i];
+      const slot = sourcemesh.name || `mesh_${i}`;
+      if (!this._ensure_rigid_part_imesh(name, slot, sourcemesh, conf)) {
+        return null;
+      }
+      _rigidLocalMat.copy(sourcemesh.matrixWorld).premultiply(_rigidRootInv);
+      const pos = cache.vec3.v0;
+      const quat = cache.quat.q0;
+      const scale = cache.vec3.v1;
+      _rigidLocalMat.decompose(pos, quat, scale);
+      parts.push({
+        slot,
+        sourcemesh,
+        px: pos.x,
+        py: pos.y,
+        pz: pos.z,
+        qx: quat.x,
+        qy: quat.y,
+        qz: quat.z,
+        qw: quat.w,
+        sx: scale.x,
+        sy: scale.y,
+        sz: scale.z,
+      });
+    }
+
+    const def = { parts };
+    this._rigid_defs[name] = def;
+    return def;
+  }
+
+  /**
+   * @param {RigidModel} model
+   * @returns {void}
+   */
+  _rigid_register(model) {
+    model._activeIdx = this._rigid_active.length;
+    this._rigid_active.push(model);
+  }
+
+  /**
+   * @param {RigidModel} model
+   * @returns {void}
+   */
+  _rigid_unregister(model) {
+    const i = model._activeIdx;
+    if (i < 0) {
+      return;
+    }
+    const active = this._rigid_active;
+    const last = active.pop();
+    if (last && i < active.length) {
+      active[i] = last;
+      last._activeIdx = i;
+    }
+    model._activeIdx = -1;
+  }
+
+  /**
+   * @param {string} name
+   * @param {Record<string, any>} conf
+   * @returns {RigidModel|null}
+   */
+  _makemodel_rigid(name, conf) {
+    const def = this._ensure_rigid_def(name, conf);
+    if (!def) {
+      return null;
+    }
+
+    let pool = this._rigid_model_pool[name];
+    if (!pool) {
+      this._rigid_model_pool[name] = pool = [];
+    }
+    let model = pool.pop();
+    if (!model) {
+      model = new RigidModel();
+    }
+    model.modelKey = name;
+    model.resetSlots();
+    this._draw.pivot.add(model.root);
+
+    const parts = def.parts;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const entity = this._acquire_rigid_part_entity(
+        name,
+        part.slot,
+        part.sourcemesh,
+        conf,
+      );
+      if (!entity) {
+        this._release_rigid_model(model);
+        return null;
+      }
+      model.setPart(
+        i,
+        part.slot,
+        entity,
+        part.px,
+        part.py,
+        part.pz,
+        part.qx,
+        part.qy,
+        part.qz,
+        part.qw,
+        part.sx,
+        part.sy,
+        part.sz,
+      );
+    }
+    model.setPartCount(parts.length);
+    model.sync();
+    return model;
+  }
+
+  /**
+   * @param {RigidModel} model
+   * @returns {void}
+   */
+  _release_rigid_model(model) {
+    this._rigid_unregister(model);
+    this._rigid_by_root.delete(model.root);
+    model.release();
+    const key = model.modelKey;
+    if (!key) {
+      return;
+    }
+    if (!this._rigid_model_pool[key]) {
+      this._rigid_model_pool[key] = [];
+    }
+    this._rigid_model_pool[key].push(model);
+  }
+
+  /**
+   * @param {import("@three.ez/instanced-mesh").InstancedEntity|THREE.Object3D|null} entity
    * @param {oimo.dynamics.rigidbody.RigidBody} [body]
    * @returns {void}
    */
@@ -520,12 +842,26 @@ class Scene {
     if (!entity) {
       return;
     }
+
+    const rigid = this._rigid_by_root.get(entity);
+    if (rigid) {
+      // 2026-06-27, Composer: rigid despawn releases part entities [rgmd3]
+      if (body?.id != null && this._physics.meshlist[body.id] === entity) {
+        delete this._physics.meshlist[body.id];
+        delete this._physics.attachopts[body.id];
+      }
+      this._release_rigid_model(rigid);
+      return;
+    }
+
     // 2026-06-14, Composer: delmodel before delbody clears weld ref [scnmd2]
     if (body?.id != null && this._physics.meshlist[body.id] === entity) {
       delete this._physics.meshlist[body.id];
       delete this._physics.attachopts[body.id];
     }
-    entity.remove();
+    if (/** @type {any} */ (entity).isInstanceEntity) {
+      /** @type {import("@three.ez/instanced-mesh").InstancedEntity} */ (entity).remove();
+    }
   }
 
   /**
@@ -612,6 +948,22 @@ class Scene {
 
   /**
    * @param {number} index
+   * @returns {RigidModel|import("@three.ez/instanced-mesh").InstancedEntity|null}
+   */
+  get_itemmodel(index) {
+    const body = this.get_itembody(index);
+    if (!body) {
+      return null;
+    }
+    const welded = this._physics.meshlist[body.id];
+    if (!welded) {
+      return null;
+    }
+    return this._rigid_by_root.get(welded) ?? welded ?? null;
+  }
+
+  /**
+   * @param {number} index
    * @returns {oimo.dynamics.rigidbody.RigidBody|null}
    */
   get_itembody(index) {
@@ -678,7 +1030,16 @@ class Scene {
         this.delbody(body_key, body);
         return;
       }
-      this.weldbody(body, entity, { allow_rotate: true });
+      // 2026-06-27, Composer: weld RigidModel root and track for sync [rgmd4]
+      if (/** @type {any} */ (entity).isRigidModel) {
+        const rigid = /** @type {RigidModel} */ (entity);
+        this.weldbody(body, rigid.root, { allow_rotate: true });
+        this._rigid_register(rigid);
+        this._rigid_by_root.set(rigid.root, rigid);
+        rigid.sync();
+      } else {
+        this.weldbody(body, entity, { allow_rotate: true });
+      }
     }
 
     // 2026-06-26, Composer: body userData itemIndex reuse existing object [scnud1]
@@ -815,12 +1176,16 @@ class Scene {
     _boundsSrcInv.copy(sourceobject.matrixWorld).invert();
 
     let added = false;
-    sourceobject.traverse((o) => {
+    /** @type {Set<string>} */
+    const seen = new Set();
+    /** @type {THREE.Object3D} */
+    const visitShape = (o) => {
       /** @type {THREE.Mesh} */
       const mesh = /** @type {any} */ (o);
-      if (!mesh.isMesh) {
+      if (!mesh.isMesh || seen.has(mesh.uuid)) {
         return;
       }
+      seen.add(mesh.uuid);
 
       const count = mesh.count ?? 1;
       for (let i = 0; i < count; i++) {
@@ -832,7 +1197,8 @@ class Scene {
           added = true;
         }
       }
-    });
+    };
+    sourceobject.traverse(visitShape);
 
     return added;
   }
@@ -960,10 +1326,23 @@ class Scene {
   }
 
   /**
+   * @returns {void}
+   */
+  // 2026-06-27, Composer: indexed active list rigid sync hot path [rgmd9]
+  sync_rigid_models() {
+    const active = this._rigid_active;
+    for (let i = 0, n = active.length; i < n; i++) {
+      active[i].sync();
+    }
+  }
+
+  /**
    * @param {number} dt
    * @returns {void}
    */
   step(dt, _rdt) {
+    // 2026-06-27, Composer: rigid part sync after physics step_attach [rgmd5]
+    this.sync_rigid_models();
     this.tyntext.step(dt);
     this.environment.step(dt);
 
@@ -1031,3 +1410,10 @@ export default Scene;
 // 2026-06-26, Composer: body userData itemIndex reuse existing object [scnud1]
 // 2026-06-27, Composer: scene Howler audiosprite loader [scnau1]
 // 2026-06-27, Composer: load audiosprite on scene start [scnau2]
+// 2026-06-27, Composer: models db parts triggers RigidModel [rgmd2]
+// 2026-06-27, Composer: rigid despawn releases part entities [rgmd3]
+// 2026-06-27, Composer: weld RigidModel root and track for sync [rgmd4]
+// 2026-06-27, Composer: rigid part sync after physics step_attach [rgmd5]
+// 2026-06-27, Composer: traverse-only collect dedupes self-mesh objects [rgmd7]
+// 2026-06-27, Composer: clear pooled root children before rebuild [rgmd8]
+// 2026-06-27, Composer: indexed active list rigid sync hot path [rgmd9]

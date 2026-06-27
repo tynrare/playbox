@@ -17,6 +17,7 @@ const COIN_B_COUNT = 0;
 const COIN_C_COUNT = 0;
 const DICE_COUNT = 1;
 const WEIGHT_Y = 4;
+const ARCADER_Y = 3;
 const WEIGHT_A_TOY_DB_ID = 7;
 // 2026-06-26, Composer: arcade per-type spawn counts [plcnt2]
 const COIN_STEP = 1;
@@ -98,6 +99,14 @@ class Arcade {
 			this._coin_toys.push(weight_toy);
 			const item_index = this._core.toybox.get_item_index(weight_toy);
 			this._core.scene.set_itemposition(item_index, 4, WEIGHT_Y, 3);
+		}
+
+		// 2026-06-27, Composer: arcade spawn arcader_a RigidModel at center [plarc7]
+		const arcader_toy = this._core.toybox.spawn("arcader_a_toy", true);
+		if (arcader_toy != null) {
+			this._coin_toys.push(arcader_toy);
+			const item_index = this._core.toybox.get_item_index(arcader_toy);
+			this._core.scene.set_itemposition(item_index, 0, ARCADER_Y, 0);
 		}
 
 		// 2026-06-27, Composer: arcade scene.contact handler owns collisions [plcnt3]
@@ -240,3 +249,4 @@ export default Arcade;
 // 2026-06-27, Composer: arcade scene.contact handler owns collisions [plcnt3]
 // 2026-06-27, Composer: register coin y passed from spawn loop [plreg1]
 // 2026-06-27, Composer: weight drop quake delegated to shenanigans [plqke2]
+// 2026-06-27, Composer: arcade spawn arcader_a RigidModel at center [plarc7]

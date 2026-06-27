@@ -33,6 +33,8 @@ db#db_pb_models(name="models")
    d(name="dice_a"                inherits="coin_a" object="dice_a")
    //- 2026-06-27, Composer: weight_a model inherits coin_a object weight_a [mdwta1]
    d(name="weight_a"              inherits="coin_a" object="weight_a")
+   //- 2026-06-27, Composer: arcader_a RigidModel parts wildcard [mdarc1]
+   d(name="arcader_a"              source="props" object="arcader_a" parts="*")
 
 //- 2026-06-17, Composer: coinmania and gameicons sprite registry from booling [sprpt1]
 include db_sprites.pug
@@ -47,3 +49,4 @@ include db_sprites.pug
 //- 2026-06-26, Composer: coin_c model inherits coin_a object coin_c [mdcnc1]
 //- 2026-06-26, Composer: dice_a model inherits coin_a object dice_a [mddca1]
 //- 2026-06-27, Composer: weight_a model inherits coin_a object weight_a [mdwta1]
+//- 2026-06-27, Composer: arcader_a RigidModel parts wildcard [mdarc1]

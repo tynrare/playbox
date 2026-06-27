@@ -11,6 +11,8 @@ db#db_pb_items(name="items")
    d(name="dice_a_item"              id="8" inherits="coin_a_item" body="dice_a" mesh="dice_a")
    //- 2026-06-27, Composer: weight_a item inherits coin_a_item [itwta1]
    d(name="weight_a_item"            id="10" inherits="coin_a_item" body="weight_a" mesh="weight_a")
+   //- 2026-06-27, Composer: arcader_a item inherits weight_a_item [itarc1]
+   d(name="arcader_a_item"           id="12" inherits="weight_a_item" body="arcader_a" mesh="arcader_a")
 
 db#db_pb_toys(name="toys")
    d(name="box_test_toy"            id="1" item="box_test_item"
@@ -26,7 +28,11 @@ db#db_pb_toys(name="toys")
    //- 2026-06-26, Composer: dice_a toy inherits coin_a_toy [toydca1]
    d(name="dice_a_toy"              id="6" inherits="coin_a_toy" item="dice_a_item")
    //- 2026-06-27, Composer: weight_a toy inherits coin_a_toy [toywta1]
+   //- 2026-06-27, Composer: arcader_a item inherits weight_a_item [itarc1]
+   //- 2026-06-27, Composer: arcader_a toy inherits weight_a_toy [toyarc1]
    d(name="weight_a_toy"            id="7" inherits="coin_a_toy" item="weight_a_item")
+   //- 2026-06-27, Composer: arcader_a toy inherits weight_a_toy [toyarc1]
+   d(name="arcader_a_toy"           id="8" inherits="weight_a_toy" item="arcader_a_item")
 //- 2026-06-14, Composer: mesh-less floor collision item [flit1]
 //- 2026-06-26, Composer: coin_b item inherits coin_a_item [itcnb1]
 //- 2026-06-26, Composer: coin_b toy inherits coin_a_toy [toycnb1]
@@ -36,5 +42,7 @@ db#db_pb_toys(name="toys")
 //- 2026-06-26, Composer: dice_a toy inherits coin_a_toy [toydca1]
 //- 2026-06-27, Composer: weight_a item inherits coin_a_item [itwta1]
 //- 2026-06-27, Composer: weight_a toy inherits coin_a_toy [toywta1]
+//- 2026-06-27, Composer: arcader_a item inherits weight_a_item [itarc1]
+//- 2026-06-27, Composer: arcader_a toy inherits weight_a_toy [toyarc1]
 //- 2026-06-26, Composer: coin_a_toy contacts module flag [toycnt1]
 //- 2026-06-27, Composer: sequential db_pb_toys ids 1-6 [toyid1]
