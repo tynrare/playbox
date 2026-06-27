@@ -147,11 +147,11 @@ class Core {
     // 2026-06-14, Composer: physics before draw for weld sync [crcyc3]
     // 2026-06-18, Composer: physics step uses real rdt for substeps [phyrdt1]
     this.physics.step(dt, _rdt);
-    this.draw.step(dt, _rdt);
-    this.ui?.step(dt, _rdt);
     this.scene.step(dt, _rdt);
-    // 2026-06-18, Composer: step passes lerped dt and real dt [crdt1]
+    this.ui?.step(dt, _rdt);
     this.flowbus.step(dt, _rdt);
+    // 2026-06-18, Composer: step passes lerped dt and real dt [crdt1]
+    this.draw.step(dt, _rdt);
 
     return 0;
   }

@@ -97,7 +97,7 @@ class Arcade {
 		if (weight_toy != null) {
 			this._coin_toys.push(weight_toy);
 			const item_index = this._core.toybox.get_item_index(weight_toy);
-			this._core.scene.set_itemposition(item_index, 0, WEIGHT_Y, 0);
+			this._core.scene.set_itemposition(item_index, 4, WEIGHT_Y, 3);
 		}
 
 		// 2026-06-27, Composer: arcade scene.contact handler owns collisions [plcnt3]
