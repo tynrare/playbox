@@ -5,3 +5,7 @@ node_modules/
 .pa
 dist/
 examples/
+res/sound/*.webm
+res/sound/*.ogg
+res/sound/*.mp3
+res/sound/*.json

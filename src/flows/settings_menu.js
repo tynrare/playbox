@@ -105,6 +105,13 @@ class SettingsMenuFlow extends FlowBase {
 				this._settings.toggle_pixelate();
 				this._settings.apply(this._core);
 				this._sync_settings_labels();
+				return;
+			}
+			// 2026-06-27, Composer: settings menu sound toggle [flwstg9]
+			if (event === "settings_btn_6") {
+				this._settings.toggle_sound();
+				this._settings.apply(this._core);
+				this._sync_settings_labels();
 			}
 		});
 	}
@@ -191,6 +198,7 @@ class SettingsMenuFlow extends FlowBase {
 			{ index: 3, text: this._settings.tilt_shift_label() },
 			{ index: 4, text: this._settings.ao_label() },
 			{ index: 5, text: this._settings.pixelate_label() },
+			{ index: 6, text: this._settings.sound_label() },
 		];
 		for (let i = 0; i < labels.length; i++) {
 			const { index, text } = labels[i];
@@ -212,3 +220,4 @@ export default SettingsMenuFlow;
 // 2026-06-18, Composer: settings menu quality cycle button [flwstg4]
 // 2026-06-18, Composer: settings shadows tilt shift ao toggles [flwstg5]
 // 2026-06-18, Composer: settings pixelate postprocess toggle [flwstg6]
+// 2026-06-27, Composer: settings menu sound toggle [flwstg9]

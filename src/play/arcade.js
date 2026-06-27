@@ -6,9 +6,11 @@
 
 import { cache } from "../math.js";
 import { BB_INVALID, BB_KEY_PLAY } from "../scene/blackboard.js";
+import ArcadeSound from "./sound.js";
 
 const COIN_STACK_COUNT = 10;
-const COIN_STEP = 0.2;
+const DICE_STACK_COUNT = 3;
+const COIN_STEP = 1;
 // 2026-06-26, Composer: VAR_PLAY field offsets owned by arcade [plfld1]
 const VAR_PLAY_STACK_INDEX = 2;
 const VAR_PLAY_BASE_X = 3;
@@ -35,6 +37,8 @@ class Arcade {
 		this._floor_index = null;
 		/** @type {number[]} */
 		this._coin_toys = [];
+		// 2026-06-27, Composer: arcade owns ArcadeSound lifecycle [plarc5]
+		this._sound = new ArcadeSound(this._core).init();
 		this._positions_applied = false;
 		return this;
 	}
@@ -54,20 +58,25 @@ class Arcade {
 
 		// 2026-06-26, Composer: arcade coin stack spawn loop [plstk1]
 		for (let i = 0; i < COIN_STACK_COUNT; i++) {
-			this._register_coin(this._core.toybox.spawn("coin_a_toy", true), i, 3, -2);
+			this._register_coin(this._core.toybox.spawn("coin_a_toy", true), i, 4, -2);
 		}
 		// 2026-06-26, Composer: arcade coin_b stack spawn loop [plstkb1]
 		for (let i = 0; i < COIN_STACK_COUNT; i++) {
-			this._register_coin(this._core.toybox.spawn("coin_b_toy", true), i, 3, -1);
+			this._register_coin(this._core.toybox.spawn("coin_b_toy", true), i, 4, -1);
 		}
 		// 2026-06-26, Composer: arcade coin_c stack spawn loop [plstkc1]
 		for (let i = 0; i < COIN_STACK_COUNT; i++) {
-			this._register_coin(this._core.toybox.spawn("coin_c_toy", true), i, 3, 0);
+			this._register_coin(this._core.toybox.spawn("coin_c_toy", true), i, 4, 0);
+		}
+		// 2026-06-26, Composer: arcade dice_a stack spawn loop [plstkdc1]
+		for (let i = 0; i < DICE_STACK_COUNT; i++) {
+			this._register_coin(this._core.toybox.spawn("dice_a_toy", true), i, 4, 1);
 		}
 
 		// 2026-06-26, Composer: coin placement via toybox.on_toyupdate [plstk2]
 		this._core.toybox.on_toypreupdate = null;
 		this._core.toybox.on_toyupdate = this._toyupdate.bind(this);
+		this._sound.start();
 	}
 
 	/**
@@ -81,6 +90,7 @@ class Arcade {
 
 	/** @returns {void} */
 	stop() {
+		this._sound.stop();
 		this._core.toybox.on_toyupdate = null;
 		this._core.toybox.on_toypreupdate = null;
 
@@ -180,3 +190,5 @@ export default Arcade;
 // 2026-06-26, Composer: coin stack metadata on toy blackboard [plstk4]
 // 2026-06-26, Composer: VAR_PLAY field offsets owned by arcade [plfld1]
 // 2026-06-26, Composer: arcade coin_c stack spawn loop [plstkc1]
+// 2026-06-26, Composer: arcade dice_a stack spawn loop [plstkdc1]
+// 2026-06-27, Composer: arcade owns ArcadeSound lifecycle [plarc5]

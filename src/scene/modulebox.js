@@ -13,10 +13,13 @@ import Lifespan from "../toys/lifespan.js";
 
 const VAR_FLAGS_MODULES = 5;
 const VAR_MFLAG_LIFESPAN = 0;
+// 2026-06-26, Composer: contacts module flag only no class [mdlcnt1]
+const VAR_MFLAG_CONTACTS = 1;
 
 const modulelist = [VAR_MFLAG_LIFESPAN];
 const modulenames = {
 	lifespan: VAR_MFLAG_LIFESPAN,
+	contacts: VAR_MFLAG_CONTACTS,
 };
 
 /**
@@ -260,6 +263,7 @@ class Modulebox {
 }
 
 export default Modulebox;
-export { VAR_FLAGS_MODULES, VAR_MFLAG_LIFESPAN, modulenames };
+export { VAR_FLAGS_MODULES, VAR_MFLAG_LIFESPAN, VAR_MFLAG_CONTACTS, modulenames };
 // 2026-06-14, Composer: modulebox storage via blackboard merged pool [mdlbx1]
 // 2026-06-17, Composer: modulebox init defers lifespan init [mdlinit1]
+// 2026-06-26, Composer: contacts module flag only no class [mdlcnt1]

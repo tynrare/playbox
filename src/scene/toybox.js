@@ -28,7 +28,7 @@
 // tbx-lifecycle flow:
 // 1) spawn → allocate toy + item; VAR_ITEM_INDEX ↔ item VAR_TOY_INDEX
 // 2) itembox.step → linked item item.initialize → scene.spawn_item (itm-scene-sidefx); toy still !initialized
-// 3) toyupdate !initialized → wait item INITIALIZED → toy.initialize → ensure_root → init_modules → configure
+// 3) toyupdate !initialized → wait item INITIALIZED → ensure_root → init_modules → configure → toy.initialize
 // 4) toyupdate active → modulebox.update(dt) → on_toyupdate
 // 5) despawn → lifecycle sets DISPOSED_L2 → tail _finalize_toy_slot same call
 // Branches: immediate spawn/despawn runs toyupdate(0) same call; stop() despawn(all, immediate=true)
@@ -77,6 +77,12 @@ class Toybox {
 		this.on_toypreupdate = null;
 		/** @type {((dt: number, index: number) => void)|null} */
 		this.on_toyupdate = null;
+	}
+
+	/** @returns {import("./itembox.js").default} */
+	get itembox() {
+		// 2026-06-26, Composer: toybox exposes itembox getter for scene [tbxitm1]
+		return this._itembox;
 	}
 
 	/** @returns {this} */
@@ -273,7 +279,7 @@ class Toybox {
 
 		if (immediate) {
 			this._itembox.itemupdate(0, item_index);
-			this.toyupdate(0, index);
+			// this.toyupdate(0, index); not reuired. itemupdate calls toyupdate via callback
 		}
 
 		return index;
@@ -339,13 +345,14 @@ class Toybox {
 			if (!this._is_item_initialized(item_index)) {
 				return false;
 			}
-			this._eventsbus.emit("toy.initialize", index);
+			// 2026-06-26, Composer: toy.initialize after init_modules configure [tbxini1]
 			this.blackboard.ensure_root(index);
 			this.modulebox.init_modules(index);
 			const conf = this.get_toyconf(index);
 			if (conf) {
 				this.modulebox.configure(index, conf);
 			}
+			this._eventsbus.emit("toy.initialize", index);
 			mempool.write_flag(index, VAR_FLAGS_A, VAR_FLAG_INITIALIZED, true);
 			return true;
 		}
@@ -415,3 +422,5 @@ export {
 // 2026-06-17, Composer: toybox dispose unwinds start [tbxdsp1]
 // 2026-06-26, Composer: item hook drives toyupdate via VAR_TOY_INDEX [tbxhook1]
 // 2026-06-26, Composer: ATanks pre/core/post/tail toyupdate [tbxatu1]
+// 2026-06-26, Composer: toybox exposes itembox getter for scene [tbxitm1]
+// 2026-06-26, Composer: toy.initialize after init_modules configure [tbxini1]

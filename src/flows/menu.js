@@ -29,10 +29,11 @@
 import FlowBase from "../core/flowbase.js";
 import ArcadeFlow from "./arcade.js";
 import DevMenuFlow from "./dev_menu.js";
+import ReadySplashFlow from "./readysplash.js";
 import SettingsMenuFlow from "./settings_menu.js";
 import TestFlow from "./test.js";
 
-/** @typedef {"root"|"dev"|"settings"|"test"|"arcade"} FlowKey */
+/** @typedef {"root"|"dev"|"settings"|"test"|"arcade"|"readysplash"} FlowKey */
 
 /**
  * @class MenuFlow
@@ -60,6 +61,7 @@ class MenuFlow extends FlowBase {
 			settings: null,
 			test: null,
 			arcade: null,
+			readysplash: null,
 		};
 		this._boot_opened = false;
 		/** @type {number|null} */
@@ -135,7 +137,7 @@ class MenuFlow extends FlowBase {
 			this._debug_click_id = null;
 		}
 		this._core.ui.delstate("ui_dev");
-		const keys = ["dev", "settings", "test", "arcade"];
+		const keys = ["dev", "settings", "test", "arcade", "readysplash"];
 		for (let i = 0; i < keys.length; i++) {
 			const key = keys[i];
 			this._flows[key]?.dispose();
@@ -177,6 +179,9 @@ class MenuFlow extends FlowBase {
 				this._flows.test = new TestFlow(this._core).init();
 			} else if (key === "arcade") {
 				this._flows.arcade = new ArcadeFlow(this._core).init();
+			} else if (key === "readysplash") {
+				// 2026-06-26, Composer: readysplash lazy pane factory [flwrsp2]
+				this._flows.readysplash = new ReadySplashFlow(this._core).init();
 			}
 		}
 		return /** @type {FlowBase} */ (this._flows[key]);
@@ -187,3 +192,4 @@ export default MenuFlow;
 // 2026-06-26, Composer: root menu arcade button nav [flwmn7]
 // 2026-06-26, Composer: flow.navigate flow.state generic nav names [flwmn6]
 // 2026-06-26, Composer: menu router event nav no parent ctors [flwmn5]
+// 2026-06-26, Composer: readysplash lazy pane factory [flwrsp2]

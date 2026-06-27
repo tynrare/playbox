@@ -14,6 +14,4 @@ description: "Reduce: separate given from assumed before acting; verify, no theo
 
 **Don't:** Philosophy, phenomenology jargon, long preambles, tables for show, “probably/maybe” stated as fact, fixes on unverified assumptions.
 
-**Output shape:** Few lines or bullets. Lead with Given; one primary path. With `@keepshort`, stay short. With `@berude`, call out when Assumed is masquerading as Given.
-
-**Conflict:** `reduce` wins on **order** (Given → Assumed → Check before solution). `berude` wins on pushback when Given is thin.
+**Output shape:** Few lines or bullets. Lead with Given; one primary path. At most one tight line per section—structure is not an excuse for length.

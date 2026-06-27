@@ -52,7 +52,8 @@ class Play {
 		this._settings?.start(this._core);
 		if (this._menu) {
 			this._core.flowbus.attach(this._menu);
-			this._menu.navigate("arcade");
+			// 2026-06-26, Composer: play boot navigates readysplash not arcade [plrsp1]
+			this._menu.navigate("readysplash");
 		}
 	}
 
@@ -70,3 +71,4 @@ class Play {
 export default Play;
 // 2026-06-26, Composer: play attaches menu flow only no dev [plmn2]
 // 2026-06-18, Composer: play owns settings inject flows [plstg1]
+// 2026-06-26, Composer: play boot navigates readysplash not arcade [plrsp1]

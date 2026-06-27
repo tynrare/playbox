@@ -37,12 +37,13 @@ class Core {
     // 2026-06-14, Composer: toybox mempool item link blackboard [tbxbb1]
     this.toybox = new Toybox(this.db, this.eventsbus, this.itembox);
     // 2026-06-14, Composer: Scene facade for model and text [scnfac1]
+    // 2026-06-26, Composer: scene ctor takes toybox not itembox [crtbx1]
     this.scene = new Scene(
       this.draw,
       this.db,
       this.assets,
       this.physics,
-      this.itembox,
+      this.toybox,
       this.eventsbus,
     );
     /** @type {Inputs} */
@@ -186,3 +187,4 @@ export default Core;
 // 2026-06-18, Composer: step passes lerped dt and real dt [crdt1]
 // 2026-06-18, Composer: physics step uses real rdt for substeps [phyrdt1]
 // 2026-06-26, Composer: toy tick via itembox.on_itemupdate hook [tbxhook1]
+// 2026-06-26, Composer: scene ctor takes toybox not itembox [crtbx1]

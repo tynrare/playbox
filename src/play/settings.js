@@ -4,6 +4,7 @@
 // 2026-06-18, Composer: render_scale quality cycle persist [stgs3]
 // 2026-06-18, Composer: shadows tilt shift ao toggles persist [stgs4]
 // 2026-06-18, Composer: pixelate postprocess toggle persist [stgs5]
+// 2026-06-27, Composer: sound toggle persist and apply [stgs6]
 import Datawork from "../core/datawork.js";
 
 const UI_DEBUG_ENABLED = "ui_debug_enabled";
@@ -191,13 +192,42 @@ class Settings {
 	}
 
 	/**
+	 * @returns {boolean}
+	 */
+	get sound() {
+		return this._load_bool("sound", true);
+	}
+
+	/**
+	 * @param {boolean} v
+	 */
+	set sound(v) {
+		this._save_bool("sound", v);
+	}
+
+	/**
+	 * @returns {void}
+	 */
+	toggle_sound() {
+		this.sound = !this.sound;
+	}
+
+	/**
+	 * @returns {string}
+	 */
+	sound_label() {
+		return `Sound ${this.sound ? "On" : "Off"}`;
+	}
+
+	/**
 	 * @param {string} key
 	 * @param {boolean} default_on
 	 * @returns {boolean}
 	 */
 	_load_bool(key, default_on) {
 		const v = this._datawork.load(key);
-		if (v == null) {
+		// 2026-06-27, Composer: datawork missing key is 0 not null [stgs7]
+		if (v == null || v === 0) {
 			return default_on;
 		}
 		return v === 2;
@@ -241,6 +271,8 @@ class Settings {
 		core.draw.set_ultra_ao_enabled(this.ao);
 		// 2026-06-19, Composer: quality via render_scale only [stgs9]
 		core.draw.set_ultra_tiltshift_enabled(this.tilt_shift);
+		// 2026-06-27, Composer: sound toggle persist and apply [stgs6]
+		core.scene.audio.set_enabled(this.sound);
 	}
 }
 
@@ -253,3 +285,5 @@ export { RENDER_SCALE_LEVELS, RENDER_SCALE_DEFAULT };
 // 2026-06-18, Composer: pixelate postprocess toggle persist [stgs5]
 // 2026-06-19, Composer: quality via render_scale only [stgs9]
 // 2026-06-18, Composer: independent pixelate and ao toggles [stgs8]
+// 2026-06-27, Composer: sound toggle persist and apply [stgs6]
+// 2026-06-27, Composer: datawork missing key is 0 not null [stgs7]

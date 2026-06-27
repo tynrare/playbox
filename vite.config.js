@@ -1,7 +1,9 @@
+import path from "node:path";
 import { defineConfig } from "vite";
 import plugin_pug from "vite-plugin-pug";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import legacy from "@vitejs/plugin-legacy";
+import { soundBundlePlugin } from "./scripts/vite-plugin-sound-bundle.mjs";
 
 /** @type {import('vite').UserConfig} */
 export default defineConfig({
@@ -9,6 +11,8 @@ export default defineConfig({
   base: "./",
   plugins: [
     //basicSsl(),
+    // 2026-06-27, Composer: dev/res/sound → res/sound audiosprite bundle [pbxvc1]
+    soundBundlePlugin({ soundRoot: path.resolve("dev/res/sound") }),
     // 2026-06-14, Composer: rename pureplay to playbox [r7n2p4]
     plugin_pug({ pretty: false }, { name: "playbox" }),
     legacy({
@@ -50,3 +54,4 @@ export default defineConfig({
 });
 // 2026-06-14, Composer: rename pureplay to playbox [r7n2p4]
 // 2026-06-14, Composer: vitest node env for toybox stress tests [tbxst1]
+// 2026-06-27, Composer: dev/res/sound → res/sound audiosprite bundle [pbxvc1]

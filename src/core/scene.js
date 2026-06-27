@@ -10,6 +10,9 @@ import {
   SpriteMaterialExtension,
 } from "../render/materials/sprite.js";
 import Environment from "../scene/environment.js";
+import Audio from "../scene/audio.js";
+import ContactRouter from "../scene/contact_router.js";
+import { VAR_FLAGS_MODULES, VAR_MFLAG_CONTACTS } from "../scene/modulebox.js";
 import { VAR_BODY_ID } from "../scene/itembox.js";
 import { oimo } from "../lib/OimoPhysics.js";
 import { RigidBody, RigidBodyType } from "./physics.js";
@@ -28,24 +31,34 @@ class Scene {
    * @param {import("./db.js").default} db
    * @param {import("./assets.js").default} assets
    * @param {import("./physics.js").default} physics
-   * @param {import("../scene/itembox.js").default} itembox
+   * @param {import("../scene/toybox.js").default} toybox
    * @param {import("./eventsbus.js").default} eventsbus
    */
-  constructor(draw, db, assets, physics, itembox, eventsbus) {
+  constructor(draw, db, assets, physics, toybox, eventsbus) {
     this._draw = draw;
     this._db = db;
     this._assets = assets;
     // 2026-06-14, Composer: scene owns body pool and physics weld [scnbd2]
     this._physics = physics;
-    this._itembox = itembox;
+    // 2026-06-26, Composer: scene toybox ref itembox via toybox [scntbx1]
+    this._toybox = toybox;
+    this._itembox = toybox.itembox;
     this._eventsbus = eventsbus;
     /** @type {number|null} */
     this._on_item_init = null;
     /** @type {number|null} */
     this._on_item_dis = null;
+    /** @type {number|null} */
+    this._on_toy_init = null;
+    /** @type {number|null} */
+    this._on_toy_dis = null;
+    /** @type {ContactRouter|null} */
+    this._contact_router = null;
     this.tyntext = new TyntextCore(draw, db, assets);
     // 2026-06-14, Composer: scene environment floor lights csm [scnenv1]
     this.environment = new Environment(draw._render, assets);
+    // 2026-06-27, Composer: scene Howler audiosprite loader [scnau1]
+    this.audio = new Audio();
     this._billboards = {};
     /** @type {Record<string, oimo.dynamics.rigidbody.RigidBody[]>} */
     this._body_pool = {};
@@ -71,6 +84,15 @@ class Scene {
   start() {
     // 2026-06-14, Composer: environment start uses config only [scnenv2]
     this.environment.start();
+    // 2026-06-27, Composer: load audiosprite on scene start [scnau2]
+    this.audio.run();
+    // 2026-06-26, Composer: ContactRouter wired on item and toy events [scnctr1]
+    this._contact_router = new ContactRouter(
+      this._eventsbus,
+      this._physics,
+      this._itembox,
+      this._toybox,
+    );
     // 2026-06-14, Composer: item init dispose via eventbus listeners [itmbx1]
     // 2026-06-14, Composer: item events pass index scalar [itmhp1]
     this._on_item_init = this._eventsbus.on("item.initialize", (index) => {
@@ -79,6 +101,20 @@ class Scene {
     });
     this._on_item_dis = this._eventsbus.on("item.dispose", (index) => {
       this.despawn_item(index);
+    });
+    this._on_toy_init = this._eventsbus.on("toy.initialize", (toyIndex) => {
+      if (
+        this._toybox.mempool.read_flag(
+          toyIndex,
+          VAR_FLAGS_MODULES,
+          VAR_MFLAG_CONTACTS,
+        )
+      ) {
+        this._contact_router?.watch(toyIndex);
+      }
+    });
+    this._on_toy_dis = this._eventsbus.on("toy.dispose", (toyIndex) => {
+      this._contact_router?.unwatch(toyIndex);
     });
   }
 
@@ -94,6 +130,19 @@ class Scene {
       this._eventsbus.off(this._on_item_dis);
       this._on_item_dis = null;
     }
+    if (this._on_toy_init != null) {
+      this._eventsbus.off(this._on_toy_init);
+      this._on_toy_init = null;
+    }
+    if (this._on_toy_dis != null) {
+      this._eventsbus.off(this._on_toy_dis);
+      this._on_toy_dis = null;
+    }
+    if (this._contact_router != null) {
+      this._contact_router.dispose();
+      this._contact_router = null;
+    }
+    this.audio.stop();
     this.environment.stop();
     this._clear_body_pool();
   }
@@ -632,6 +681,11 @@ class Scene {
       this.weldbody(body, entity, { allow_rotate: true });
     }
 
+    // 2026-06-26, Composer: body userData itemIndex reuse existing object [scnud1]
+    if (body.userData == null) {
+      body.userData = {};
+    }
+    body.userData.itemIndex = index;
     this._itembox.mempool.write_ui16(index, VAR_BODY_ID, body.id);
   }
 
@@ -890,6 +944,10 @@ class Scene {
     body.setTransform(t);
     body.setLinearVelocity(this._body_cache.vec3.init(0, 0, 0));
     body.setAngularVelocity(this._body_cache.vec3.init(0, 0, 0));
+    // 2026-06-26, Composer: clear pooled body userData itemIndex [scnud1]
+    if (body.userData != null) {
+      body.userData.itemIndex = null;
+    }
   }
 
   /**
@@ -968,3 +1026,8 @@ export default Scene;
 // 2026-06-27, Composer: bounds shape matrix relative to sourceobject [scnbnd2]
 // 2026-06-26, Composer: cached ExtendedMaterial DitheredOpacity CSM [scnmat1]
 // 2026-06-26, Composer: material shininess for MeshPhongMaterial [scnph1]
+// 2026-06-26, Composer: scene toybox ref itembox via toybox [scntbx1]
+// 2026-06-26, Composer: ContactRouter wired on item and toy events [scnctr1]
+// 2026-06-26, Composer: body userData itemIndex reuse existing object [scnud1]
+// 2026-06-27, Composer: scene Howler audiosprite loader [scnau1]
+// 2026-06-27, Composer: load audiosprite on scene start [scnau2]

@@ -14,6 +14,7 @@
 //- 2026-06-18, Composer: test close cross sprite icon [uinav11]
 //- 2026-06-18, Composer: settings shadows tilt shift ao buttons [uinav12]
 //- 2026-06-18, Composer: settings pixelate postprocess button [uinav13]
+//- 2026-06-27, Composer: settings menu sound toggle button [uinav20]
 //- 2026-06-18, Composer: settings menu half-size layout [uinav14]
 //- 2026-06-18, Composer: settings menu top-right anchor stack [uinav15]
 //- 2026-06-26, Composer: root menu arcade button label [uinav18]
@@ -52,8 +53,9 @@ db#db_pb_ui_settings_menu_elements(name="ui_settings_menu_elements" scope="ui_el
         //- 2026-06-18, Composer: settings menu quality button label [uinav10]
         //- 2026-06-18, Composer: settings shadows tilt shift ao buttons [uinav12]
         //- 2026-06-18, Composer: settings pixelate postprocess button [uinav13]
+        //- 2026-06-27, Composer: settings menu sound toggle button [uinav20]
         //- 2026-06-18, Composer: label rx/ry centers on anchor-1 panel [uinav16]
-        - var btn_label = val === 0 ? "Back" : val === 1 ? "Quality" : val === 2 ? "Shadows" : val === 3 ? "Tilt Shift" : val === 4 ? "AO" : val === 5 ? "Pixelate" : "-"
+        - var btn_label = val === 0 ? "Back" : val === 1 ? "Quality" : val === 2 ? "Shadows" : val === 3 ? "Tilt Shift" : val === 4 ? "AO" : val === 5 ? "Pixelate" : val === 6 ? "Sound" : "-"
         d(name=btn_name type="panel" interactive="true" event=btn_name
             x=100 y=btn_y rx=-4 ry=-4 w=settings_btn_w h=settings_btn_h scale=1
             anchorx=1 anchory=1
@@ -87,6 +89,15 @@ db#db_pb_ui_arcade_elements(name="ui_arcade_elements" scope="ui_elements")
         pivot="arcade_close"
         z=1 anchorx=0.5 anchory=0.5
         size="4" opacity="1" colorb="0xffffff" glow="1")
+
+db#db_pb_ui_readysplash_elements(name="ui_readysplash_elements" scope="ui_elements")
+    //- 2026-06-26, Composer: readysplash green start button [uinav21]
+    d(name="readysplash_start" type="panel" interactive="true" event="readysplash_start"
+        x=50 y=50 w=30 h=10 scale=1
+        color="0x00aa00" colorb="0x00ff00" glow="1" opacity="1" corner="0.3")
+    d(name="readysplash_start_label" type="text" font="afont" pivot="readysplash_start"
+        text="Start" fontsize="4" color="0xffffff" colorb="0xffffff" glow="1" opacity="1"
+        anchorx=0.5 anchory=0.5)
 
 db#db_pb_ui_test_elements(name="ui_test_elements" scope="ui_elements")
     //- 2026-06-17, Composer: test flow close and ok ui elements [uinav6]
@@ -162,6 +173,9 @@ db#db_pb_ui_dev_menu_vis(name="ui_dev_menu_vis" scope="ui_states")
 db#db_pb_ui_arcade_vis(name="ui_arcade_vis" scope="ui_states")
     d(name="arcade_close_elements" element="[arcade_close, arcade_close_icon]")
 
+db#db_pb_ui_readysplash_vis(name="ui_readysplash_vis" scope="ui_states")
+    d(name="readysplash_elements" element="[readysplash_start, readysplash_start_label]")
+
 db#db_pb_ui_test_vis(name="ui_test_vis" scope="ui_states")
     d(name="test_close_elements" element="[test_close, test_close_icon]")
 
@@ -203,6 +217,7 @@ db#db_pb_ui_debug_enabled(name="ui_debug_enabled" scope="ui_states")
 //- 2026-06-18, Composer: test close cross sprite icon [uinav11]
 //- 2026-06-18, Composer: settings shadows tilt shift ao buttons [uinav12]
 //- 2026-06-18, Composer: settings pixelate postprocess button [uinav13]
+//- 2026-06-27, Composer: settings menu sound toggle button [uinav20]
 //- 2026-06-18, Composer: settings menu half-size layout [uinav14]
 //- 2026-06-18, Composer: settings menu top-right anchor stack [uinav15]
 //- 2026-06-26, Composer: root menu arcade button label [uinav18]
