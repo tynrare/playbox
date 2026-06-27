@@ -12,7 +12,7 @@ import { VAR_TOY_DB_ID } from "../scene/toybox.js";
 import ArcadeSound from "./sound.js";
 import { contactApproachSpeed, quake, QUAKE_SPEED_MIN } from "./shenanigans.js";
 
-const COIN_A_COUNT = 5;
+const COIN_A_COUNT = 3;
 const COIN_B_COUNT = 0;
 const COIN_C_COUNT = 0;
 const DICE_COUNT = 1;

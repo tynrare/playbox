@@ -2,3 +2,4 @@ metalLatch boost=0.01
 chips-collide-2 boost=0.5
 impactMetal_light_002 boost=0.5
 impactWood_light_000 boost=0.5
+impactPunch_heavy_000 boost=2
