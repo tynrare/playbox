@@ -19,20 +19,27 @@ db#db_pb_toys(name="toys")
       modules="[lifespan]" lifespan="10")
    d(name="box_just_toy"            id="2" item="box_test_item")
    //- 2026-06-26, Composer: coin_a_toy contacts module flag [toycnt1]
+   //- 2026-06-28, Composer: coin_a_toy tags module coin grabbable [toytag1]
    d(name="coin_a_toy"              id="3" item="coin_a_item"
-      modules="[contacts]")
+      modules="[contacts, tags]" tags="[coin, grabbable]")
    //- 2026-06-26, Composer: coin_b toy inherits coin_a_toy [toycnb1]
    d(name="coin_b_toy"              id="4" inherits="coin_a_toy" item="coin_b_item")
    //- 2026-06-26, Composer: coin_c toy inherits coin_a_toy [toycnc1]
    d(name="coin_c_toy"              id="5" inherits="coin_a_toy" item="coin_c_item")
    //- 2026-06-26, Composer: dice_a toy inherits coin_a_toy [toydca1]
-   d(name="dice_a_toy"              id="6" inherits="coin_a_toy" item="dice_a_item")
+   //- 2026-06-28, Composer: dice_a tags dice grabbable [toytag2]
+   d(name="dice_a_toy"              id="6" inherits="coin_a_toy" item="dice_a_item"
+      tags="[dice, grabbable]")
    //- 2026-06-27, Composer: weight_a toy inherits coin_a_toy [toywta1]
    //- 2026-06-27, Composer: arcader_a item inherits weight_a_item [itarc1]
    //- 2026-06-27, Composer: arcader_a toy inherits weight_a_toy [toyarc1]
-   d(name="weight_a_toy"            id="7" inherits="coin_a_toy" item="weight_a_item")
+   //- 2026-06-28, Composer: weight_a tags weight grabbable [toytag3]
+   d(name="weight_a_toy"            id="7" inherits="coin_a_toy" item="weight_a_item"
+      tags="[weight, grabbable]")
    //- 2026-06-27, Composer: arcader_a toy inherits weight_a_toy [toyarc1]
-   d(name="arcader_a_toy"           id="8" inherits="weight_a_toy" item="arcader_a_item")
+   //- 2026-06-28, Composer: arcader_a tags weight not grabbable [toytag4]
+   d(name="arcader_a_toy"           id="8" inherits="weight_a_toy" item="arcader_a_item"
+      tags="[weight]")
 //- 2026-06-14, Composer: mesh-less floor collision item [flit1]
 //- 2026-06-26, Composer: coin_b item inherits coin_a_item [itcnb1]
 //- 2026-06-26, Composer: coin_b toy inherits coin_a_toy [toycnb1]
@@ -46,3 +53,7 @@ db#db_pb_toys(name="toys")
 //- 2026-06-27, Composer: arcader_a toy inherits weight_a_toy [toyarc1]
 //- 2026-06-26, Composer: coin_a_toy contacts module flag [toycnt1]
 //- 2026-06-27, Composer: sequential db_pb_toys ids 1-6 [toyid1]
+//- 2026-06-28, Composer: coin_a_toy tags module coin grabbable [toytag1]
+//- 2026-06-28, Composer: dice_a tags dice grabbable [toytag2]
+//- 2026-06-28, Composer: weight_a tags weight grabbable [toytag3]
+//- 2026-06-28, Composer: arcader_a tags weight not grabbable [toytag4]

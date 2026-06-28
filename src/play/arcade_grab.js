@@ -4,9 +4,9 @@
 import { oimo } from "../lib/OimoPhysics.js";
 import { TOY_INDEX_INVALID } from "../scene/itembox.js";
 
-const GRAB_LIFT_Y = 5;
-const GRAB_STIFFNESS = 100;
-const GRAB_DAMPING = 50;
+const GRAB_LIFT_Y = 3;
+const GRAB_STIFFNESS = 70;
+const GRAB_DAMPING = 20;
 
 const _pos = new oimo.common.Vec3();
 const _vel = new oimo.common.Vec3();

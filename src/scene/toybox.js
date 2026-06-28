@@ -397,6 +397,49 @@ class Toybox {
 	}
 
 	/**
+	 * @param {number} index
+	 * @param {string} name
+	 * @returns {boolean}
+	 */
+	has_tag(index, name) {
+		// 2026-06-28, Composer: toybox delegates tag queries to tags module [tbxtag1]
+		return this.modulebox.tags.has_tag(index, name);
+	}
+
+	/**
+	 * @param {number} index
+	 * @param {string} name
+	 * @returns {void}
+	 */
+	add_tag(index, name) {
+		this.modulebox.tags.add_tag(index, name);
+	}
+
+	/**
+	 * @param {number} index
+	 * @param {string} name
+	 * @returns {void}
+	 */
+	remove_tag(index, name) {
+		this.modulebox.tags.remove_tag(index, name);
+	}
+
+	/**
+	 * @param {string} name
+	 * @returns {number|null}
+	 */
+	register_tag(name) {
+		return this.modulebox.tags.register_tag(name);
+	}
+
+	/**
+	 * @returns {string[]}
+	 */
+	get_tag_names() {
+		return this.modulebox.tags.get_tag_names();
+	}
+
+	/**
 	 * @param {number} dt
 	 * @returns {void}
 	 */
@@ -424,3 +467,4 @@ export {
 // 2026-06-26, Composer: ATanks pre/core/post/tail toyupdate [tbxatu1]
 // 2026-06-26, Composer: toybox exposes itembox getter for scene [tbxitm1]
 // 2026-06-26, Composer: toy.initialize after init_modules configure [tbxini1]
+// 2026-06-28, Composer: toybox delegates tag queries to tags module [tbxtag1]

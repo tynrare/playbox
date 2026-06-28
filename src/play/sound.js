@@ -1,18 +1,8 @@
 /** @namespace ty */
-// Purpose: arcade contact sfx — kind map, impact volume, play API.
+// Purpose: arcade contact sfx — tag kind map, impact volume, play API.
 
 import { TOY_INDEX_INVALID } from "../scene/itembox.js";
-import { VAR_TOY_DB_ID } from "../scene/toybox.js";
 
-// 2026-06-27, Composer: toy db id to contact sfx kind map [plsfx1]
-/** @type {ReadonlyMap<number, string>} */
-const TOY_CONTACT_KIND_BY_DB_ID = new Map([
-	[3, "coin"],
-	[4, "coin"],
-	[5, "coin"],
-	[6, "dice"],
-	[7, "weight"],
-]);
 /** @type {Readonly<Record<string, string>>} */
 const CONTACT_SFX_BY_KIND = {
 	coin: "chips-collide-2",
@@ -20,10 +10,10 @@ const CONTACT_SFX_BY_KIND = {
 	weight: "impactPunch_heavy_000",
 };
 /** @type {Readonly<string[]>} */
-const CONTACT_KIND_PRIORITY = ["dice", "coin"];
+const CONTACT_KIND_PRIORITY = ["dice", "coin", "weight"];
 // 2026-06-27, Composer: contact approach speed to sfx volume [plimp1]
-const CONTACT_SPEED_MIN = 1.0;
-const CONTACT_SPEED_MAX = 16.0;
+const CONTACT_SPEED_MIN = 2.0;
+const CONTACT_SPEED_MAX = 32.0;
 const CONTACT_VOL_MIN = 0.10;
 const CONTACT_VOL_MAX = 1.0;
 
@@ -57,11 +47,18 @@ class ArcadeSound {
 	 * @returns {string|null}
 	 */
 	_toy_contact_kind(toyIndex) {
+		// 2026-06-28, Composer: contact sfx kind from toy tags [plsfx2]
 		if (toyIndex === TOY_INDEX_INVALID) {
 			return null;
 		}
-		const id = this._core.toybox.mempool.read_ui16(toyIndex, VAR_TOY_DB_ID);
-		return TOY_CONTACT_KIND_BY_DB_ID.get(id) ?? null;
+		const toybox = this._core.toybox;
+		for (let i = 0; i < CONTACT_KIND_PRIORITY.length; i++) {
+			const kind = CONTACT_KIND_PRIORITY[i];
+			if (toybox.has_tag(toyIndex, kind)) {
+				return kind;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -122,6 +119,6 @@ class ArcadeSound {
 export default ArcadeSound;
 // 2026-06-27, Composer: fix listener id vs handler name clash [plsnd2]
 // 2026-06-27, Composer: arcade sound scene.contact listener [plsnd1]
-// 2026-06-27, Composer: toy db id to contact sfx kind map [plsfx1]
 // 2026-06-27, Composer: contact approach speed to sfx volume [plimp1]
 // 2026-06-27, Composer: contact sfx play API called from arcade [plsnd3]
+// 2026-06-28, Composer: contact sfx kind from toy tags [plsfx2]

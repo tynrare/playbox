@@ -10,16 +10,20 @@ import Blackboard, {
 } from "./blackboard.js";
 import { VAR_FLAGS_A, VAR_FLAG_ACTIVE } from "../core/mempool.js";
 import Lifespan from "../toys/lifespan.js";
+import Tags from "../toys/tags.js";
 
 const VAR_FLAGS_MODULES = 5;
 const VAR_MFLAG_LIFESPAN = 0;
 // 2026-06-26, Composer: contacts module flag only no class [mdlcnt1]
 const VAR_MFLAG_CONTACTS = 1;
+// 2026-06-28, Composer: tags module flag and class [mdltag1]
+const VAR_MFLAG_TAGS = 2;
 
-const modulelist = [VAR_MFLAG_LIFESPAN];
+const modulelist = [VAR_MFLAG_LIFESPAN, VAR_MFLAG_TAGS];
 const modulenames = {
 	lifespan: VAR_MFLAG_LIFESPAN,
 	contacts: VAR_MFLAG_CONTACTS,
+	tags: VAR_MFLAG_TAGS,
 };
 
 /**
@@ -37,14 +41,16 @@ class Modulebox {
 		this._blackboard = blackboard;
 		this._toy_mempool = toy_mempool;
 		this.lifespan = new Lifespan(VAR_MFLAG_LIFESPAN, toy_mempool);
+		this.tags = new Tags(VAR_MFLAG_TAGS);
 		/** @type {Array<import("../toys/module.js").default>} */
-		this.modulelist = [this.lifespan];
+		this.modulelist = [this.lifespan, this.tags];
 	}
 
 	/** @returns {void} */
 	init() {
 		// 2026-06-17, Composer: modulebox init defers lifespan init [mdlinit1]
 		this.lifespan.init(this._blackboard);
+		this.tags.init(this._blackboard);
 	}
 
 	/**
@@ -263,7 +269,8 @@ class Modulebox {
 }
 
 export default Modulebox;
-export { VAR_FLAGS_MODULES, VAR_MFLAG_LIFESPAN, VAR_MFLAG_CONTACTS, modulenames };
+export { VAR_FLAGS_MODULES, VAR_MFLAG_LIFESPAN, VAR_MFLAG_CONTACTS, VAR_MFLAG_TAGS, modulenames };
 // 2026-06-14, Composer: modulebox storage via blackboard merged pool [mdlbx1]
 // 2026-06-17, Composer: modulebox init defers lifespan init [mdlinit1]
 // 2026-06-26, Composer: contacts module flag only no class [mdlcnt1]
+// 2026-06-28, Composer: tags module flag and class [mdltag1]

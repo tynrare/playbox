@@ -12,7 +12,6 @@ import {
 	VAR_ITEM_DB_ID,
 	VAR_TOY_INDEX,
 } from "../scene/itembox.js";
-import { VAR_TOY_DB_ID } from "../scene/toybox.js";
 import ArcadeGrab from "./arcade_grab.js";
 import ArcadeInputs from "./arcade_inputs.js";
 import ArcadeSound from "./sound.js";
@@ -25,7 +24,6 @@ const COIN_C_COUNT = 0;
 const DICE_COUNT = 1;
 const WEIGHT_Y = 4;
 const ARCADER_Y = 3;
-const WEIGHT_A_TOY_DB_ID = 7;
 const FLOOR_ITEM_DB_ID = 0;
 // 2026-06-26, Composer: arcade per-type spawn counts [plcnt2]
 const COIN_STEP = 1;
@@ -229,12 +227,12 @@ class Arcade {
 	 * @param {number} toyIndex
 	 * @returns {boolean}
 	 */
-	_is_weight_a(toyIndex) {
+	_is_quake_weight(toyIndex) {
+		// 2026-06-28, Composer: quake weight detected via weight tag [plqke3]
 		if (toyIndex === TOY_INDEX_INVALID) {
 			return false;
 		}
-		const id = this._core.toybox.mempool.read_ui16(toyIndex, VAR_TOY_DB_ID);
-		return id === WEIGHT_A_TOY_DB_ID;
+		return this._core.toybox.has_tag(toyIndex, "weight");
 	}
 
 	/**
@@ -248,9 +246,9 @@ class Arcade {
 		}
 
 		const speed = contactApproachSpeed(payload.contact);
-		const weightToy = this._is_weight_a(payload.toyIndex)
+		const weightToy = this._is_quake_weight(payload.toyIndex)
 			? payload.toyIndex
-			: this._is_weight_a(payload.otherToyIndex)
+			: this._is_quake_weight(payload.otherToyIndex)
 				? payload.otherToyIndex
 				: TOY_INDEX_INVALID;
 
@@ -272,13 +270,18 @@ class Arcade {
 	 */
 	_on_arcade_pick({ itemIndex }) {
 		// 2026-06-28, Composer: pick toy grab floor drop [plgrb4]
-		const { itembox } = this._core;
+		const { itembox, toybox } = this._core;
 
 		const itemDbId = itembox.mempool.read_ui16(itemIndex, VAR_ITEM_DB_ID);
 		const toyIndex = itembox.mempool.read_ui16(itemIndex, VAR_TOY_INDEX);
 		const hasToy = toyIndex !== TOY_INDEX_INVALID;
 
 		if (hasToy) {
+			// 2026-06-28, Composer: pick non-grabbable toy calls drop [plgrb7]
+			if (!toybox.has_tag(toyIndex, "grabbable")) {
+				this._grab.drop();
+				return;
+			}
 			this._grab.grab(toyIndex);
 		} else if (itemDbId === FLOOR_ITEM_DB_ID) {
 			this._grab.drop();
@@ -310,3 +313,5 @@ export default Arcade;
 // 2026-06-28, Composer: arcade.pick resolves item and toy db ids [plinp3]
 // 2026-06-28, Composer: arcade owns ArcadeGrab lifecycle [plgrb3]
 // 2026-06-28, Composer: pick toy grab floor drop [plgrb4]
+// 2026-06-28, Composer: pick non-grabbable toy calls drop [plgrb7]
+// 2026-06-28, Composer: quake weight detected via weight tag [plqke3]

@@ -46,7 +46,7 @@ class ArcadeInputs {
 	start() {
 		// 2026-06-28, Composer: pointer.click Oimo raycast emits arcade.pick [plinp1]
 		this._pointer_click_id = this._core.eventsbus.on(
-			"pointer.click",
+			"pointer.up",
 			this._on_pointer_click.bind(this),
 		);
 		// 2026-06-28, Composer: pointer.move floor plane intersect stores floor [plinp4]
