@@ -56,12 +56,8 @@ class ArcadeGrab {
 	 * @returns {void}
 	 */
 	grab(toyIndex, x, y, z) {
-		// 2026-06-28, Composer: one-shot pick-point impulse on grab [plgrb10]
-		if (toyIndex === TOY_INDEX_INVALID) {
-			return;
-		}
-		if (this._grabbed.has(toyIndex)) {
-			this._grabbed.delete(toyIndex);
+		// 2026-06-28, Composer: grab add only no toggle drop [plgrb12]
+		if (toyIndex === TOY_INDEX_INVALID || this._grabbed.has(toyIndex)) {
 			return;
 		}
 		this._grabbed.add(toyIndex);
@@ -143,3 +139,4 @@ export default ArcadeGrab;
 // 2026-06-28, Composer: mass-scaled PD so light toys match heavy accel [plgrb6]
 // 2026-06-28, Composer: one-shot pick-point impulse on grab [plgrb10]
 // 2026-06-28, Composer: grab impulse uses fixed strength toward target [plgrb11]
+// 2026-06-28, Composer: grab add only no toggle drop [plgrb12]

@@ -26,12 +26,12 @@ class Core {
     // 2026-06-17, Composer: defer db DOM bind to init [dblbind1]
     this.db = new DbList();
     this.assets = new Assets(this.db, this.render);
-    // 2026-06-14, Composer: unwrap draw ctor args [drwarg1]
-    this.draw = new Draw(this.db, this.render, this.assets);
-    // 2026-06-14, Composer: physics before scene for body pool wiring [scnbd2]
-    this.physics = new Physics(this.render);
     // 2026-06-14, Composer: eventsbus hub for inputs and ui [evbs1]
     this.eventsbus = new EventsBus();
+    // 2026-06-14, Composer: unwrap draw ctor args [drwarg1]
+    this.draw = new Draw(this.db, this.render, this.assets, this.eventsbus);
+    // 2026-06-14, Composer: physics before scene for body pool wiring [scnbd2]
+    this.physics = new Physics(this.render);
     // 2026-06-14, Composer: itembox data worker before scene [itmbx1]
     this.itembox = new Itembox(this.db, this.eventsbus);
     // 2026-06-14, Composer: toybox mempool item link blackboard [tbxbb1]
@@ -202,3 +202,4 @@ export default Core;
 // 2026-06-26, Composer: toy tick via itembox.on_itemupdate hook [tbxhook1]
 // 2026-06-26, Composer: scene ctor takes toybox not itembox [crtbx1]
 // 2026-06-28, Composer: core wires toybox.on_toyupdate to flowbus [crtoy1]
+// 2026-06-28, Composer: draw ctor receives eventsbus [drweq1]

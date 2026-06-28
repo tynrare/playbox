@@ -6,13 +6,13 @@ db#db_pb_bodies(name="bodies")
    d(name="floor" shape="box" w="64" h="0.1" l="64" dynamics="false"
      adamping="1" ldamping="1" density="1" friction="1" restitution="0")
    d(name="coin_a" type="bounds" shape="cylinder" source="coin_a" dynamics="true"
-     adamping="0.5" ldamping="0.5" density="1" friction="0.5" restitution="0")
+     adamping="0.5" ldamping="0.5" density="1" friction="0.5" restitution="0.2")
    //- 2026-06-26, Composer: coin_b body inherits coin_a bounds [bdcnb1]
    d(name="coin_b" inherits="coin_a" source="coin_b")
    //- 2026-06-26, Composer: coin_c body inherits coin_a bounds [bdcnc1]
    d(name="coin_c" inherits="coin_a" source="coin_c")
    //- 2026-06-26, Composer: dice_a body inherits coin_a bounds [bddca1]
-   d(name="dice_a" inherits="coin_a" source="dice_a" shape="box")
+   d(name="dice_a" inherits="coin_a" source="dice_a" shape="box" restitution="0.5")
    //- 2026-06-27, Composer: weight_a body density 10 from props bounds [bdwta1]
    d(name="weight_a" inherits="dice_a" source="weight_a" density="10")
    //- 2026-06-27, Composer: arcader_a body inherits weight_a bounds [bdarc1]

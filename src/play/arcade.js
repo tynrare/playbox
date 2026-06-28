@@ -9,10 +9,10 @@ import { BB_KEY_PLAY } from "../scene/blackboard.js";
 import { CONTACT_PHASE_BEGIN } from "../scene/contact_router.js";
 import {
 	TOY_INDEX_INVALID,
-	VAR_ITEM_DB_ID,
 	VAR_TOY_INDEX,
 } from "../scene/itembox.js";
 import ArcadeGrab from "./arcade_grab.js";
+import ArcadeBox from "./arcade_box.js";
 import ArcadeInputs from "./arcade_inputs.js";
 import ArcadeSound from "./sound.js";
 // 2026-06-28, Composer: rename shenanigans import to arcade_quake [plrqk1]
@@ -59,10 +59,14 @@ class Arcade {
 		this._inputs = new ArcadeInputs(this._core).init();
 		// 2026-06-28, Composer: arcade owns ArcadeGrab lifecycle [plgrb3]
 		this._grab = new ArcadeGrab(this._core, this._inputs).init();
+		// 2026-06-28, Composer: arcade owns ArcadeBox camera walls [plbox3]
+		this._box = new ArcadeBox(this._core).init();
 		/** @type {number|null} */
 		this._scene_contact_id = null;
 		/** @type {number|null} */
 		this._pick_id = null;
+		/** @type {number|null} */
+		this._grab_drop_id = null;
 		return this;
 	}
 
@@ -83,6 +87,7 @@ class Arcade {
 
 		this._core.render.camera.position.set(0, 10, 2);
 		this._core.render.camera.lookAt(0, 0, 0);
+		this._box.start();
 
 		// 2026-06-26, Composer: arcade coin stack spawn loop [plstk1]
 		for (let i = 0; i < COIN_A_COUNT; i++) {
@@ -131,6 +136,11 @@ class Arcade {
 			"arcade.pick",
 			this._on_arcade_pick.bind(this),
 		);
+		// 2026-06-28, Composer: pointer up drop via arcade.grab.drop [plgrb12]
+		this._grab_drop_id = this._core.eventsbus.on(
+			"arcade.grab.drop",
+			this._on_grab_drop.bind(this),
+		);
 		this._inputs.start();
 		this._sound.start();
 	}
@@ -162,8 +172,13 @@ class Arcade {
 			this._core.eventsbus.off(this._pick_id);
 			this._pick_id = null;
 		}
+		if (this._grab_drop_id != null) {
+			this._core.eventsbus.off(this._grab_drop_id);
+			this._grab_drop_id = null;
+		}
 		this._inputs.stop();
 		this._grab.stop();
+		this._box.stop();
 		this._sound.stop();
 
 		for (const toy_index of this._coin_toys) {
@@ -269,21 +284,21 @@ class Arcade {
 	 * @returns {void}
 	 */
 	_on_arcade_pick({ itemIndex, x, y, z }) {
-		// 2026-06-28, Composer: pick toy grab floor drop [plgrb4]
+		// 2026-06-28, Composer: pick adds grabbable without releasing prior [plgrb13]
 		const { itembox, toybox } = this._core;
 
-		const itemDbId = itembox.mempool.read_ui16(itemIndex, VAR_ITEM_DB_ID);
 		const toyIndex = itembox.mempool.read_ui16(itemIndex, VAR_TOY_INDEX);
-		const hasToy = toyIndex !== TOY_INDEX_INVALID;
-
-		if (hasToy && toybox.has_tag(toyIndex, "grabbable")) {
-			// 2026-06-28, Composer: grab receives raycast pick world position [plgrb8]
-			this._grab.grab(toyIndex, x, y, z);
-		} else {
-			// 2026-06-28, Composer: pick non-grabbable toy calls drop [plgrb7]
-			this._grab.drop();
+		if (toyIndex === TOY_INDEX_INVALID || !toybox.has_tag(toyIndex, "grabbable")) {
 			return;
 		}
+
+		this._grab.grab(toyIndex, x, y, z);
+	}
+
+	/** @returns {void} */
+	_on_grab_drop() {
+		// 2026-06-28, Composer: pointer up drop via arcade.grab.drop [plgrb12]
+		this._grab.drop();
 	}
 }
 
@@ -310,6 +325,7 @@ export default Arcade;
 // 2026-06-28, Composer: arcade owns ArcadeInputs lifecycle [plinp2]
 // 2026-06-28, Composer: arcade.pick resolves item and toy db ids [plinp3]
 // 2026-06-28, Composer: arcade owns ArcadeGrab lifecycle [plgrb3]
-// 2026-06-28, Composer: pick toy grab floor drop [plgrb4]
-// 2026-06-28, Composer: quake weight detected via weight tag [plqke3]
 // 2026-06-28, Composer: grab receives raycast pick world position [plgrb8]
+// 2026-06-28, Composer: pointer up drop via arcade.grab.drop [plgrb12]
+// 2026-06-28, Composer: pick adds grabbable without releasing prior [plgrb13]
+// 2026-06-28, Composer: arcade owns ArcadeBox camera walls [plbox3]

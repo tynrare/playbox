@@ -1,5 +1,5 @@
 /** @namespace ty */
-// Purpose: pointer click → Oimo raycast → arcade.pick with itemIndex.
+// Purpose: pointer drag → Oimo raycast pick; emit arcade.pick on target change.
 
 import * as THREE from "three";
 import { oimo } from "../lib/OimoPhysics.js";
@@ -35,8 +35,14 @@ class ArcadeInputs {
 		this._rayCast = new RayCastClosest();
 		/** @type {THREE.Vector3} */
 		this.pointer_floor = new THREE.Vector3();
+		/** @type {boolean} */
+		this._grabbing = false;
 		/** @type {number|null} */
-		this._pointer_click_id = null;
+		this._pick_item_index = null;
+		/** @type {number|null} */
+		this._pointer_down_id = null;
+		/** @type {number|null} */
+		this._pointer_up_id = null;
 		/** @type {number|null} */
 		this._pointer_move_id = null;
 		return this;
@@ -44,10 +50,15 @@ class ArcadeInputs {
 
 	/** @returns {void} */
 	start() {
-		// 2026-06-28, Composer: pointer.click Oimo raycast emits arcade.pick [plinp1]
-		this._pointer_click_id = this._core.eventsbus.on(
+		// 2026-06-28, Composer: pointer down sets grab flag and traces pick [plinp6]
+		this._pointer_down_id = this._core.eventsbus.on(
 			"pointer.down",
-			this._on_pointer_click.bind(this),
+			this._on_pointer_down.bind(this),
+		);
+		// 2026-06-28, Composer: pointer up emits arcade.grab.drop [plinp7]
+		this._pointer_up_id = this._core.eventsbus.on(
+			"pointer.up",
+			this._on_pointer_up.bind(this),
 		);
 		// 2026-06-28, Composer: pointer.move floor plane intersect stores floor [plinp4]
 		this._pointer_move_id = this._core.eventsbus.on(
@@ -58,14 +69,20 @@ class ArcadeInputs {
 
 	/** @returns {void} */
 	stop() {
-		if (this._pointer_click_id != null) {
-			this._core.eventsbus.off(this._pointer_click_id);
-			this._pointer_click_id = null;
+		if (this._pointer_down_id != null) {
+			this._core.eventsbus.off(this._pointer_down_id);
+			this._pointer_down_id = null;
+		}
+		if (this._pointer_up_id != null) {
+			this._core.eventsbus.off(this._pointer_up_id);
+			this._pointer_up_id = null;
 		}
 		if (this._pointer_move_id != null) {
 			this._core.eventsbus.off(this._pointer_move_id);
 			this._pointer_move_id = null;
 		}
+		this._grabbing = false;
+		this._pick_item_index = null;
 	}
 
 	/** @returns {void} */
@@ -90,6 +107,63 @@ class ArcadeInputs {
 	}
 
 	/**
+	 * @param {number} x
+	 * @param {number} y
+	 * @returns {{ itemIndex: number, x: number, y: number, z: number }|null}
+	 */
+	_trace_pick(x, y) {
+		const world = this._core.physics.world;
+		if (!world || !this._pointer_ray(x, y)) {
+			return null;
+		}
+
+		const origin = _raycaster.ray.origin;
+		_rayEnd.copy(_raycaster.ray.direction).multiplyScalar(RAY_MAX).add(origin);
+
+		_rayBegin.init(origin.x, origin.y, origin.z);
+		_rayEndOimo.init(_rayEnd.x, _rayEnd.y, _rayEnd.z);
+
+		const hit = this._rayCast;
+		hit.clear();
+		world.rayCast(_rayBegin, _rayEndOimo, hit);
+		if (!hit.hit || !hit.shape) {
+			return null;
+		}
+
+		const body = hit.shape.getRigidBody();
+		const itemIndex = body?.userData?.itemIndex;
+		if (itemIndex == null) {
+			return null;
+		}
+
+		const pos = hit.position;
+		return { itemIndex, x: pos.x, y: pos.y, z: pos.z };
+	}
+
+	/**
+	 * @param {{ itemIndex: number, x: number, y: number, z: number }|null} pick
+	 * @returns {void}
+	 */
+	_emit_pick_if_changed(pick) {
+		if (!pick || pick.itemIndex === this._pick_item_index) {
+			return;
+		}
+		this._pick_item_index = pick.itemIndex;
+		this._core.eventsbus.emit("arcade.pick", pick);
+	}
+
+	/**
+	 * @param {{ x: number, y: number }} detail
+	 * @returns {void}
+	 */
+	_on_pointer_down({ x, y }) {
+		// 2026-06-28, Composer: pointer down sets grab flag and traces pick [plinp6]
+		this._grabbing = true;
+		this._pick_item_index = null;
+		this._emit_pick_if_changed(this._trace_pick(x, y));
+	}
+
+	/**
 	 * @param {{ x: number, y: number }} detail
 	 * @returns {void}
 	 */
@@ -103,50 +177,30 @@ class ArcadeInputs {
 		if (hit) {
 			this.pointer_floor.copy(hit);
 		}
+
+		if (!this._grabbing) {
+			return;
+		}
+
+		// 2026-06-28, Composer: grab drag retraces pick each move [plinp8]
+		this._emit_pick_if_changed(this._trace_pick(x, y));
 	}
 
 	/**
 	 * @param {{ x: number, y: number }} detail
 	 * @returns {void}
 	 */
-	_on_pointer_click({ x, y }) {
-		const world = this._core.physics.world;
-		if (!world || !this._pointer_ray(x, y)) {
-			return;
-		}
-
-		const origin = _raycaster.ray.origin;
-		_rayEnd.copy(_raycaster.ray.direction).multiplyScalar(RAY_MAX).add(origin);
-
-		_rayBegin.init(origin.x, origin.y, origin.z);
-		_rayEndOimo.init(_rayEnd.x, _rayEnd.y, _rayEnd.z);
-
-		const hit = this._rayCast;
-		hit.clear();
-		world.rayCast(_rayBegin, _rayEndOimo, hit);
-		if (!hit.hit || !hit.shape) {
-			return;
-		}
-
-		const body = hit.shape.getRigidBody();
-		const itemIndex = body?.userData?.itemIndex;
-		if (itemIndex == null) {
-			return;
-		}
-
-		// 2026-06-28, Composer: arcade.pick includes raycast hit position [plinp5]
-		const pos = hit.position;
-		this._core.eventsbus.emit("arcade.pick", {
-			itemIndex,
-			x: pos.x,
-			y: pos.y,
-			z: pos.z,
-		});
+	_on_pointer_up(_detail) {
+		// 2026-06-28, Composer: pointer up emits arcade.grab.drop [plinp7]
+		this._grabbing = false;
+		this._pick_item_index = null;
+		this._core.eventsbus.emit("arcade.grab.drop");
 	}
 }
 
 export default ArcadeInputs;
-// 2026-06-28, Composer: pointer.click Oimo raycast emits arcade.pick [plinp1]
-// 2026-06-28, Composer: arcade.pick includes raycast hit position [plinp5]
+// 2026-06-28, Composer: pointer down sets grab flag and traces pick [plinp6]
+// 2026-06-28, Composer: pointer up emits arcade.grab.drop [plinp7]
+// 2026-06-28, Composer: grab drag retraces pick each move [plinp8]
 // 2026-06-28, Composer: pointer.move floor plane intersect stores floor [plinp4]
 // 2026-06-28, Composer: world ray NDC via draw.pointer_ndc [drwptr1]

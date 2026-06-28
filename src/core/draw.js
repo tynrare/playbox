@@ -30,12 +30,14 @@ class Draw {
    * @param {import("./db.js").default} db
    * @param {import("./render.js").default} render
    * @param {import("./assets.js").default} assets
+   * @param {import("./eventsbus.js").default} eventsbus
    */
-  constructor(db, render, assets) {
+  constructor(db, render, assets, eventsbus) {
     // 2026-06-14, Composer: port RenderBoolingSandsphere into Draw [drwprt1]
     this._db = db;
     this._render = render;
     this._assets = assets;
+    this._eventsbus = eventsbus;
     this.active = false;
     this.scale = 1;
     this._window_w = 1;
@@ -230,6 +232,8 @@ class Draw {
     // 2026-06-19, Composer: size passes after n8ao added to composer [drwao3]
     this._composer_set_size(this._window_w, this._window_h);
     this.equalizer();
+    // 2026-06-28, Composer: bare draw.equalizer after initial layout [drweq1]
+    this._emit_equalizer();
   }
 
   /**
@@ -338,6 +342,15 @@ class Draw {
       render.camera.fov = this._get_camera_vfov(w, h);
       render.camera.updateProjectionMatrix();
     }
+    // 2026-06-28, Composer: bare draw.equalizer on viewport change [drweq1]
+    this._emit_equalizer();
+  }
+
+  /**
+   * @returns {void}
+   */
+  _emit_equalizer() {
+    this._eventsbus?.emit("draw.equalizer");
   }
 
   /**
@@ -545,4 +558,5 @@ class Draw {
 // 2026-06-26, Composer: lock horizontal FOV across aspect changes [drwfov1]
 // 2026-06-28, Composer: client pointer NDC via cameraui half extents [drwptr1]
 // 2026-06-28, Composer: scale maps CSS pointer to render buffer NDC [drwptr2]
+// 2026-06-28, Composer: bare draw.equalizer on viewport change [drweq1]
 export default Draw;
