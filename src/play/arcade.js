@@ -113,8 +113,8 @@ class Arcade {
 			this._core.scene.set_itemposition(item_index, 4, WEIGHT_Y, 3);
 		}
 
-		// 2026-06-27, Composer: arcade spawn arcader_a RigidModel at center [plarc7]
-		const arcader_toy = this._core.toybox.spawn("arcader_a_toy", true);
+		// 2026-06-27, Composer: arcade spawn arcader_a assembly with welded button [plarc7]
+		const arcader_toy = this._core.toybox.spawn("arcader_a_assembly_toy", true);
 		if (arcader_toy != null) {
 			this._coin_toys.push(arcader_toy);
 			const item_index = this._core.toybox.get_item_index(arcader_toy);
@@ -265,10 +265,10 @@ class Arcade {
 	}
 
 	/**
-	 * @param {{ itemIndex: number }} payload
+	 * @param {{ itemIndex: number, x: number, y: number, z: number }} payload
 	 * @returns {void}
 	 */
-	_on_arcade_pick({ itemIndex }) {
+	_on_arcade_pick({ itemIndex, x, y, z }) {
 		// 2026-06-28, Composer: pick toy grab floor drop [plgrb4]
 		const { itembox, toybox } = this._core;
 
@@ -276,15 +276,13 @@ class Arcade {
 		const toyIndex = itembox.mempool.read_ui16(itemIndex, VAR_TOY_INDEX);
 		const hasToy = toyIndex !== TOY_INDEX_INVALID;
 
-		if (hasToy) {
+		if (hasToy && toybox.has_tag(toyIndex, "grabbable")) {
+			// 2026-06-28, Composer: grab receives raycast pick world position [plgrb8]
+			this._grab.grab(toyIndex, x, y, z);
+		} else {
 			// 2026-06-28, Composer: pick non-grabbable toy calls drop [plgrb7]
-			if (!toybox.has_tag(toyIndex, "grabbable")) {
-				this._grab.drop();
-				return;
-			}
-			this._grab.grab(toyIndex);
-		} else if (itemDbId === FLOOR_ITEM_DB_ID) {
 			this._grab.drop();
+			return;
 		}
 	}
 }
@@ -307,11 +305,11 @@ export default Arcade;
 // 2026-06-27, Composer: arcade scene.contact handler owns collisions [plcnt3]
 // 2026-06-27, Composer: register coin y passed from spawn loop [plreg1]
 // 2026-06-27, Composer: weight drop quake delegated to arcade_quake [plqke2]
-// 2026-06-27, Composer: arcade spawn arcader_a RigidModel at center [plarc7]
+// 2026-06-27, Composer: arcade spawn arcader_a assembly with welded button [plarc7]
 // 2026-06-28, Composer: rename shenanigans import to arcade_quake [plrqk1]
 // 2026-06-28, Composer: arcade owns ArcadeInputs lifecycle [plinp2]
 // 2026-06-28, Composer: arcade.pick resolves item and toy db ids [plinp3]
 // 2026-06-28, Composer: arcade owns ArcadeGrab lifecycle [plgrb3]
 // 2026-06-28, Composer: pick toy grab floor drop [plgrb4]
-// 2026-06-28, Composer: pick non-grabbable toy calls drop [plgrb7]
 // 2026-06-28, Composer: quake weight detected via weight tag [plqke3]
+// 2026-06-28, Composer: grab receives raycast pick world position [plgrb8]

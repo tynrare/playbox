@@ -16,7 +16,11 @@ db#db_pb_bodies(name="bodies")
    //- 2026-06-27, Composer: weight_a body density 10 from props bounds [bdwta1]
    d(name="weight_a" inherits="dice_a" source="weight_a" density="10")
    //- 2026-06-27, Composer: arcader_a body inherits weight_a bounds [bdarc1]
-   d(name="arcader_a" inherits="weight_a" source="arcader_a")
+   //- 2026-06-28, Composer: arcader_a body parts exclude button [bdarc2]
+   d(name="arcader_a" inherits="weight_a" source="arcader_a"
+      parts="[arcader_a, arcader_a_revolver_0]")
+   //- 2026-06-28, Composer: arcader_a_button bounds body [bdarcb1]
+   d(name="arcader_a_button" inherits="coin_a" source="arcader_a_button" density="2")
 //- 2026-06-14, Composer: physics bodies db for toybox spawn [bdb1]
 //- 2026-06-14, Composer: static floor body for floor_toy spawn [flbd1]
 //- 2026-06-26, Composer: coin_b body inherits coin_a bounds [bdcnb1]
@@ -24,3 +28,5 @@ db#db_pb_bodies(name="bodies")
 //- 2026-06-26, Composer: dice_a body inherits coin_a bounds [bddca1]
 //- 2026-06-27, Composer: weight_a body density 10 from props bounds [bdwta1]
 //- 2026-06-27, Composer: arcader_a body inherits weight_a bounds [bdarc1]
+//- 2026-06-28, Composer: arcader_a body parts exclude button [bdarc2]
+//- 2026-06-28, Composer: arcader_a_button bounds body [bdarcb1]

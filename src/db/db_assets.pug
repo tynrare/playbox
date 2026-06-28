@@ -34,7 +34,11 @@ db#db_pb_models(name="models")
    //- 2026-06-27, Composer: weight_a model inherits coin_a object weight_a [mdwta1]
    d(name="weight_a"              inherits="coin_a" object="weight_a")
    //- 2026-06-27, Composer: arcader_a RigidModel parts wildcard [mdarc1]
-   d(name="arcader_a"              source="props" object="arcader_a" parts="*")
+   //- 2026-06-28, Composer: arcader_a parts exclude welded button [mdarc2]
+   d(name="arcader_a"              source="props" object="arcader_a"
+      parts="[arcader_a, arcader_a_revolver_0]")
+   //- 2026-06-28, Composer: arcader_a_button single mesh model [mdarcb1]
+   d(name="arcader_a_button"        source="props" object="arcader_a_button")
 
 //- 2026-06-17, Composer: coinmania and gameicons sprite registry from booling [sprpt1]
 include db_sprites.pug
@@ -50,3 +54,5 @@ include db_sprites.pug
 //- 2026-06-26, Composer: dice_a model inherits coin_a object dice_a [mddca1]
 //- 2026-06-27, Composer: weight_a model inherits coin_a object weight_a [mdwta1]
 //- 2026-06-27, Composer: arcader_a RigidModel parts wildcard [mdarc1]
+//- 2026-06-28, Composer: arcader_a parts exclude welded button [mdarc2]
+//- 2026-06-28, Composer: arcader_a_button single mesh model [mdarcb1]

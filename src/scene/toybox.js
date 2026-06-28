@@ -440,6 +440,22 @@ class Toybox {
 	}
 
 	/**
+	 * @param {number} index
+	 * @param {string} name
+	 * @returns {void}
+	 */
+	// 2026-06-28, Composer: runtime welds module inject on child toys [tbxwld1]
+	enable_module(index, name) {
+		const flag = modulenames[name];
+		if (flag == null) {
+			logger.error(`Toybox::enable_module "${name}" error: unknown module`);
+			return;
+		}
+		this.mempool.write_flag(index, VAR_FLAGS_MODULES, flag, true);
+		this.modulebox.update(0, index);
+	}
+
+	/**
 	 * @param {number} dt
 	 * @returns {void}
 	 */

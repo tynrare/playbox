@@ -46,7 +46,7 @@ class ArcadeInputs {
 	start() {
 		// 2026-06-28, Composer: pointer.click Oimo raycast emits arcade.pick [plinp1]
 		this._pointer_click_id = this._core.eventsbus.on(
-			"pointer.up",
+			"pointer.down",
 			this._on_pointer_click.bind(this),
 		);
 		// 2026-06-28, Composer: pointer.move floor plane intersect stores floor [plinp4]
@@ -134,11 +134,19 @@ class ArcadeInputs {
 			return;
 		}
 
-		this._core.eventsbus.emit("arcade.pick", { itemIndex });
+		// 2026-06-28, Composer: arcade.pick includes raycast hit position [plinp5]
+		const pos = hit.position;
+		this._core.eventsbus.emit("arcade.pick", {
+			itemIndex,
+			x: pos.x,
+			y: pos.y,
+			z: pos.z,
+		});
 	}
 }
 
 export default ArcadeInputs;
 // 2026-06-28, Composer: pointer.click Oimo raycast emits arcade.pick [plinp1]
+// 2026-06-28, Composer: arcade.pick includes raycast hit position [plinp5]
 // 2026-06-28, Composer: pointer.move floor plane intersect stores floor [plinp4]
 // 2026-06-28, Composer: world ray NDC via draw.pointer_ndc [drwptr1]

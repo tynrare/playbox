@@ -16,8 +16,8 @@ const VAR_FLAG_INITIALIZED = 1;
 const VAR_FLAG_DISPOSED = 3;
 
 /** Module flags whose component chunks must be freed on dispose. */
-// 2026-06-28, Composer: free tags component chunk on entity dispose [bbtag1]
-const BB_MODULE_FLAGS = [0, 2];
+// 2026-06-28, Composer: free welds component chunk on entity dispose [bbwld1]
+const BB_MODULE_FLAGS = [0, 2, 3];
 
 /**
  * @class Blackboard
@@ -363,3 +363,4 @@ export {
 // 2026-06-26, Composer: BB_KEY_PLAY chunk for arcade stack metadata [bbply1]
 // 2026-06-26, Composer: signed deci-units in ui16 slot [bbi161]
 // 2026-06-28, Composer: free tags component chunk on entity dispose [bbtag1]
+// 2026-06-28, Composer: free welds component chunk on entity dispose [bbwld1]

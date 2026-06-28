@@ -309,6 +309,8 @@ class Physics {
 			transformZero: new oimo.common.Transform(),
 		};
 		this.guids = 0;
+		/** @type {import("../lib/OimoPhysics.js").oimo.dynamics.constraint.joint.GenericJoint[]} */
+		this._fixed_joints = [];
 	}
 
 	/**
@@ -349,6 +351,7 @@ class Physics {
 		this.bodylist = {};
 		this.meshlist = {};
 		this.attachopts = {};
+		this._fixed_joints = [];
 		this._acc = 0;
 	}
 
@@ -576,6 +579,56 @@ class Physics {
 		body.setTransform(t);
 		body.setAngularVelocity(this.cache.vec3_2.init(0, 0, 0));
 		this.step_attach(body.id);
+	}
+
+	/**
+	 * @param {oimo.dynamics.rigidbody.RigidBody} bodyA
+	 * @param {oimo.dynamics.rigidbody.RigidBody} bodyB
+	 * @param {oimo.common.Vec3} anchorWorld
+	 * @returns {import("../lib/OimoPhysics.js").oimo.dynamics.constraint.joint.GenericJoint|null}
+	 */
+	// 2026-06-28, Composer: fixed joint weld for welded toys [phywld1]
+	create_fixed_joint(bodyA, bodyB, anchorWorld) {
+		if (!this.world || !bodyA || !bodyB) {
+			return null;
+		}
+		const j = oimo.dynamics.constraint.joint;
+		const config = new j.GenericJointConfig();
+		const m = new oimo.common.Mat3();
+		config.init(bodyB, bodyA, anchorWorld, m, m);
+		const rotLimit = () => new j.RotationalLimitMotor().setLimits(0, 0);
+		const transLimit = () => new j.TranslationalLimitMotor().setLimits(0, 0);
+		const sd = () => new j.SpringDamper().setSpring(4, 1);
+		config.translationalLimitMotors = [transLimit(), transLimit(), transLimit()];
+		config.translationalSpringDampers = [sd(), sd(), sd()];
+		config.rotationalLimitMotors = [rotLimit(), rotLimit(), rotLimit()];
+		config.rotationalSpringDampers = [sd(), sd(), sd()];
+		const joint = new j.GenericJoint(config);
+		this.world.addJoint(joint);
+		if (!this._fixed_joints) {
+			this._fixed_joints = [];
+		}
+		this._fixed_joints.push(joint);
+		return joint;
+	}
+
+	/**
+	 * @param {import("../lib/OimoPhysics.js").oimo.dynamics.constraint.joint.GenericJoint} joint
+	 * @returns {void}
+	 */
+	remove_joint(joint) {
+		if (!joint || !this.world) {
+			return;
+		}
+		if (joint._world === this.world) {
+			this.world.removeJoint(joint);
+		}
+		if (this._fixed_joints) {
+			const i = this._fixed_joints.indexOf(joint);
+			if (i >= 0) {
+				this._fixed_joints.splice(i, 1);
+			}
+		}
 	}
 
 	/**

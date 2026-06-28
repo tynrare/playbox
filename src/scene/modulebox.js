@@ -11,6 +11,7 @@ import Blackboard, {
 import { VAR_FLAGS_A, VAR_FLAG_ACTIVE } from "../core/mempool.js";
 import Lifespan from "../toys/lifespan.js";
 import Tags from "../toys/tags.js";
+import Welds from "../toys/welds.js";
 
 const VAR_FLAGS_MODULES = 5;
 const VAR_MFLAG_LIFESPAN = 0;
@@ -18,12 +19,15 @@ const VAR_MFLAG_LIFESPAN = 0;
 const VAR_MFLAG_CONTACTS = 1;
 // 2026-06-28, Composer: tags module flag and class [mdltag1]
 const VAR_MFLAG_TAGS = 2;
+// 2026-06-28, Composer: welds module flag and class [mdlwld1]
+const VAR_MFLAG_WELDS = 3;
 
-const modulelist = [VAR_MFLAG_LIFESPAN, VAR_MFLAG_TAGS];
+const modulelist = [VAR_MFLAG_LIFESPAN, VAR_MFLAG_TAGS, VAR_MFLAG_WELDS];
 const modulenames = {
 	lifespan: VAR_MFLAG_LIFESPAN,
 	contacts: VAR_MFLAG_CONTACTS,
 	tags: VAR_MFLAG_TAGS,
+	welds: VAR_MFLAG_WELDS,
 };
 
 /**
@@ -42,8 +46,9 @@ class Modulebox {
 		this._toy_mempool = toy_mempool;
 		this.lifespan = new Lifespan(VAR_MFLAG_LIFESPAN, toy_mempool);
 		this.tags = new Tags(VAR_MFLAG_TAGS);
+		this.welds = new Welds(VAR_MFLAG_WELDS, toy_mempool);
 		/** @type {Array<import("../toys/module.js").default>} */
-		this.modulelist = [this.lifespan, this.tags];
+		this.modulelist = [this.lifespan, this.tags, this.welds];
 	}
 
 	/** @returns {void} */
@@ -51,6 +56,7 @@ class Modulebox {
 		// 2026-06-17, Composer: modulebox init defers lifespan init [mdlinit1]
 		this.lifespan.init(this._blackboard);
 		this.tags.init(this._blackboard);
+		this.welds.init(this._blackboard);
 	}
 
 	/**
@@ -269,8 +275,9 @@ class Modulebox {
 }
 
 export default Modulebox;
-export { VAR_FLAGS_MODULES, VAR_MFLAG_LIFESPAN, VAR_MFLAG_CONTACTS, VAR_MFLAG_TAGS, modulenames };
+export { VAR_FLAGS_MODULES, VAR_MFLAG_LIFESPAN, VAR_MFLAG_CONTACTS, VAR_MFLAG_TAGS, VAR_MFLAG_WELDS, modulenames };
 // 2026-06-14, Composer: modulebox storage via blackboard merged pool [mdlbx1]
 // 2026-06-17, Composer: modulebox init defers lifespan init [mdlinit1]
 // 2026-06-26, Composer: contacts module flag only no class [mdlcnt1]
 // 2026-06-28, Composer: tags module flag and class [mdltag1]
+// 2026-06-28, Composer: welds module flag and class [mdlwld1]

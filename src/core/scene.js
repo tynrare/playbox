@@ -3,6 +3,7 @@ import * as THREE from "three";
 import logger from "../logger.js";
 import { TyntextCore } from "./tyntext.js";
 import { cache, v3up } from "../math.js";
+import { VAR_FLAG_ACTIVE, VAR_FLAGS_A } from "./mempool.js";
 import { DitheredOpacity } from "../render/materials/DitheredOpacity.js";
 import { ExtendedMaterial } from "../render/materials/ExtendedMaterial.js";
 import {
@@ -13,8 +14,8 @@ import Environment from "../scene/environment.js";
 import Audio from "../scene/audio.js";
 import ContactRouter from "../scene/contact_router.js";
 import RigidModel, { RigidModelPart } from "../scene/rigid_model.js";
-import { VAR_FLAGS_MODULES, VAR_MFLAG_CONTACTS } from "../scene/modulebox.js";
-import { VAR_BODY_ID } from "../scene/itembox.js";
+import { VAR_FLAGS_MODULES, VAR_MFLAG_CONTACTS, VAR_MFLAG_WELDS } from "../scene/modulebox.js";
+import { VAR_BODY_ID, VAR_TOY_INDEX, TOY_INDEX_INVALID } from "../scene/itembox.js";
 import { oimo } from "../lib/OimoPhysics.js";
 import { RigidBody, RigidBodyType } from "./physics.js";
 
@@ -22,6 +23,12 @@ const _billboardMatrix = new THREE.Matrix4();
 const _boundsSrcInv = new THREE.Matrix4();
 const _rigidRootInv = new THREE.Matrix4();
 const _rigidLocalMat = new THREE.Matrix4();
+const _weldParentMat = new THREE.Matrix4();
+const _weldChildMat = new THREE.Matrix4();
+const _weldPos = new THREE.Vector3();
+const _weldQuat = new THREE.Quaternion();
+const _weldScale = new THREE.Vector3();
+const _weldBodyQuat = new THREE.Quaternion();
 
 // 2026-06-14, Composer: Scene facade for model and text [scnfac1]
 /**
@@ -81,6 +88,10 @@ class Scene {
     this._collect_meshes_buf = [];
     /** @type {Set<string>} */
     this._collect_meshes_seen = new Set();
+    /** @type {Map<number, { joints: import("../lib/OimoPhysics.js").oimo.dynamics.constraint.joint.GenericJoint[], childIndices: number[], childKeys: string[] }>} */
+    this._weld_joints = new Map();
+    /** @type {Set<number>} */
+    this._weld_spawned = new Set();
   }
 
   /**
@@ -125,9 +136,12 @@ class Scene {
       ) {
         this._contact_router?.watch(toyIndex);
       }
+      // 2026-06-28, Composer: scene welds children on root toy.initialize [scnwld1]
+      this._on_toy_initialize_welds(toyIndex);
     });
     this._on_toy_dis = this._eventsbus.on("toy.dispose", (toyIndex) => {
       this._contact_router?.unwatch(toyIndex);
+      this._on_toy_dispose_welds(toyIndex);
     });
   }
 
@@ -158,6 +172,8 @@ class Scene {
     this.audio.stop();
     this.environment.stop();
     this._clear_body_pool();
+    this._weld_joints.clear();
+    this._weld_spawned.clear();
   }
 
   /**
@@ -880,6 +896,7 @@ class Scene {
       return;
     }
     this.set_bodyposition(body, x, y, z);
+    this._maybe_sync_weld_members_for_item(index);
   }
 
   /**
@@ -894,6 +911,133 @@ class Scene {
       return;
     }
     this.set_bodyrotation(body, rotation);
+    this._maybe_sync_weld_members_for_item(index);
+  }
+
+  /**
+   * @param {number} index
+   * @param {THREE.Matrix4} worldMat
+   * @returns {void}
+   */
+  // 2026-06-28, Composer: set item body pose from world matrix [scnwld3]
+  set_item_world_matrix(index, worldMat) {
+    const body = this.get_itembody(index);
+    if (!body) {
+      return;
+    }
+    this._set_body_world_matrix(body, worldMat);
+    this._maybe_sync_weld_members_for_item(index);
+  }
+
+  /**
+   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {THREE.Matrix4} worldMat
+   * @returns {void}
+   */
+  _set_body_world_matrix(body, worldMat) {
+    worldMat.decompose(_weldPos, _weldQuat, _weldScale);
+    const t = this._body_cache.transform;
+    const p = this._body_cache.vec3;
+    const q = this._physics.cache.quat;
+    p.init(_weldPos.x, _weldPos.y, _weldPos.z);
+    q.x = _weldQuat.x;
+    q.y = _weldQuat.y;
+    q.z = _weldQuat.z;
+    q.w = _weldQuat.w;
+    t.setPosition(p);
+    t.setOrientation(q);
+    body.setTransform(t);
+    body.setLinearVelocity(this._physics.cache.vec3_1.init(0, 0, 0));
+    body.setAngularVelocity(this._physics.cache.vec3_2.init(0, 0, 0));
+    this._physics.step_attach(body.id);
+    const rigid = this._rigid_by_root.get(this._physics.meshlist[body.id]);
+    rigid?.sync();
+  }
+
+  /**
+   * @param {number} itemIndex
+   * @returns {void}
+   */
+  _maybe_sync_weld_members_for_item(itemIndex) {
+    const toyIndex = this._itembox.mempool.read_ui16(itemIndex, VAR_TOY_INDEX);
+    if (toyIndex === TOY_INDEX_INVALID) {
+      return;
+    }
+    if (!this._toybox.modulebox.welds.is_root(toyIndex)) {
+      return;
+    }
+    if (!this._weld_spawned.has(toyIndex)) {
+      return;
+    }
+    this._sync_weld_subtree(toyIndex);
+  }
+
+  /**
+   * @param {number} toyIndex
+   * @returns {void}
+   */
+  // 2026-06-28, Composer: recursive weld subtree sync from parent pose [scnwld6]
+  _sync_weld_subtree(toyIndex) {
+    const welds = this._toybox.modulebox.welds;
+    if (!welds.is_root(toyIndex)) {
+      return;
+    }
+    const pack = this._weld_joints.get(toyIndex);
+    if (!pack?.childKeys?.length) {
+      return;
+    }
+    const parentItem = this._toybox.get_item_index(toyIndex);
+    const parentBody = this.get_itembody(parentItem);
+    if (!parentBody) {
+      return;
+    }
+    const parentConf = this._toybox.get_toyconf(toyIndex);
+    const parentModel = parentConf?.item
+      ? this._db.get("models")?.getconfig(
+          this._itembox.get_itemconf_by_key(parentConf.item)?.mesh,
+        )
+      : null;
+    if (!parentModel?.source || !parentModel?.object) {
+      return;
+    }
+    if (!this._body_world_matrix(parentBody, _weldParentMat)) {
+      return;
+    }
+
+    const anchor = this._physics.cache.vec3_3;
+    for (let i = 0, n = pack.childKeys.length; i < n; i++) {
+      const childKey = pack.childKeys[i];
+      const childIndex = pack.childIndices[i];
+      const childModel = this._resolve_toy_mesh_model(childKey);
+      if (!childModel?.source || !childModel?.object) {
+        continue;
+      }
+      const relMat = this.get_gltf_child_transform(
+        parentModel.source,
+        parentModel.object,
+        childModel.object,
+      );
+      if (!relMat) {
+        continue;
+      }
+      const childItem = this._toybox.get_item_index(childIndex);
+      const childBody = this.get_itembody(childItem);
+      if (!childBody) {
+        continue;
+      }
+
+      if (pack.joints[i]) {
+        this._physics.remove_joint(pack.joints[i]);
+      }
+
+      _weldChildMat.copy(_weldParentMat).multiply(relMat);
+      this._set_body_world_matrix(childBody, _weldChildMat);
+
+      childBody.getPositionTo(anchor);
+      pack.joints[i] = this._physics.create_fixed_joint(parentBody, childBody, anchor);
+
+      this._sync_weld_subtree(childIndex);
+    }
   }
 
   /**
@@ -1068,6 +1212,26 @@ class Scene {
     _boundsSrcInv.copy(sourceobject.matrixWorld).invert();
 
     let added = false;
+    const partsFilter = bodyconf.parts;
+    if (partsFilter != null) {
+      // 2026-06-28, Composer: bounds body respects parts filter like mesh [scnbnd3]
+      const meshes = this._collect_meshes(sourceobject, partsFilter);
+      for (let i = 0, n = meshes.length; i < n; i++) {
+        const mesh = meshes[i];
+        const count = mesh.count ?? 1;
+        for (let j = 0; j < count; j++) {
+          if (mesh.isInstancedMesh) {
+            if (this.create_instanced_mesh_shape(mesh, j, body, bodyconf, _boundsSrcInv)) {
+              added = true;
+            }
+          } else if (this.create_mesh_shape(mesh, body, bodyconf, _boundsSrcInv)) {
+            added = true;
+          }
+        }
+      }
+      return added;
+    }
+
     /** @type {Set<string>} */
     const seen = new Set();
     /** @type {THREE.Object3D} */
@@ -1218,6 +1382,225 @@ class Scene {
   }
 
   /**
+   * @param {string} toyKey
+   * @returns {Record<string, any>|null}
+   */
+  _resolve_toy_mesh_model(toyKey) {
+    const toyconf = this._db.get("toys")?.getconfig(toyKey);
+    if (!toyconf?.item) {
+      return null;
+    }
+    const itemconf = this._itembox.get_itemconf_by_key(toyconf.item);
+    if (!itemconf?.mesh) {
+      return null;
+    }
+    return this._db.get("models")?.getconfig(itemconf.mesh) ?? null;
+  }
+
+  /**
+   * @param {string} sourceKey
+   * @param {string} parentObjectKey
+   * @param {string} childObjectKey
+   * @returns {THREE.Matrix4|null}
+   */
+  get_gltf_child_transform(sourceKey, parentObjectKey, childObjectKey) {
+    const gltf = this._assets.file(sourceKey);
+    if (!gltf?.scene) {
+      logger.error(
+        `Scene::get_gltf_child_transform error: no source "${sourceKey}" preloaded`,
+      );
+      return null;
+    }
+    gltf.scene.updateMatrixWorld(true);
+    const parent = gltf.scene.getObjectByName(parentObjectKey);
+    const child = gltf.scene.getObjectByName(childObjectKey);
+    if (!parent || !child) {
+      logger.error(
+        `Scene::get_gltf_child_transform error: missing "${parentObjectKey}" or "${childObjectKey}"`,
+      );
+      return null;
+    }
+    _rigidLocalMat.copy(child.matrixWorld).premultiply(
+      _rigidRootInv.copy(parent.matrixWorld).invert(),
+    );
+    return _rigidLocalMat;
+  }
+
+  /**
+   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {THREE.Matrix4} out
+   * @returns {THREE.Matrix4|null}
+   */
+  _body_world_matrix(body, out) {
+    if (!body) {
+      return null;
+    }
+    const t = this._body_cache.transform;
+    body.getTransformTo(t);
+    const p = t.getPosition();
+    const q = t.getOrientation();
+    _weldPos.set(p.x, p.y, p.z);
+    _weldBodyQuat.set(q.x, q.y, q.z, q.w);
+    return out.compose(_weldPos, _weldBodyQuat, _weldScale.set(1, 1, 1));
+  }
+
+  /**
+   * @param {number} toyIndex
+   * @returns {void}
+   */
+  _on_toy_initialize_welds(toyIndex) {
+    if (this._weld_spawned.has(toyIndex)) {
+      return;
+    }
+    const mempool = this._toybox.mempool;
+    if (!mempool.read_flag(toyIndex, VAR_FLAGS_MODULES, VAR_MFLAG_WELDS)) {
+      return;
+    }
+    const conf = this._toybox.get_toyconf(toyIndex);
+    if (!conf?.welds?.length) {
+      return;
+    }
+    this._weld_children(toyIndex, conf.welds);
+  }
+
+  /**
+   * @param {number} rootIndex
+   * @param {string[]} childKeys
+   * @returns {void}
+   */
+  _weld_children(rootIndex, childKeys) {
+    // 2026-06-28, Composer: scene spawn weld children on root init [scnwld2]
+    const rootItem = this._toybox.get_item_index(rootIndex);
+    const rootBody = this.get_itembody(rootItem);
+    if (!rootBody) {
+      logger.error(`Scene::_weld_children error: no root body for toy ${rootIndex}`);
+      return;
+    }
+    const rootConf = this._toybox.get_toyconf(rootIndex);
+    const rootModel = rootConf?.item
+      ? this._db.get("models")?.getconfig(
+          this._itembox.get_itemconf_by_key(rootConf.item)?.mesh,
+        )
+      : null;
+    if (!rootModel?.source || !rootModel?.object) {
+      logger.error(`Scene::_weld_children error: no root mesh model for toy ${rootIndex}`);
+      return;
+    }
+    if (!this._body_world_matrix(rootBody, _weldParentMat)) {
+      return;
+    }
+
+    /** @type {import("../lib/OimoPhysics.js").oimo.dynamics.constraint.joint.GenericJoint[]} */
+    const joints = [];
+    /** @type {number[]} */
+    const childIndices = [];
+    /** @type {string[]} */
+    const childKeysStored = [];
+    const welds = this._toybox.modulebox.welds;
+    const anchor = this._physics.cache.vec3_3;
+
+    for (let i = 0, n = childKeys.length; i < n; i++) {
+      const childKey = childKeys[i];
+      const childModel = this._resolve_toy_mesh_model(childKey);
+      if (!childModel?.source || !childModel?.object) {
+        logger.error(`Scene::_weld_children error: no model for "${childKey}"`);
+        continue;
+      }
+      const relMat = this.get_gltf_child_transform(
+        rootModel.source,
+        rootModel.object,
+        childModel.object,
+      );
+      if (!relMat) {
+        continue;
+      }
+
+      const childIndex = this._toybox.spawn(childKey, false);
+      if (childIndex == null) {
+        continue;
+      }
+      this._toybox.enable_module(childIndex, "welds");
+      this._toybox.modulebox.configure(childIndex, { weld_root: rootIndex });
+
+      const childItem = this._toybox.get_item_index(childIndex);
+      this._itembox.itemupdate(0, childItem);
+
+      _weldChildMat.copy(_weldParentMat).multiply(relMat);
+      this.set_item_world_matrix(childItem, _weldChildMat);
+      this._toybox.toyupdate(0, childIndex);
+
+      const childBody = this.get_itembody(childItem);
+      if (!childBody) {
+        this._toybox.despawn(childIndex, true);
+        continue;
+      }
+
+      childBody.getPositionTo(anchor);
+      const joint = this._physics.create_fixed_joint(rootBody, childBody, anchor);
+      if (joint) {
+        joints.push(joint);
+      }
+      welds.push_member(rootIndex, childIndex);
+      childIndices.push(childIndex);
+      childKeysStored.push(childKey);
+    }
+
+    this._weld_joints.set(rootIndex, {
+      joints,
+      childIndices,
+      childKeys: childKeysStored,
+    });
+    this._weld_spawned.add(rootIndex);
+  }
+
+  /**
+   * @param {number} rootIndex
+   * @param {number} childIndex
+   * @returns {void}
+   */
+  unweld_member(rootIndex, childIndex) {
+    const pack = this._weld_joints.get(rootIndex);
+    if (!pack) {
+      return;
+    }
+    const i = pack.childIndices.indexOf(childIndex);
+    if (i < 0) {
+      return;
+    }
+    const joint = pack.joints[i];
+    if (joint) {
+      this._physics.remove_joint(joint);
+      pack.joints.splice(i, 1);
+    }
+    pack.childIndices.splice(i, 1);
+    pack.childKeys?.splice(i, 1);
+  }
+
+  /**
+   * @param {number} toyIndex
+   * @returns {void}
+   */
+  _on_toy_dispose_welds(toyIndex) {
+    // 2026-06-28, Composer: scene weld dispose joints only welds owns cascade [scnwld5]
+    const pack = this._weld_joints.get(toyIndex);
+    if (pack) {
+      for (const joint of pack.joints) {
+        this._physics.remove_joint(joint);
+      }
+      this._weld_joints.delete(toyIndex);
+      this._weld_spawned.delete(toyIndex);
+    }
+    const welds = this._toybox.modulebox.welds;
+    if (!welds.has(toyIndex) || !welds.is_member(toyIndex)) {
+      return;
+    }
+    const parent = welds.get_parent(toyIndex);
+    if (parent !== TOY_INDEX_INVALID) {
+      this.unweld_member(parent, toyIndex);
+    }
+  }
+
+  /**
    * @returns {void}
    */
   sync_rigid_models() {
@@ -1304,6 +1687,11 @@ export default Scene;
 // 2026-06-27, Composer: rigid despawn releases part entities [rgmd3]
 // 2026-06-27, Composer: weld RigidModel root and track for sync [rgmd4]
 // 2026-06-27, Composer: rigid part sync after physics step_attach [rgmd5]
-// 2026-06-27, Composer: traverse-only collect dedupes self-mesh objects [rgmd7]
-// 2026-06-27, Composer: clear pooled root children before rebuild [rgmd8]
 // 2026-06-27, Composer: reuse scratch buf for makemodel collect [rgmd9]
+// 2026-06-28, Composer: scene welds children on root toy.initialize [scnwld1]
+// 2026-06-28, Composer: scene spawn weld children on root init [scnwld2]
+// 2026-06-28, Composer: bounds body respects parts filter like mesh [scnbnd3]
+// 2026-06-28, Composer: set item body pose from world matrix [scnwld3]
+// 2026-06-28, Composer: reposition welded children from root body pose [scnwld4]
+// 2026-06-28, Composer: scene weld dispose joints only welds owns cascade [scnwld5]
+// 2026-06-28, Composer: recursive weld subtree sync from parent pose [scnwld6]
