@@ -85,8 +85,10 @@ class Arcade {
 		}
 		this._coin_toys = [];
 
-		this._core.render.camera.position.set(0, 10, 2);
+		this._core.render.camera.position.set(0, 10, 4);
 		this._core.render.camera.lookAt(0, 0, 0);
+		this._core.render.camera.updateMatrixWorld();
+		this._core.render.camera.updateProjectionMatrix();
 		this._box.start();
 
 		// 2026-06-26, Composer: arcade coin stack spawn loop [plstk1]

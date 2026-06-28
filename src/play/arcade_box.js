@@ -2,12 +2,14 @@
 // Purpose: fixed-size static walls aligned to camera frustum on y=0.
 
 import * as THREE from "three";
-import { RigidBodyType } from "../core/physics.js";
-import { cache, v3up, vzero } from "../math.js";
+import { oimo } from "../lib/OimoPhysics.js";
+import { RigidBody, RigidBodyType } from "../core/physics.js";
+import { v3up, vzero } from "../math.js";
 
 const WALL_LENGTH = 256;
 const WALL_WIDTH = 2;
 const WALL_HEIGHT = 20;
+const WALL_INSET = 0.1;
 const GROUND_Y = 0;
 
 const _ndc = new THREE.Vector2();
@@ -20,13 +22,16 @@ const _corners = [
 	new THREE.Vector3(),
 	new THREE.Vector3(),
 ];
-const _centroid = new THREE.Vector3();
 const _mid = new THREE.Vector3();
-const _edgeDir = new THREE.Vector3();
+const _centroid = new THREE.Vector3();
 const _inward = new THREE.Vector3();
-const _xAxis = new THREE.Vector3(1, 0, 0);
+const _pos = new THREE.Vector3();
 const _quat = new THREE.Quaternion();
-const _boxSize = new THREE.Vector3(WALL_LENGTH, WALL_HEIGHT, WALL_WIDTH);
+const _halfExtents = new oimo.common.Vec3(
+	WALL_WIDTH * 0.5,
+	WALL_HEIGHT * 0.5,
+	WALL_LENGTH * 0.5,
+);
 
 /** @type {readonly [number, number][]} */
 const NDC_CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
@@ -92,14 +97,32 @@ class ArcadeBox {
 		this._align_walls();
 	}
 
+	/**
+	 * @returns {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody}
+	 */
+	_make_wall_body() {
+		// 2026-06-28, Composer: shape offset bottom flush at body origin [plbox4]
+		const physics = this._core.physics;
+		const body_config = new oimo.dynamics.rigidbody.RigidBodyConfig();
+		body_config.position.init(0, GROUND_Y, 0);
+		body_config.type = RigidBodyType.STATIC;
+		const body = new RigidBody(body_config);
+		const shape_config = new oimo.dynamics.rigidbody.ShapeConfig();
+		shape_config.position.init(0, WALL_HEIGHT * 0.5, 0);
+		shape_config.geometry = new oimo.collision.geometry.BoxGeometry(_halfExtents);
+		shape_config.density = 1;
+		shape_config.friction = 1;
+		shape_config.restitution = 0;
+		body.addShape(new oimo.dynamics.rigidbody.Shape(shape_config));
+		physics.add_body(body);
+		return body;
+	}
+
 	/** @returns {void} */
 	_create_walls() {
 		// 2026-06-28, Composer: fixed len walls created once no resize [plbox2]
-		const physics = this._core.physics;
-		const origin = cache.vec3.v0.set(0, WALL_HEIGHT * 0.5, 0);
 		for (let i = 0; i < 4; i++) {
-			const body = physics.create_box(origin, _boxSize, RigidBodyType.STATIC);
-			this._walls.push(body);
+			this._walls.push(this._make_wall_body());
 		}
 	}
 
@@ -131,16 +154,16 @@ class ArcadeBox {
 			return;
 		}
 
-		// 2026-06-28, Composer: reposition rotate walls to frustum edges [plbox1]
-		_centroid.set(0, 0, 0);
-		for (let i = 0; i < 4; i++) {
-			_centroid.add(_corners[i]);
+		// 2026-06-28, Composer: yaw from ground edge dx dz CCW corners [plbox7]
+		// 2026-06-28, Composer: half thickness plus inset inward from edge [plbox8]
+		const physics = this._core.physics;
+		const inward_offset = -WALL_WIDTH * 0.5 + WALL_INSET;
+
+		_centroid.set(0, GROUND_Y, 0);
+		for (let j = 0; j < 4; j++) {
+			_centroid.add(_corners[j]);
 		}
 		_centroid.multiplyScalar(0.25);
-
-		const physics = this._core.physics;
-		const halfWidth = WALL_WIDTH * 0.5;
-		const centerY = WALL_HEIGHT * 0.5;
 
 		for (let i = 0; i < 4; i++) {
 			const edge = WALL_EDGES[i];
@@ -148,28 +171,23 @@ class ArcadeBox {
 			const b = _corners[edge[1]];
 
 			_mid.addVectors(a, b).multiplyScalar(0.5);
-			_edgeDir.subVectors(b, a);
-			_edgeDir.y = 0;
-			const edgeLen = _edgeDir.length();
-			if (edgeLen <= 0) {
+			const dx = b.x - a.x;
+			const dz = b.z - a.z;
+			if (dx * dx + dz * dz <= 0) {
 				continue;
 			}
-			_edgeDir.multiplyScalar(1 / edgeLen);
 
-			_inward.set(_edgeDir.z, 0, -_edgeDir.x);
-			if (_inward.dot(_centroid) - _inward.dot(_mid) < 0) {
-				_inward.negate();
+			_inward.subVectors(_centroid, _mid).setY(0);
+			if (_inward.lengthSq() <= 0) {
+				continue;
 			}
+			_inward.normalize();
 
-			_quat.setFromUnitVectors(_xAxis, _edgeDir);
+			_quat.setFromAxisAngle(v3up, Math.atan2(dx, dz));
+			_pos.copy(_mid).addScaledVector(_inward, inward_offset);
 			const body = this._walls[i];
 			physics.setBodyRotation(body, _quat);
-			physics.setBodyPosition(
-				body,
-				_mid.x + _inward.x * halfWidth,
-				centerY,
-				_mid.z + _inward.z * halfWidth,
-			);
+			physics.setBodyPosition(body, _pos.x, GROUND_Y, _pos.z);
 		}
 	}
 
@@ -186,4 +204,6 @@ class ArcadeBox {
 export default ArcadeBox;
 // 2026-06-28, Composer: draw.equalizer aligns fixed walls [plbox1]
 // 2026-06-28, Composer: fixed len walls created once no resize [plbox2]
-// 2026-06-28, Composer: reposition rotate walls to frustum edges [plbox1]
+// 2026-06-28, Composer: shape offset bottom flush at body origin [plbox4]
+// 2026-06-28, Composer: yaw from ground edge dx dz CCW corners [plbox7]
+// 2026-06-28, Composer: half thickness plus inset inward from edge [plbox8]
