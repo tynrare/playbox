@@ -5,13 +5,46 @@ import * as THREE from "three";
 const _ownerInv = new THREE.Matrix4();
 const _localMat = new THREE.Matrix4();
 
+/** @type {RigidModelPart[]} */
+const _part_pool = [];
+
 /**
- * @typedef {object} RigidModelPart
- * @property {THREE.Object3D} pivot
- * @property {import("@three.ez/instanced-mesh").InstancedEntity|null} entity
- * @property {import("@three.ez/instanced-mesh").InstancedMesh2|null} owner
- * @property {string} slot
+ * @class RigidModelPart
+ * @brief Pooled pivot + instanced entity slot for RigidModel.
  */
+class RigidModelPart {
+	constructor() {
+		/** @type {THREE.Object3D} */
+		this.pivot = new THREE.Object3D();
+		/** @type {import("@three.ez/instanced-mesh").InstancedEntity|null} */
+		this.entity = null;
+	}
+
+	/**
+	 * @param {import("@three.ez/instanced-mesh").InstancedEntity} entity
+	 * @returns {RigidModelPart}
+	 */
+	static acquire(entity) {
+		// 2026-06-27, Composer: pooled RigidModelPart for makemodel [rgmd9]
+		const part = _part_pool.pop() ?? new RigidModelPart();
+		part.entity = entity;
+		return part;
+	}
+
+	/**
+	 * @param {RigidModelPart} part
+	 * @returns {void}
+	 */
+	static release(part) {
+		part.entity = null;
+		part.pivot.removeFromParent();
+		part.pivot.position.set(0, 0, 0);
+		part.pivot.quaternion.set(0, 0, 0, 1);
+		part.pivot.scale.set(1, 1, 1);
+		part.pivot.updateMatrix();
+		_part_pool.push(part);
+	}
+}
 
 /**
  * @class RigidModel
@@ -22,16 +55,10 @@ class RigidModel {
 		this.isRigidModel = true;
 		/** @type {string|null} */
 		this.modelKey = null;
-		/** @type {number} */
-		this._activeIdx = -1;
 		/** @type {THREE.Group} */
 		this.root = new THREE.Group();
-		/** @type {RigidModelPart[]} */
-		this._parts = [];
-		/** @type {number} */
-		this._partCount = 0;
-		/** @type {Record<string, THREE.Object3D>} */
-		this._slots = {};
+		/** @type {Map<string, RigidModelPart>} */
+		this.parts = new Map();
 	}
 
 	/**
@@ -39,114 +66,45 @@ class RigidModel {
 	 * @returns {THREE.Object3D|null}
 	 */
 	getSlot(name) {
-		return this._slots[name] ?? null;
-	}
-
-	/**
-	 * @param {number} index
-	 * @param {string} slot
-	 * @param {import("@three.ez/instanced-mesh").InstancedEntity} entity
-	 * @param {number} px
-	 * @param {number} py
-	 * @param {number} pz
-	 * @param {number} qx
-	 * @param {number} qy
-	 * @param {number} qz
-	 * @param {number} qw
-	 * @param {number} sx
-	 * @param {number} sy
-	 * @param {number} sz
-	 * @returns {void}
-	 */
-	setPart(
-		index,
-		slot,
-		entity,
-		px,
-		py,
-		pz,
-		qx,
-		qy,
-		qz,
-		qw,
-		sx,
-		sy,
-		sz,
-	) {
-		// 2026-06-27, Composer: reuse pivot shells across pool cycles [rgmd9]
-		let part = this._parts[index];
-		if (!part) {
-			const pivot = new THREE.Object3D();
-			part = { pivot, entity: null, owner: null, slot: "" };
-			this._parts[index] = part;
-			this.root.add(pivot);
-		}
-		part.slot = slot;
-		part.entity = entity;
-		part.owner = entity.owner;
-		part.pivot.name = slot;
-		part.pivot.position.set(px, py, pz);
-		part.pivot.quaternion.set(qx, qy, qz, qw);
-		part.pivot.scale.set(sx, sy, sz);
-		part.pivot.updateMatrix();
-		this._slots[slot] = part.pivot;
-	}
-
-	/**
-	 * @param {number} count
-	 * @returns {void}
-	 */
-	setPartCount(count) {
-		this._partCount = count;
-	}
-
-	/** @returns {void} */
-	resetSlots() {
-		for (const k in this._slots) {
-			delete this._slots[k];
-		}
+		return this.parts.get(name)?.pivot ?? null;
 	}
 
 	/** @returns {void} */
 	sync() {
-		// 2026-06-27, Composer: indexed sync with cached owner inverse [rgmd9]
+		// 2026-06-27, Composer: pivot world to owner-local via setMatrixAt [rgmd6]
 		this.root.updateMatrixWorld(true);
-		const parts = this._parts;
-		const n = this._partCount;
-		let lastOwner = null;
-		for (let i = 0; i < n; i++) {
-			const part = parts[i];
-			const owner = part.owner;
-			if (!owner || !part.entity) {
-				continue;
+		// 2026-06-27, Composer: Map.forEach avoids values iterator alloc [rgmd9]
+		this.parts.forEach((part) => {
+			const entity = part.entity;
+			if (!entity) {
+				return;
 			}
-			if (owner !== lastOwner) {
-				owner.updateMatrixWorld(true);
-				_ownerInv.copy(owner.matrixWorld).invert();
-				lastOwner = owner;
-			}
-			_localMat.copy(part.pivot.matrixWorld).premultiply(_ownerInv);
-			owner.setMatrixAt(part.entity.id, _localMat);
-		}
+			const owner = entity.owner;
+			owner.updateMatrixWorld(true);
+			_localMat.copy(part.pivot.matrixWorld).premultiply(
+				_ownerInv.copy(owner.matrixWorld).invert(),
+			);
+			owner.setMatrixAt(entity.id, _localMat);
+		});
 	}
 
 	/** @returns {void} */
 	release() {
-		const parts = this._parts;
-		const n = this._partCount;
-		for (let i = 0; i < n; i++) {
-			const entity = parts[i]?.entity;
-			entity?.remove();
-			parts[i].entity = null;
-			parts[i].owner = null;
-		}
-		this._partCount = 0;
-		this.resetSlots();
+		// 2026-06-27, Composer: Map.forEach avoids values iterator alloc [rgmd9]
+		this.parts.forEach((part) => {
+			part.entity?.remove();
+			RigidModelPart.release(part);
+		});
+		this.parts.clear();
+		// 2026-06-27, Composer: release clears root children on pool reuse [rgmd8]
+		this.root.clear();
 		this.root.removeFromParent();
 	}
 }
 
 export default RigidModel;
+export { RigidModelPart };
 // 2026-06-27, Composer: welded multi-part visual root + instanced parts [rgmd1]
 // 2026-06-27, Composer: pivot world to owner-local via setMatrixAt [rgmd6]
-// 2026-06-27, Composer: indexed sync with cached owner inverse [rgmd9]
+// 2026-06-27, Composer: release clears root children on pool reuse [rgmd8]
+// 2026-06-27, Composer: pooled RigidModelPart for makemodel [rgmd9]

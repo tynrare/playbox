@@ -46,6 +46,16 @@ class ArcadeFlow extends FlowBase {
 		this._play.step(dt, rdt);
 	}
 
+	/**
+	 * @param {number} dt
+	 * @param {number} index
+	 * @returns {void}
+	 */
+	toyupdate(dt, index) {
+		// 2026-06-28, Composer: arcade flow delegates toyupdate to play [flwtoy2]
+		this._play.toyupdate(dt, index);
+	}
+
 	/** @returns {void} */
 	stop() {
 		if (this._ui_click_id != null) {
@@ -64,3 +74,4 @@ class ArcadeFlow extends FlowBase {
 
 export default ArcadeFlow;
 // 2026-06-26, Composer: arcade flow close btn returns root [flwarc1]
+// 2026-06-28, Composer: arcade flow delegates toyupdate to play [flwtoy2]

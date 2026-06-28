@@ -159,6 +159,18 @@ class FlowBus {
 		}
 	}
 
+	/**
+	 * @param {number} dt
+	 * @param {number} index
+	 * @returns {void}
+	 */
+	toyupdate(dt, index) {
+		// 2026-06-28, Composer: flowbus fan-out toyupdate to attached flows [flwtoy1]
+		for (let i = 0; i < this._flows.length; i++) {
+			this._flows[i].toyupdate(dt, index);
+		}
+	}
+
 
 
 	/** @returns {void} */
@@ -203,5 +215,6 @@ export default FlowBus;
 // 2026-06-26, Composer: flowbus emitFlowState flow.state [flwflw1]
 // 2026-06-17, Composer: flowbus attach detach running flag [flwatt1]
 // 2026-06-17, Composer: flowbus start idempotent guard [flwidp1]
+// 2026-06-28, Composer: flowbus fan-out toyupdate to attached flows [flwtoy1]
 
 

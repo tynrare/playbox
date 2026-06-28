@@ -33,6 +33,14 @@ class FlowBase {
 	 */
 	step(_dt, _rdt) {}
 
+	/**
+	 * @param {number} _dt
+	 * @param {number} _index
+	 * @returns {void}
+	 */
+	// 2026-06-28, Composer: flowbase toyupdate hook for per-toy tick [flwtoy3]
+	toyupdate(_dt, _index) {}
+
 	/** @returns {void} */
 	stop() {}
 
@@ -46,3 +54,4 @@ class FlowBase {
 export default FlowBase;
 // 2026-06-17, Composer: flow base lifecycle stubs [flwbs1]
 // 2026-06-17, Composer: flow dispose calls stop for teardown [flwdsp1]
+// 2026-06-28, Composer: flowbase toyupdate hook for per-toy tick [flwtoy3]

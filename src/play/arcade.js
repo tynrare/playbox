@@ -7,10 +7,17 @@
 import { cache } from "../math.js";
 import { BB_KEY_PLAY } from "../scene/blackboard.js";
 import { CONTACT_PHASE_BEGIN } from "../scene/contact_router.js";
-import { TOY_INDEX_INVALID } from "../scene/itembox.js";
+import {
+	TOY_INDEX_INVALID,
+	VAR_ITEM_DB_ID,
+	VAR_TOY_INDEX,
+} from "../scene/itembox.js";
 import { VAR_TOY_DB_ID } from "../scene/toybox.js";
+import ArcadeGrab from "./arcade_grab.js";
+import ArcadeInputs from "./arcade_inputs.js";
 import ArcadeSound from "./sound.js";
-import { contactApproachSpeed, quake, QUAKE_SPEED_MIN } from "./shenanigans.js";
+// 2026-06-28, Composer: rename shenanigans import to arcade_quake [plrqk1]
+import { contactApproachSpeed, quake, QUAKE_SPEED_MIN } from "./arcade_quake.js";
 
 const COIN_A_COUNT = 3;
 const COIN_B_COUNT = 0;
@@ -19,6 +26,7 @@ const DICE_COUNT = 1;
 const WEIGHT_Y = 4;
 const ARCADER_Y = 3;
 const WEIGHT_A_TOY_DB_ID = 7;
+const FLOOR_ITEM_DB_ID = 0;
 // 2026-06-26, Composer: arcade per-type spawn counts [plcnt2]
 const COIN_STEP = 1;
 // 2026-06-26, Composer: VAR_PLAY field offsets owned by arcade [plfld1]
@@ -49,8 +57,14 @@ class Arcade {
 		this._coin_toys = [];
 		// 2026-06-27, Composer: arcade owns ArcadeSound lifecycle [plarc5]
 		this._sound = new ArcadeSound(this._core).init();
+		// 2026-06-28, Composer: arcade owns ArcadeInputs lifecycle [plinp2]
+		this._inputs = new ArcadeInputs(this._core).init();
+		// 2026-06-28, Composer: arcade owns ArcadeGrab lifecycle [plgrb3]
+		this._grab = new ArcadeGrab(this._core, this._inputs).init();
 		/** @type {number|null} */
 		this._scene_contact_id = null;
+		/** @type {number|null} */
+		this._pick_id = null;
 		return this;
 	}
 
@@ -106,7 +120,7 @@ class Arcade {
 		if (arcader_toy != null) {
 			this._coin_toys.push(arcader_toy);
 			const item_index = this._core.toybox.get_item_index(arcader_toy);
-			this._core.scene.set_itemposition(item_index, 0, ARCADER_Y, 0);
+			this._core.scene.set_itemposition(item_index, -2, ARCADER_Y, 0);
 		}
 
 		// 2026-06-27, Composer: arcade scene.contact handler owns collisions [plcnt3]
@@ -114,6 +128,12 @@ class Arcade {
 			"scene.contact",
 			this._on_scene_contact.bind(this),
 		);
+		// 2026-06-28, Composer: arcade.pick resolves item and toy db ids [plinp3]
+		this._pick_id = this._core.eventsbus.on(
+			"arcade.pick",
+			this._on_arcade_pick.bind(this),
+		);
+		this._inputs.start();
 		this._sound.start();
 	}
 
@@ -124,12 +144,28 @@ class Arcade {
 	 */
 	step(_dt, _rdt) {}
 
+	/**
+	 * @param {number} dt
+	 * @param {number} index
+	 * @returns {void}
+	 */
+	toyupdate(dt, index) {
+		// 2026-06-28, Composer: arcade delegates toyupdate to grab [plgrb3]
+		this._grab.toyupdate(dt, index);
+	}
+
 	/** @returns {void} */
 	stop() {
 		if (this._scene_contact_id != null) {
 			this._core.eventsbus.off(this._scene_contact_id);
 			this._scene_contact_id = null;
 		}
+		if (this._pick_id != null) {
+			this._core.eventsbus.off(this._pick_id);
+			this._pick_id = null;
+		}
+		this._inputs.stop();
+		this._grab.stop();
 		this._sound.stop();
 
 		for (const toy_index of this._coin_toys) {
@@ -219,7 +255,7 @@ class Arcade {
 				: TOY_INDEX_INVALID;
 
 		if (weightToy !== TOY_INDEX_INVALID && speed >= QUAKE_SPEED_MIN) {
-			// 2026-06-27, Composer: weight drop quake delegated to shenanigans [plqke2]
+			// 2026-06-27, Composer: weight drop quake delegated to arcade_quake [plqke2]
 			const weightBody = this._weight_body(weightToy);
 			const world = this._core.physics.world;
 			if (weightBody != null && world != null) {
@@ -228,6 +264,25 @@ class Arcade {
 		}
 
 		this._sound.play_contact(payload.toyIndex, payload.otherToyIndex, speed);
+	}
+
+	/**
+	 * @param {{ itemIndex: number }} payload
+	 * @returns {void}
+	 */
+	_on_arcade_pick({ itemIndex }) {
+		// 2026-06-28, Composer: pick toy grab floor drop [plgrb4]
+		const { itembox } = this._core;
+
+		const itemDbId = itembox.mempool.read_ui16(itemIndex, VAR_ITEM_DB_ID);
+		const toyIndex = itembox.mempool.read_ui16(itemIndex, VAR_TOY_INDEX);
+		const hasToy = toyIndex !== TOY_INDEX_INVALID;
+
+		if (hasToy) {
+			this._grab.grab(toyIndex);
+		} else if (itemDbId === FLOOR_ITEM_DB_ID) {
+			this._grab.drop();
+		}
 	}
 }
 
@@ -248,5 +303,10 @@ export default Arcade;
 // 2026-06-27, Composer: arcade spawn weight_a at center [plwgt1]
 // 2026-06-27, Composer: arcade scene.contact handler owns collisions [plcnt3]
 // 2026-06-27, Composer: register coin y passed from spawn loop [plreg1]
-// 2026-06-27, Composer: weight drop quake delegated to shenanigans [plqke2]
+// 2026-06-27, Composer: weight drop quake delegated to arcade_quake [plqke2]
 // 2026-06-27, Composer: arcade spawn arcader_a RigidModel at center [plarc7]
+// 2026-06-28, Composer: rename shenanigans import to arcade_quake [plrqk1]
+// 2026-06-28, Composer: arcade owns ArcadeInputs lifecycle [plinp2]
+// 2026-06-28, Composer: arcade.pick resolves item and toy db ids [plinp3]
+// 2026-06-28, Composer: arcade owns ArcadeGrab lifecycle [plgrb3]
+// 2026-06-28, Composer: pick toy grab floor drop [plgrb4]

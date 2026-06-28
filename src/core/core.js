@@ -113,6 +113,8 @@ class Core {
     this.inputs?.start();
     this.ui?.start();
     this.flowbus.start();
+    // 2026-06-28, Composer: core wires toybox.on_toyupdate to flowbus [crtoy1]
+    this.toybox.on_toyupdate = (dt, index) => this.toyupdate(dt, index);
     this.active = true;
   }
 
@@ -125,6 +127,7 @@ class Core {
     this.flowbus.stop();
     this.ui.stop();
     this.inputs.stop();
+    this.toybox.on_toyupdate = null;
     this.toybox.stop();
     this.itembox.stop();
     this.physics.stop();
@@ -154,6 +157,16 @@ class Core {
     this.draw.step(dt, _rdt);
 
     return 0;
+  }
+
+  /**
+   * @param {number} dt
+   * @param {number} index
+   * @returns {void}
+   */
+  toyupdate(dt, index) {
+    // 2026-06-28, Composer: core wires toybox.on_toyupdate to flowbus [crtoy1]
+    this.flowbus.toyupdate(dt, index);
   }
 }
 
@@ -188,3 +201,4 @@ export default Core;
 // 2026-06-18, Composer: physics step uses real rdt for substeps [phyrdt1]
 // 2026-06-26, Composer: toy tick via itembox.on_itemupdate hook [tbxhook1]
 // 2026-06-26, Composer: scene ctor takes toybox not itembox [crtbx1]
+// 2026-06-28, Composer: core wires toybox.on_toyupdate to flowbus [crtoy1]

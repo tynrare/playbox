@@ -5,6 +5,7 @@ export const qidentity = new THREE.Quaternion();
 
 export const v3up = new THREE.Vector3(0, 1, 0);
 export const v3right = new THREE.Vector3(1, 0, 0);
+export const v3forward = new THREE.Vector3(0, 0, 1);
 export const vzero = new THREE.Vector3(0, 0, 0);
 export const vone = new THREE.Vector3(1, 1, 1);
 

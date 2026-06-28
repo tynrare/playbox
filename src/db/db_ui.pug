@@ -20,6 +20,8 @@
 //- 2026-06-26, Composer: root menu arcade button label [uinav18]
 //- 2026-06-26, Composer: arcade flow close ui elements [uinav19]
 //- 2026-06-18, Composer: label rx/ry centers on anchor-1 panel [uinav16]
+//- 2026-06-28, Composer: readysplash square play sprite button [uinav22]
+//- 2026-06-28, Composer: loading hourglass sprite not text [uinav23]
 - var menu_btn_indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 db#db_pb_ui_root_elements(name="ui_root_elements" scope="ui_elements")
@@ -91,13 +93,15 @@ db#db_pb_ui_arcade_elements(name="ui_arcade_elements" scope="ui_elements")
         size="4" opacity="1" colorb="0xffffff" glow="1")
 
 db#db_pb_ui_readysplash_elements(name="ui_readysplash_elements" scope="ui_elements")
-    //- 2026-06-26, Composer: readysplash green start button [uinav21]
+    //- 2026-06-28, Composer: readysplash square play sprite button [uinav22]
+    //- 2026-06-28, Composer: loading hourglass sprite not text [uinav23]
     d(name="readysplash_start" type="panel" interactive="true" event="readysplash_start"
-        x=50 y=50 w=30 h=10 scale=1
+        x=50 y=50 w=20 h=20 scale=1
         color="0x00aa00" colorb="0x00ff00" glow="1" opacity="1" corner="0.3")
-    d(name="readysplash_start_label" type="text" font="afont" pivot="readysplash_start"
-        text="Start" fontsize="4" color="0xffffff" colorb="0xffffff" glow="1" opacity="1"
-        anchorx=0.5 anchory=0.5)
+    d(name="readysplash_start_icon" type="sprite" sprite="play"
+        pivot="readysplash_start"
+        z=1 anchorx=0.46 anchory=0.5
+        size="16" opacity="1" colorb="0xffffff" glow="1")
 
 db#db_pb_ui_test_elements(name="ui_test_elements" scope="ui_elements")
     //- 2026-06-17, Composer: test flow close and ok ui elements [uinav6]
@@ -144,12 +148,13 @@ db#db_pb_ui_dev_elements(name="ui_dev_elements" scope="ui_elements")
 db#db_pb_ui_loading_elements(name="ui_loading_elements" scope="ui_elements")
     d(name="loading_bg" type="panel"
         z=1 x=50 y=50
-        w=80 h=80 scale=1
+        w=40 h=40 scale=1
         color="0x0" colorb="0xffffff" glow="4" opacity=0.5 corner=0.1)
-    d(name="loading_text" type="text" font="afont"
+    //- 2026-06-28, Composer: loading hourglass sprite not text [uinav23]
+    d(name="loading_icon" type="sprite" sprite="cm_hourglass_i204"
         z=2 x=50 y=50
-        text="loading" fontsize="22" color="0xffffff" colorb="0xffffff" glow="1" opacity="1"
-        anchorx=0.5 anchory=0.5)
+        anchorx=0.5 anchory=0.5
+        size="14" opacity="1" colorb="0xffffff" glow="1")
 
 db#db_pb_ui_root_vis(name="ui_root_vis" scope="ui_states")
     //- 2026-06-17, Composer: root menu vis state refs ten buttons [uinav1]
@@ -174,7 +179,7 @@ db#db_pb_ui_arcade_vis(name="ui_arcade_vis" scope="ui_states")
     d(name="arcade_close_elements" element="[arcade_close, arcade_close_icon]")
 
 db#db_pb_ui_readysplash_vis(name="ui_readysplash_vis" scope="ui_states")
-    d(name="readysplash_elements" element="[readysplash_start, readysplash_start_label]")
+    d(name="readysplash_elements" element="[readysplash_start, readysplash_start_icon]")
 
 db#db_pb_ui_test_vis(name="ui_test_vis" scope="ui_states")
     d(name="test_close_elements" element="[test_close, test_close_icon]")
@@ -187,7 +192,7 @@ db#db_pb_ui_tests_states(name="ui_tests_states" scope="ui_states")
         ry=-10)
 
 db#db_pb_ui_loading(name="ui_loading" scope="ui_states")
-    d(name="loading_elements" element="[loading_bg,loading_text]")
+    d(name="loading_elements" element="[loading_bg,loading_icon]")
 
 db#db_pb_ui_dev(name="ui_dev" scope="ui_states")
     //- 2026-06-14, Composer: hide elements until active state refs them [uivis1]
@@ -223,3 +228,5 @@ db#db_pb_ui_debug_enabled(name="ui_debug_enabled" scope="ui_states")
 //- 2026-06-26, Composer: root menu arcade button label [uinav18]
 //- 2026-06-26, Composer: arcade flow close ui elements [uinav19]
 //- 2026-06-18, Composer: label rx/ry centers on anchor-1 panel [uinav16]
+//- 2026-06-28, Composer: readysplash square play sprite button [uinav22]
+//- 2026-06-28, Composer: loading hourglass sprite not text [uinav23]

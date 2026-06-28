@@ -5,6 +5,7 @@
 // 2026-06-26, Composer: play attaches menu flow only no dev [plmn2]
 import Core from "./core/core.js";
 import MenuFlow from "./flows/menu.js";
+import SplashFlow from "./flows/splashscreen.js";
 import Settings from "./play/settings.js";
 
 /**
@@ -21,6 +22,10 @@ class Play {
 		this._menu = null;
 		/** @type {Settings|null} */
 		this._settings = null;
+		/** @type {SplashFlow|null} */
+		this._splash = null;
+		/** @type {boolean} */
+		this._splash_attached = false;
 	}
 
 	/**
@@ -31,6 +36,8 @@ class Play {
 		// 2026-06-26, Composer: play attaches menu flow only no dev [plmn2]
 		this._settings = new Settings(this._core.datawork);
 		this._menu = new MenuFlow(this._core, this._settings).init();
+		// 2026-06-28, Composer: play init boot splash flow [plspl1]
+		this._splash = new SplashFlow(this._core).init();
 		return this;
 	}
 
@@ -39,10 +46,15 @@ class Play {
 	 * @returns {void}
 	 */
 	splashscreen(visible) {
+		// 2026-06-28, Composer: splashscreen attach detach splash flow [plspl2]
 		if (visible) {
-			this._core.ui.setstate("ui_loading");
-		} else {
-			this._core.ui.delstate("ui_loading");
+			if (this._splash && !this._splash_attached) {
+				this._core.flowbus.attach(this._splash);
+				this._splash_attached = true;
+			}
+		} else if (this._splash_attached && this._splash) {
+			this._core.flowbus.detach(this._splash);
+			this._splash_attached = false;
 		}
 	}
 
@@ -59,6 +71,7 @@ class Play {
 
 	/** @returns {void} */
 	stop() {
+		this.splashscreen(false);
 		this._menu?.teardown();
 	}
 
@@ -72,3 +85,5 @@ export default Play;
 // 2026-06-26, Composer: play attaches menu flow only no dev [plmn2]
 // 2026-06-18, Composer: play owns settings inject flows [plstg1]
 // 2026-06-26, Composer: play boot navigates readysplash not arcade [plrsp1]
+// 2026-06-28, Composer: play init boot splash flow [plspl1]
+// 2026-06-28, Composer: splashscreen attach detach splash flow [plspl2]

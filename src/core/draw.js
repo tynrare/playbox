@@ -15,7 +15,7 @@ import { VerticalTiltShiftShader } from "three/addons/shaders/VerticalTiltShiftS
 import Drawcore from "../render/drawcore.js";
 
 const BLOOM_FACTOR = 0.9;
-const PIXELATE_SIZE = 6;
+const PIXELATE_SIZE = 4;
 // 2026-06-26, Composer: reference vertical FOV at landscape aspect [drwfov1]
 const CAMERA_BASE_FOV = 42;
 const CAMERA_REF_ASPECT = 16 / 9;
@@ -177,16 +177,16 @@ class Draw {
 
     const n8aopass = new N8AOPass(render.scene, render.camera, 1, 1);
     n8aopass.configuration.gammaCorrection = false;
-    n8aopass.configuration.intensity = 2.0;
+    n8aopass.configuration.intensity = 0.5;
     n8aopass.configuration.colorMultiply = false;
     n8aopass.configuration.halfRes = false;
     n8aopass.configuration.aoBufferScale = 0.25;
     n8aopass.configuration.depthAwareUpsampling = false;
     n8aopass.configuration.aoSamples = 16;
-    n8aopass.configuration.aoRadius = 2;
+    n8aopass.configuration.aoRadius = 1;
     n8aopass.configuration.denoiseSamples = 4;
-    n8aopass.configuration.denoiseRadius = 16;
-    n8aopass.configuration.denoiseIterations = 1;
+    n8aopass.configuration.denoiseRadius = 8;
+    n8aopass.configuration.denoiseIterations = 2;
     n8aopass.configuration.aoTones = 0;
     n8aopass.configuration.autoRenderBeauty = false;
     // 2026-06-19, Composer: skip per-frame transparency rerenders [drwao2]
@@ -376,6 +376,24 @@ class Draw {
   }
 
   /**
+   * @param {number} clientX
+   * @param {number} clientY
+   * @param {THREE.Vector2} out
+   * @returns {boolean}
+   */
+  pointer_ndc(clientX, clientY, out) {
+    // 2026-06-28, Composer: scale maps CSS pointer to render buffer NDC [drwptr2]
+    const hw = this.cameraui?.right ?? this._window_w * 0.5;
+    const hh = this.cameraui?.top ?? this._window_h * 0.5;
+    if (hw <= 0 || hh <= 0) {
+      return false;
+    }
+    const s = this.scale;
+    out.set((clientX * s) / hw - 1, -((clientY * s) / hh - 1));
+    return true;
+  }
+
+  /**
    * @param {number} dt
    * @returns {void}
    */
@@ -525,4 +543,6 @@ class Draw {
 // 2026-06-19, Composer: size passes after n8ao added to composer [drwao3]
 // 2026-06-19, Composer: depthAwareUpsampling aligns low-res AO [drwao4]
 // 2026-06-26, Composer: lock horizontal FOV across aspect changes [drwfov1]
+// 2026-06-28, Composer: client pointer NDC via cameraui half extents [drwptr1]
+// 2026-06-28, Composer: scale maps CSS pointer to render buffer NDC [drwptr2]
 export default Draw;

@@ -1,6 +1,6 @@
 /** @namespace ty */
 // Purpose: weight-drop quake via Oimo aabbTest and contact list.
-
+// 2026-06-28, Composer: renamed from shenanigans.js [plrqk1]
 import { oimo } from "../lib/OimoPhysics.js";
 
 const RigidBodyType = oimo.dynamics.rigidbody.RigidBodyType;
@@ -441,3 +441,4 @@ export function quake(world, contact, weightBody) {
 // 2026-06-27, Composer: quake mass mult from damped quaker/target ratio [plqke6]
 // 2026-06-27, Composer: quake angular shake away from impact source [plqke7]
 // 2026-06-27, Composer: quake contact chain propagation decay per hop [plqke8]
+// 2026-06-28, Composer: renamed from shenanigans.js [plrqk1]
