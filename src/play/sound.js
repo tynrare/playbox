@@ -5,7 +5,7 @@ import { TOY_INDEX_INVALID } from "../scene/itembox.js";
 
 /** @type {Readonly<Record<string, string>>} */
 const CONTACT_SFX_BY_KIND = {
-	coin: "chips-collide-2",
+	coin: "coindrop",
 	dice: "impactWood_light_000",
 	weight: "impactPunch_heavy_000",
 };

@@ -3,6 +3,7 @@
 // Requires: npm install audiosprite ffmpeg-static (devDependencies)
 
 import { execFileSync } from "node:child_process";
+import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import os from "node:os";
@@ -34,6 +35,8 @@ export const DEFAULT_SOUND_EXPORT = "webm,ogg,mp3";
 export const DEFAULT_SOUND_BOOST = 1.0;
 /** @type {string} Optional per-clip volume map in a sound bundle folder. */
 export const BUNDLE_TXT_NAME = "bundle.txt";
+/** @type {string} Suffix for stored source hash beside bundled outputs in res/sound. */
+export const SOURCES_HASH_SUFFIX = ".sources.hash";
 
 /**
  * @brief Resolve ffmpeg binary (ffmpeg-static or PATH).
@@ -93,16 +96,29 @@ export function audioBaseName(filePath) {
 }
 
 /**
- * @brief Optional per-clip volume boosts from bundle.txt in a sound folder.
- * Lines: `<audio-basename> boost=<number>` (e.g. `lowFrequency_explosion_001 boost=2.0`).
- * @param {string} inputDir
- * @returns {Map<string, number>}
+ * @typedef {{ boost: number, crop: { start: number, stop: number } | null }} BundleClipOptions
  */
-export function readBundleTxtBoosts(inputDir) {
-	const boosts = new Map();
+
+/**
+ * @brief Default bundle.txt options for one clip.
+ * @returns {BundleClipOptions}
+ */
+export function defaultBundleClipOptions() {
+	return { boost: DEFAULT_SOUND_BOOST, crop: null };
+}
+
+/**
+ * @brief Per-clip boost/crop options from bundle.txt in a sound folder.
+ * Lines: `<audio-basename> boost=<number>` and/or `crop=<start>,<stop>` (seconds).
+ * @param {string} inputDir
+ * @returns {Map<string, BundleClipOptions>}
+ */
+// 2026-06-28, Composer: bundle.txt crop start/stop seconds [pbxs4]
+export function readBundleTxtOptions(inputDir) {
+	const options = new Map();
 	const file = path.join(inputDir, BUNDLE_TXT_NAME);
 	if (!fs.existsSync(file)) {
-		return boosts;
+		return options;
 	}
 	const text = fs.readFileSync(file, "utf8");
 	for (const line of text.split(/\r?\n/)) {
@@ -110,80 +126,123 @@ export function readBundleTxtBoosts(inputDir) {
 		if (!trimmed || trimmed.startsWith("#")) {
 			continue;
 		}
-		const m = trimmed.match(/^(\S+)\s+boost=([0-9.]+)\s*$/i);
+		const m = trimmed.match(/^(\S+)\s+(.+)$/);
 		if (!m) {
 			console.warn(
 				`bundle-sound: skip bundle.txt line in ${path.relative(ROOT, inputDir)}: ${trimmed}`,
 			);
 			continue;
 		}
-		boosts.set(m[1], Number(m[2]));
+		const clip = defaultBundleClipOptions();
+		let matched = false;
+		const boostM = m[2].match(/boost=([0-9.]+)/i);
+		if (boostM) {
+			clip.boost = Number(boostM[1]);
+			matched = true;
+		}
+		const cropM = m[2].match(/crop=([0-9.]+)\s*,\s*([0-9.]+)/i);
+		if (cropM) {
+			const start = Number(cropM[1]);
+			const stop = Number(cropM[2]);
+			if (Number.isFinite(start) && Number.isFinite(stop) && stop > start) {
+				clip.crop = { start, stop };
+				matched = true;
+			} else {
+				console.warn(
+					`bundle-sound: invalid crop in ${path.relative(ROOT, inputDir)}: ${trimmed}`,
+				);
+			}
+		}
+		if (!matched) {
+			console.warn(
+				`bundle-sound: skip bundle.txt line in ${path.relative(ROOT, inputDir)}: ${trimmed}`,
+			);
+			continue;
+		}
+		options.set(m[1], clip);
 	}
-	return boosts;
+	return options;
 }
 
 /**
- * @brief Resolve volume boost from bundle.txt keyed by audio basename.
- * @param {Map<string, number>} bundleBoosts
+ * @brief Resolve bundle.txt options keyed by audio basename.
+ * @param {Map<string, BundleClipOptions>} bundleOptions
  * @param {string} fileBase audio basename without extension
- * @returns {number}
+ * @returns {BundleClipOptions}
  */
-export function resolveSoundBoost(bundleBoosts, fileBase) {
-	return bundleBoosts.get(fileBase) ?? DEFAULT_SOUND_BOOST;
+export function resolveBundleClipOptions(bundleOptions, fileBase) {
+	return bundleOptions.get(fileBase) ?? defaultBundleClipOptions();
 }
 
 /**
- * @brief Apply linear volume boost to one clip via ffmpeg (returns input when boost is 1).
+ * @brief True when bundle.txt requests crop and/or volume boost for one clip.
+ * @param {BundleClipOptions} opts
+ * @returns {boolean}
+ */
+export function needsSoundPreprocess(opts) {
+	return opts.crop !== null || opts.boost !== DEFAULT_SOUND_BOOST;
+}
+
+/**
+ * @brief Apply crop and/or linear volume boost to one clip via ffmpeg.
  * @param {string} inputPath
- * @param {number} boost
+ * @param {BundleClipOptions} opts
  * @param {string} tempDir
  * @returns {string}
  */
-export function preprocessSoundVolume(inputPath, boost, tempDir) {
-	const n = Number(boost);
-	if (!Number.isFinite(n) || n === DEFAULT_SOUND_BOOST) {
+export function preprocessSoundClip(inputPath, opts, tempDir) {
+	if (!needsSoundPreprocess(opts)) {
 		return inputPath;
 	}
 	const outPath = path.join(tempDir, `${audioBaseName(inputPath)}.wav`);
-	execFileSync(
-		resolveFfmpegPath(),
-		[
-			"-y",
-			"-i",
-			inputPath,
-			"-filter:a",
-			`volume=${n}`,
-			"-ar",
-			"44100",
-			"-ac",
-			"1",
-			outPath,
-		],
-		{ stdio: "pipe" },
-	);
+	const args = ["-y", "-i", inputPath];
+	if (opts.crop) {
+		args.push("-ss", String(opts.crop.start), "-to", String(opts.crop.stop));
+	}
+	if (opts.boost !== DEFAULT_SOUND_BOOST) {
+		args.push("-filter:a", `volume=${opts.boost}`);
+	}
+	args.push("-ar", "44100", "-ac", "1", outPath);
+	execFileSync(resolveFfmpegPath(), args, { stdio: "pipe" });
 	return outPath;
 }
 
 /**
- * @brief Map source clips to boosted temp copies when bundle.txt requests it.
+ * @brief Short log label for one preprocessed clip.
+ * @param {BundleClipOptions} opts
+ * @returns {string}
+ */
+export function formatPreprocessLabel(opts) {
+	const parts = [];
+	if (opts.crop) {
+		parts.push(`crop ${opts.crop.start}–${opts.crop.stop}s`);
+	}
+	if (opts.boost !== DEFAULT_SOUND_BOOST) {
+		parts.push(`x${opts.boost}`);
+	}
+	return parts.join(", ");
+}
+
+/**
+ * @brief Map source clips to cropped/boosted temp copies when bundle.txt requests it.
  * @param {string} inputDir
  * @param {string[]} files absolute paths sorted like listBundleSoundFiles
  * @returns {{ files: string[], cleanup: () => void }}
  */
 export function prepareSoundFilesForBundle(inputDir, files) {
-	const bundleBoosts = readBundleTxtBoosts(inputDir);
+	const bundleOptions = readBundleTxtOptions(inputDir);
 	let tempDir = null;
 	const prepared = files.map((file) => {
-		const boost = resolveSoundBoost(bundleBoosts, audioBaseName(file));
-		if (boost === DEFAULT_SOUND_BOOST) {
+		const opts = resolveBundleClipOptions(bundleOptions, audioBaseName(file));
+		if (!needsSoundPreprocess(opts)) {
 			return file;
 		}
 		if (!tempDir) {
 			tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "bundle-sound-"));
 		}
-		const out = preprocessSoundVolume(file, boost, tempDir);
+		const out = preprocessSoundClip(file, opts, tempDir);
 		console.log(
-			`bundle-sound: boost ${audioBaseName(file)} x${boost} → ${path.basename(out)}`,
+			`bundle-sound: ${formatPreprocessLabel(opts)} ${audioBaseName(file)} → ${path.basename(out)}`,
 		);
 		return out;
 	});
@@ -242,6 +301,114 @@ export function resolveSoundBundlePaths(rawInputDir, root = ROOT) {
 }
 
 /**
+ * @brief Path to stored source hash for one bundle output base.
+ * @param {string} outputBase
+ * @returns {string}
+ */
+export function sourcesHashPath(outputBase) {
+	return `${outputBase}${SOURCES_HASH_SUFFIX}`;
+}
+
+/**
+ * @brief Parse audiosprite export list into file extensions.
+ * @param {string} [exportFormats]
+ * @returns {string[]}
+ */
+export function listBundleOutputFormats(exportFormats = DEFAULT_SOUND_EXPORT) {
+	return exportFormats
+		.split(",")
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+}
+
+/**
+ * @brief True when json + every export audio file exists for a bundle.
+ * @param {string} outputBase
+ * @param {string} [exportFormats]
+ * @returns {boolean}
+ */
+export function bundleOutputsExist(outputBase, exportFormats = DEFAULT_SOUND_EXPORT) {
+	if (!fs.existsSync(`${outputBase}.json`)) {
+		return false;
+	}
+	return listBundleOutputFormats(exportFormats).every((ext) =>
+		fs.existsSync(`${outputBase}.${ext}`),
+	);
+}
+
+/**
+ * @brief Mix bundle.txt full content into a sources hash (any edit invalidates cache).
+ * @param {import("node:crypto").Hash} h
+ * @param {string} inputDir
+ * @returns {void}
+ */
+// 2026-06-28, Composer: source hash uses file size + bundle.txt content [pbxs5]
+export function hashBundleTxtSources(h, inputDir) {
+	const bundleTxt = path.join(inputDir, BUNDLE_TXT_NAME);
+	h.update("bundle.txt\0");
+	if (fs.existsSync(bundleTxt)) {
+		h.update(fs.readFileSync(bundleTxt));
+	}
+	h.update("\0");
+}
+
+/**
+ * @brief Mix one source clip basename + size into a sources hash.
+ * @param {import("node:crypto").Hash} h
+ * @param {string} file absolute path
+ * @returns {void}
+ */
+export function hashSoundFileSources(h, file) {
+	const stat = fs.statSync(file);
+	h.update(path.basename(file));
+	h.update("\0");
+	h.update(String(stat.size));
+	h.update("\0");
+}
+
+/**
+ * @brief Fingerprint dev/res/sound clips + bundle.txt + bundle options.
+ * @param {string} inputDir
+ * @param {string[]} sourceFiles absolute paths sorted like listBundleSoundFiles
+ * @param {{ export?: string, gap?: number }} [opts]
+ * @returns {string}
+ */
+export function computeSourcesHash(inputDir, sourceFiles, opts = {}) {
+	const exportFormats = opts.export ?? DEFAULT_SOUND_EXPORT;
+	const gap = opts.gap ?? 1;
+	const h = crypto.createHash("sha256");
+	h.update(`v2\0export=${exportFormats}\0gap=${gap}\0`);
+	hashBundleTxtSources(h, inputDir);
+	for (const file of sourceFiles) {
+		hashSoundFileSources(h, file);
+	}
+	return h.digest("hex");
+}
+
+/**
+ * @brief Read stored source hash from res/sound when present.
+ * @param {string} outputBase
+ * @returns {string | null}
+ */
+export function readStoredSourcesHash(outputBase) {
+	const file = sourcesHashPath(outputBase);
+	if (!fs.existsSync(file)) {
+		return null;
+	}
+	return fs.readFileSync(file, "utf8").trim() || null;
+}
+
+/**
+ * @brief Persist source hash beside bundled outputs in res/sound.
+ * @param {string} outputBase
+ * @param {string} hash
+ * @returns {void}
+ */
+export function writeStoredSourcesHash(outputBase, hash) {
+	fs.writeFileSync(sourcesHashPath(outputBase), `${hash}\n`);
+}
+
+/**
  * @brief Normalize Howler JSON src paths to forward slashes.
  * @param {{ src?: string[] }} spriteJson
  * @returns {{ src?: string[] }}
@@ -258,7 +425,7 @@ export function normalizeHowlerJsonPaths(spriteJson) {
 /**
  * @brief Concat dev/res/sound clips into one audiosprite + Howler v2 JSON in res/sound.
  * @param {{ rawInputDir?: string, root?: string, export?: string, gap?: number }} [opts]
- * @returns {Promise<{ name: string, clips: number, jsonPath: string, outDir: string, sprite: object }>}
+ * @returns {Promise<{ name: string, clips: number, jsonPath: string, outDir: string, sprite: object, skipped?: boolean }>}
  */
 export async function bundleSound(opts = {}) {
 	ensureFfmpegOnPath();
@@ -280,11 +447,36 @@ export async function bundleSound(opts = {}) {
 		throw new Error(`bundle-sound: no audio files in ${inputDir}`);
 	}
 
+	const exportFormats = opts.export ?? DEFAULT_SOUND_EXPORT;
+	const gap = opts.gap ?? 1;
+	const sourcesHash = computeSourcesHash(inputDir, sourceFiles, {
+		export: exportFormats,
+		gap,
+	});
+	const jsonPath = `${outputBase}.json`;
+	const storedHash = readStoredSourcesHash(outputBase);
+	if (
+		storedHash === sourcesHash &&
+		bundleOutputsExist(outputBase, exportFormats)
+	) {
+		const spriteJson = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+		console.log(
+			`bundle-sound: ${bundleName} unchanged (${sourcesHash.slice(0, 8)}…) → skip`,
+		);
+		return {
+			name: bundleName,
+			clips: sourceFiles.length,
+			jsonPath,
+			outDir,
+			sprite: spriteJson,
+			skipped: true,
+		};
+	}
+
 	const { files, cleanup } = prepareSoundFilesForBundle(inputDir, sourceFiles);
 
 	fs.mkdirSync(outDir, { recursive: true });
 
-	const exportFormats = opts.export ?? DEFAULT_SOUND_EXPORT;
 	let spriteJson;
 	try {
 		spriteJson = normalizeHowlerJsonPaths(
@@ -293,7 +485,7 @@ export async function bundleSound(opts = {}) {
 				path: jsonResPath.replace(/\\/g, "/"),
 				export: exportFormats,
 				format: "howler2",
-				gap: opts.gap ?? 1,
+				gap,
 				logger: {
 					debug: () => {},
 					info: (msg, meta) => {
@@ -311,8 +503,8 @@ export async function bundleSound(opts = {}) {
 		cleanup();
 	}
 
-	const jsonPath = `${outputBase}.json`;
 	fs.writeFileSync(jsonPath, `${JSON.stringify(spriteJson, null, 2)}\n`);
+	writeStoredSourcesHash(outputBase, sourcesHash);
 
 	console.log(
 		`bundle-sound: ${bundleName} ${sourceFiles.length} clips → ${path.relative(root, jsonPath)} (${exportFormats}, howler2)`,
@@ -341,3 +533,6 @@ if (isCli) {
 
 // 2026-06-27, Composer: playbox sound bundle script [pbxs1]
 // 2026-06-27, Composer: dev/res/sound → res/sound mirror [pbxs2]
+// 2026-06-28, Composer: skip rebuild when source hash matches [pbxs3]
+// 2026-06-28, Composer: bundle.txt crop start/stop seconds [pbxs4]
+// 2026-06-28, Composer: source hash uses file size + bundle.txt content [pbxs5]
