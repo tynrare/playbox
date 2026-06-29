@@ -37,21 +37,28 @@ class Inputs {
       type: 0,
     };
 
-    /** @type {Record<number, { x: number, y: number, touch_identifier: number }>} */
+    /** @type {Record<number, { x: number, y: number, touch_identifier: number, type: number }>} */
     this._pointers = {};
-    /** @type {Array<{ x: number, y: number, touch_identifier: number }>} */
+    /** @type {Array<{ x: number, y: number, touch_identifier: number, type: number }>} */
     this._pointers_pool = Array.from({ length: 10 }, () => ({
       x: 0,
       y: 0,
       touch_identifier: -1,
+      type: 0,
     }));
 
-    /** @type {((ev: Event) => void)|null} */
+    /** @type {((ev: PointerEvent) => void)|null} */
     this._on_pointerdown = null;
-    /** @type {((ev: Event) => void)|null} */
+    /** @type {((ev: PointerEvent) => void)|null} */
     this._on_pointerup = null;
-    /** @type {((ev: Event) => void)|null} */
+    /** @type {((ev: PointerEvent) => void)|null} */
     this._on_pointermove = null;
+    /** @type {((ev: PointerEvent) => void)|null} */
+    this._on_pointerrelease = null;
+    /** @type {(() => void)|null} */
+    this._on_blur = null;
+    /** @type {(() => void)|null} */
+    this._on_visibility = null;
   }
 
   /**
@@ -90,41 +97,60 @@ class Inputs {
       return;
     }
 
-    // 2026-06-14, Composer: bind canvas pointer listeners [inpdev2]
+    // 2026-06-29, Composer: pointer events with capture and blur cancel [inpptr1]
     this._on_pointerdown = (ev) => this._pointerdown(ev);
     this._on_pointerup = (ev) => this._pointerup(ev);
     this._on_pointermove = (ev) => this._pointermove(ev);
+    this._on_pointerrelease = (ev) => this._pointerrelease(ev);
+    this._on_blur = () => this._cancel_active_pointers();
+    this._on_visibility = () => {
+      if (document.hidden) {
+        this._cancel_active_pointers();
+      }
+    };
 
-    container.addEventListener("mousedown", this._on_pointerdown, { passive: false });
-    container.addEventListener("touchstart", this._on_pointerdown, { passive: false });
-    container.addEventListener("mouseup", this._on_pointerup, { passive: false });
-    container.addEventListener("touchend", this._on_pointerup, { passive: false });
-    container.addEventListener("touchmove", this._on_pointermove, { passive: false });
-    container.addEventListener("mousemove", this._on_pointermove, { passive: false });
+    container.addEventListener("pointerdown", this._on_pointerdown, { passive: false });
+    container.addEventListener("pointerup", this._on_pointerup, { passive: false });
+    container.addEventListener("pointermove", this._on_pointermove, { passive: false });
+    container.addEventListener("pointercancel", this._on_pointerrelease, { passive: false });
+    container.addEventListener("lostpointercapture", this._on_pointerrelease);
+    window.addEventListener("blur", this._on_blur);
+    document.addEventListener("visibilitychange", this._on_visibility);
   }
 
   /**
    * @returns {void}
    */
   stop() {
+    this._cancel_active_pointers();
+
     const container = this._container;
     if (container && this._on_pointerdown) {
-      container.removeEventListener("mousedown", this._on_pointerdown);
-      container.removeEventListener("touchstart", this._on_pointerdown);
-      container.removeEventListener("mouseup", this._on_pointerup);
-      container.removeEventListener("touchend", this._on_pointerup);
-      container.removeEventListener("touchmove", this._on_pointermove);
-      container.removeEventListener("mousemove", this._on_pointermove);
+      container.removeEventListener("pointerdown", this._on_pointerdown);
+      container.removeEventListener("pointerup", this._on_pointerup);
+      container.removeEventListener("pointermove", this._on_pointermove);
+      container.removeEventListener("pointercancel", this._on_pointerrelease);
+      container.removeEventListener("lostpointercapture", this._on_pointerrelease);
+    }
+    if (this._on_blur) {
+      window.removeEventListener("blur", this._on_blur);
+    }
+    if (this._on_visibility) {
+      document.removeEventListener("visibilitychange", this._on_visibility);
     }
 
     this._on_pointerdown = null;
     this._on_pointerup = null;
     this._on_pointermove = null;
+    this._on_pointerrelease = null;
+    this._on_blur = null;
+    this._on_visibility = null;
     this._pointers = {};
     this._pointers_pool = Array.from({ length: 10 }, () => ({
       x: 0,
       y: 0,
       touch_identifier: -1,
+      type: 0,
     }));
   }
 
@@ -133,6 +159,39 @@ class Inputs {
     this.stop();
     this.events.dispose();
     this._container = null;
+  }
+
+  /**
+   * @returns {void}
+   */
+  _cancel_active_pointers() {
+    // 2026-06-29, Composer: synthetic pointerup on focus loss [inpptr1]
+    for (const touch_identifier in this._pointers) {
+      const pointer = this._pointers[touch_identifier];
+      this._onpointerup(
+        pointer.x,
+        pointer.y,
+        Number(touch_identifier),
+        pointer.type,
+        null,
+      );
+    }
+  }
+
+  /**
+   * @param {PointerEvent} ev
+   * @returns {number}
+   */
+  _pointer_type(ev) {
+    return ev.pointerType === "touch" ? 0 : 1;
+  }
+
+  /**
+   * @param {EventTarget|null} target
+   * @returns {string|null}
+   */
+  _pointer_command(target) {
+    return target instanceof HTMLElement ? target.id : null;
   }
 
   /**
@@ -202,6 +261,7 @@ class Inputs {
     pointer.x = x;
     pointer.y = y;
     pointer.touch_identifier = touch_identifier;
+    pointer.type = type;
     this._pointers[touch_identifier] = pointer;
 
     this._event_detail.x = x;
@@ -213,29 +273,24 @@ class Inputs {
   }
 
   /**
-   * @param {PointerEvent|TouchEvent|MouseEvent} ev
+   * @param {PointerEvent} ev
    * @returns {void}
    */
   _pointerdown(ev) {
     this._muteevent(ev);
 
-    if (ev.changedTouches?.length) {
-      for (let i = 0; i < ev.changedTouches.length; i++) {
-        const x = ev.changedTouches[i].clientX;
-        const y = ev.changedTouches[i].clientY;
-        const touch_identifier = ev.changedTouches[i].identifier;
-        const command =
-          ev.target instanceof HTMLElement ? ev.target.id : null;
-        this._onpointerdown(x, y, touch_identifier, 0, command);
-      }
-    } else {
-      const x = ev.clientX;
-      const y = ev.clientY;
-      const touch_identifier = 0xf;
-      const command =
-        ev.target instanceof HTMLElement ? ev.target.id : null;
-      this._onpointerdown(x, y, touch_identifier, 1, command);
+    const container = this._container;
+    if (container && !container.hasPointerCapture(ev.pointerId)) {
+      container.setPointerCapture(ev.pointerId);
     }
+
+    this._onpointerdown(
+      ev.clientX,
+      ev.clientY,
+      ev.pointerId,
+      this._pointer_type(ev),
+      this._pointer_command(ev.target),
+    );
   }
 
   /**
@@ -274,29 +329,33 @@ class Inputs {
   }
 
   /**
-   * @param {PointerEvent|TouchEvent|MouseEvent} ev
+   * @param {PointerEvent} ev
    * @returns {void}
    */
   _pointerup(ev) {
     this._muteevent(ev);
+    this._onpointerup(
+      ev.clientX,
+      ev.clientY,
+      ev.pointerId,
+      this._pointer_type(ev),
+      this._pointer_command(ev.target),
+    );
+  }
 
-    if (ev.changedTouches?.length) {
-      for (let i = 0; i < ev.changedTouches.length; i++) {
-        const x = ev.changedTouches[i].clientX;
-        const y = ev.changedTouches[i].clientY;
-        const touch_identifier = ev.changedTouches[i].identifier;
-        const command =
-          ev.target instanceof HTMLElement ? ev.target.id : null;
-        this._onpointerup(x, y, touch_identifier, 0, command);
-      }
-    } else {
-      const x = ev.clientX;
-      const y = ev.clientY;
-      const touch_identifier = 0xf;
-      const command =
-        ev.target instanceof HTMLElement ? ev.target.id : null;
-      this._onpointerup(x, y, touch_identifier, 1, command);
-    }
+  /**
+   * @param {PointerEvent} ev
+   * @returns {void}
+   */
+  _pointerrelease(ev) {
+    // 2026-06-29, Composer: lost capture and cancel release holds [inpptr1]
+    this._onpointerup(
+      ev.clientX,
+      ev.clientY,
+      ev.pointerId,
+      this._pointer_type(ev),
+      this._pointer_command(ev.target),
+    );
   }
 
   /**
@@ -327,33 +386,23 @@ class Inputs {
   }
 
   /**
-   * @param {PointerEvent|TouchEvent|MouseEvent} ev
+   * @param {PointerEvent} ev
    * @returns {void}
    */
   _pointermove(ev) {
     this._muteevent(ev);
-
-    if (ev.changedTouches?.length) {
-      for (let i = 0; i < ev.changedTouches.length; i++) {
-        const x = ev.changedTouches[i].clientX;
-        const y = ev.changedTouches[i].clientY;
-        const touch_identifier = ev.changedTouches[i].identifier;
-        const command =
-          ev.target instanceof HTMLElement ? ev.target.id : null;
-        this._onpointermove(x, y, touch_identifier, 0, command);
-      }
-    } else {
-      const x = ev.clientX;
-      const y = ev.clientY;
-      const touch_identifier = 0xf;
-      const command =
-        ev.target instanceof HTMLElement ? ev.target.id : null;
-      this._onpointermove(x, y, touch_identifier, 1, command);
-    }
+    this._onpointermove(
+      ev.clientX,
+      ev.clientY,
+      ev.pointerId,
+      this._pointer_type(ev),
+      this._pointer_command(ev.target),
+    );
   }
 }
 
 export default Inputs;
+// 2026-06-29, Composer: pointer events with capture and blur cancel [inpptr1]
 // 2026-06-14, Composer: stop unbinds listeners, dispose clears init [inpdev4]
 // 2026-06-14, Composer: defer canvas binding to init [inpdev3]
 // 2026-06-14, Composer: rename run to start on inputs ui [crn1]
