@@ -69,7 +69,7 @@ class Scene {
     // 2026-06-27, Composer: scene Howler audiosprite loader [scnau1]
     this.audio = new Audio();
     this._billboards = {};
-    /** @type {Record<string, import("../lib/Rapier3d.js").RigidBody[]>} */
+    /** @type {Record<string, import("@dimforge/rapier3d").RigidBody[]>} */
     this._body_pool = {};
     this._body_cache = {
       vec3: { x: 0, y: 0, z: 0 },
@@ -86,7 +86,7 @@ class Scene {
     this._collect_meshes_buf = [];
     /** @type {Set<string>} */
     this._collect_meshes_seen = new Set();
-    /** @type {Map<number, { joints: import("../lib/Rapier3d.js").ImpulseJoint[], childIndices: number[], childKeys: string[] }>} */
+    /** @type {Map<number, { joints: import("@dimforge/rapier3d").ImpulseJoint[], childIndices: number[], childKeys: string[] }>} */
     this._weld_joints = new Map();
     /** @type {Set<number>} */
     this._weld_spawned = new Set();
@@ -741,7 +741,7 @@ class Scene {
 
   /**
    * @param {import("@three.ez/instanced-mesh").InstancedEntity|THREE.Object3D|null} entity
-   * @param {import("../lib/Rapier3d.js").RigidBody} [body]
+   * @param {import("@dimforge/rapier3d").RigidBody} [body]
    * @returns {void}
    */
   delmodel(entity, body) {
@@ -772,7 +772,7 @@ class Scene {
 
   /**
    * @param {string} name bodies db key
-   * @returns {import("../lib/Rapier3d.js").RigidBody|null}
+   * @returns {import("@dimforge/rapier3d").RigidBody|null}
    */
   makebody(name) {
     // 2026-06-29, Composer: Rapier bodies recreated each makebody [scnrbd1]
@@ -786,7 +786,7 @@ class Scene {
 
   /**
    * @param {string} name bodies db key
-   * @param {import("../lib/Rapier3d.js").RigidBody} body
+   * @param {import("@dimforge/rapier3d").RigidBody} body
    * @returns {void}
    */
   delbody(name, body) {
@@ -797,7 +797,7 @@ class Scene {
   }
 
   /**
-   * @param {import("../lib/Rapier3d.js").RigidBody} body
+   * @param {import("@dimforge/rapier3d").RigidBody} body
    * @param {import("@three.ez/instanced-mesh").InstancedEntity} entity
    * @param {object} [opts]
    * @returns {void}
@@ -807,7 +807,7 @@ class Scene {
   }
 
   /**
-   * @param {import("../lib/Rapier3d.js").RigidBody} body
+   * @param {import("@dimforge/rapier3d").RigidBody} body
    * @param {number} x
    * @param {number} y
    * @param {number} z
@@ -819,7 +819,7 @@ class Scene {
   }
 
   /**
-   * @param {import("../lib/Rapier3d.js").RigidBody} body
+   * @param {import("@dimforge/rapier3d").RigidBody} body
    * @param {import("three").Quaternion} rotation
    * @returns {void}
    */
@@ -858,7 +858,7 @@ class Scene {
 
   /**
    * @param {number} index
-   * @returns {import("../lib/Rapier3d.js").RigidBody|null}
+   * @returns {import("@dimforge/rapier3d").RigidBody|null}
    */
   get_itembody(index) {
     const body_id = this._itembox.mempool.read_ui16(index, VAR_BODY_ID);
@@ -916,7 +916,7 @@ class Scene {
   }
 
   /**
-   * @param {import("../lib/Rapier3d.js").RigidBody} body
+   * @param {import("@dimforge/rapier3d").RigidBody} body
    * @param {THREE.Matrix4} worldMat
    * @returns {void}
    */
@@ -1093,7 +1093,7 @@ class Scene {
 
   /**
    * @param {string} name
-   * @returns {import("../lib/Rapier3d.js").RigidBody|null}
+   * @returns {import("@dimforge/rapier3d").RigidBody|null}
    */
   _create_body(name) {
     const bodyconf = this._db.get("bodies")?.getconfig(name);
@@ -1103,7 +1103,8 @@ class Scene {
     }
 
     const world = this._physics.world;
-    if (!world) {
+    // 2026-06-29, Composer: guard _create_body when Rapier not loaded [rphdyn1]
+    if (!RAPIER || !world) {
       return null;
     }
 
@@ -1161,7 +1162,7 @@ class Scene {
 
   /**
    * @param {Record<string, any>} bodyconf
-   * @param {import("../lib/Rapier3d.js").RigidBody} body
+   * @param {import("@dimforge/rapier3d").RigidBody} body
    * @returns {boolean}
    */
   _makebodyshape_bounds(bodyconf, body) {
@@ -1246,10 +1247,10 @@ class Scene {
   /**
    * @param {THREE.InstancedMesh} mesh
    * @param {number} index
-   * @param {import("../lib/Rapier3d.js").RigidBody} body
+   * @param {import("@dimforge/rapier3d").RigidBody} body
    * @param {Record<string, any>} bodyconf
    * @param {THREE.Matrix4} srcInv
-   * @returns {import("../lib/Rapier3d.js").Collider|null}
+   * @returns {import("@dimforge/rapier3d").Collider|null}
    */
   create_instanced_mesh_shape(mesh, index, body, bodyconf, srcInv) {
     if (!mesh.geometry.boundingBox) {
@@ -1267,10 +1268,10 @@ class Scene {
 
   /**
    * @param {THREE.Mesh} mesh
-   * @param {import("../lib/Rapier3d.js").RigidBody} body
+   * @param {import("@dimforge/rapier3d").RigidBody} body
    * @param {Record<string, any>} bodyconf
    * @param {THREE.Matrix4} srcInv
-   * @returns {import("../lib/Rapier3d.js").Collider|null}
+   * @returns {import("@dimforge/rapier3d").Collider|null}
    */
   create_mesh_shape(mesh, body, bodyconf, srcInv) {
     if (!mesh.geometry.boundingBox) {
@@ -1291,9 +1292,9 @@ class Scene {
   /**
    * @param {THREE.Box3} boundbox
    * @param {THREE.Matrix4} matrix
-   * @param {import("../lib/Rapier3d.js").RigidBody} body
+   * @param {import("@dimforge/rapier3d").RigidBody} body
    * @param {Record<string, any>} bodyconf
-   * @returns {import("../lib/Rapier3d.js").Collider|null}
+   * @returns {import("@dimforge/rapier3d").Collider|null}
    */
   create_shape(boundbox, matrix, body, bodyconf) {
     const size = boundbox.getSize(cache.vec3.v0);
@@ -1385,7 +1386,7 @@ class Scene {
   }
 
   /**
-   * @param {import("../lib/Rapier3d.js").RigidBody} body
+   * @param {import("@dimforge/rapier3d").RigidBody} body
    * @param {THREE.Matrix4} out
    * @returns {THREE.Matrix4|null}
    */
@@ -1446,7 +1447,7 @@ class Scene {
       return;
     }
 
-    /** @type {import("../lib/Rapier3d.js").ImpulseJoint[]} */
+    /** @type {import("@dimforge/rapier3d").ImpulseJoint[]} */
     const joints = [];
     /** @type {number[]} */
     const childIndices = [];
@@ -1656,3 +1657,4 @@ export default Scene;
 // 2026-06-28, Composer: recursive weld subtree sync from parent pose [scnwld6]
 // 2026-06-29, Composer: Rapier bodies recreated each makebody [scnrbd1]
 // 2026-06-29, Composer: scene bodies via RigidBodyDesc ColliderDesc [scnrbd2]
+// 2026-06-29, Composer: guard _create_body when Rapier not loaded [rphdyn1]

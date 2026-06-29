@@ -72,7 +72,7 @@ class App {
     // 2026-06-20, Composer: start boot preload l1 and core [appst1]
     this.active = true;
     await this.core.assets.preload(1);
-    await this.core.start();
+    this.core.start();
     this.play.splashscreen(true);
   }
 
@@ -81,8 +81,10 @@ class App {
    */
   async startplay() {
     // boot-launch step 10
-    // 2026-06-20, Composer: startplay preload l2 and attach flows [appsp1]
-    await this.core.assets.preload(2);
+    // 2026-06-29, Composer: defer Rapier WASM until startplay bootstrap [rphdyn1]
+    const rapierLoad = this.core.physics.ensureRapier();
+    await Promise.all([this.core.assets.preload(2), rapierLoad]);
+    await this.core.physics.bootstrap();
     // boot-launch step 11
     this.play.start();
     this.ready = true;
@@ -118,4 +120,4 @@ export default App;
 // 2026-06-20, Composer: start boot preload l1 and core [appst1]
 // 2026-06-20, Composer: startplay preload l2 and attach flows [appsp1]
 // 2026-06-20, Composer: boot launch playbook nested gateway [bootpb1]
-// 2026-06-29, Composer: await core.start for Rapier init [rphinit1]
+// 2026-06-29, Composer: defer Rapier WASM until startplay bootstrap [rphdyn1]

@@ -2,16 +2,31 @@
 // 2026-06-29, Composer: Rapier physics world owner and step loop [rph1]
 import * as THREE from "three";
 import { cache } from "../math.js";
-import RAPIER from "../lib/Rapier3d.js";
+// 2026-06-29, Composer: dynamic import rapier3d deferred to bootstrap [rphdyn1]
+/** @type {typeof import("@dimforge/rapier3d").default | null} */
+let RAPIER = null;
+/** @type {Promise<typeof import("@dimforge/rapier3d").default> | null} */
+let _rapierLoad = null;
+
+/**
+ * @returns {Promise<typeof import("@dimforge/rapier3d").default>}
+ */
+function ensureRapier() {
+	if (RAPIER) {
+		return Promise.resolve(RAPIER);
+	}
+	if (!_rapierLoad) {
+		_rapierLoad = import("@dimforge/rapier3d").then((mod) => {
+			RAPIER = mod.default;
+			return RAPIER;
+		});
+	}
+	return _rapierLoad;
+}
+
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
-
-const RigidBodyType = {
-	DYNAMIC: RAPIER.RigidBodyType.Dynamic,
-	STATIC: RAPIER.RigidBodyType.Fixed,
-	KINEMATIC: RAPIER.RigidBodyType.KinematicPositionBased,
-};
 
 const SOLVER_ITERATIONS = 10;
 const SOLVER_FRICTION_ITERATIONS = 5;
@@ -63,7 +78,7 @@ class RapierDebugDraw {
 	}
 
 	/**
-	 * @param {import("../lib/Rapier3d.js").DebugRenderBuffers} buffers
+	 * @param {import("@dimforge/rapier3d").DebugRenderBuffers} buffers
 	 * @returns {void}
 	 */
 	update(buffers) {
@@ -116,6 +131,9 @@ class PhysicsUtils {
 	 */
 	create_physics_box(pos, size, type, opts, color = 0xffffff) {
 		const body = this._physics.create_box(pos, size, type, opts);
+		if (!body) {
+			return 0;
+		}
 		const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
 		const material = new THREE.MeshStandardMaterial({ color });
 		const mesh = new THREE.Mesh(geometry, material);
@@ -135,6 +153,9 @@ class PhysicsUtils {
 	 */
 	create_physics_sphere(pos, radius, type, opts, color = 0xffffff) {
 		const body = this._physics.create_sphere(pos, radius, type, opts);
+		if (!body) {
+			return 0;
+		}
 		const geometry = opts?.icosphere
 			? new THREE.IcosahedronGeometry(radius)
 			: new THREE.SphereGeometry(radius);
@@ -156,6 +177,9 @@ class PhysicsUtils {
 	 */
 	create_physics_cylinder(pos, size, type, opts, color = 0xffffff) {
 		const body = this._physics.create_cylinder(pos, size, type, opts);
+		if (!body) {
+			return 0;
+		}
 		const geometry = new THREE.CylinderGeometry(
 			size.x,
 			size.x,
@@ -185,17 +209,17 @@ class Physics {
 		this.config = config;
 		this.tds = 1;
 		this._acc = 0;
-		/** @type {import("../lib/Rapier3d.js").World|null} */
+		/** @type {import("@dimforge/rapier3d").World|null} */
 		this.world = null;
-		/** @type {import("../lib/Rapier3d.js").EventQueue|null} */
+		/** @type {import("@dimforge/rapier3d").EventQueue|null} */
 		this.eventQueue = null;
 		/** @type {RapierDebugDraw|null} */
 		this.debug_draw = null;
-		/** @type {Object<string, import("../lib/Rapier3d.js").RigidBody>} */
+		/** @type {Object<string, import("@dimforge/rapier3d").RigidBody>} */
 		this.bodylist = {};
 		/** @type {Object<string, { itemIndex?: number|null }>} */
 		this.bodyMeta = {};
-		/** @type {Object<string, import("../lib/Rapier3d.js").Collider>} */
+		/** @type {Object<string, import("@dimforge/rapier3d").Collider>} */
 		this.colliderlist = {};
 		/** @type {Map<number, string>} */
 		this.colliderToGameId = new Map();
@@ -211,7 +235,7 @@ class Physics {
 			quat: { x: 0, y: 0, z: 0, w: 1 },
 		};
 		this.guids = 0;
-		/** @type {import("../lib/Rapier3d.js").ImpulseJoint[]} */
+		/** @type {import("@dimforge/rapier3d").ImpulseJoint[]} */
 		this._fixed_joints = [];
 		/** @type {((started: boolean, h1: number, h2: number) => void)|null} */
 		this._collision_handler = null;
@@ -225,13 +249,33 @@ class Physics {
 	}
 
 	/**
-	 * @returns {Promise<Physics>}
+	 * @returns {Physics}
 	 */
-	async start() {
-		// 2026-06-29, Composer: await RAPIER.init before world create [rphinit1]
-		await RAPIER.init();
+	// 2026-06-29, Composer: sync start empty until bootstrap loads Rapier [rphdyn1]
+	start() {
 		this.guids = 0;
 		this._acc = 0;
+		if (!this.utils) {
+			this.utils = new PhysicsUtils(this, this._render.scene);
+		}
+		this._startWorld();
+		return this;
+	}
+
+	/**
+	 * @returns {Promise<Physics>}
+	 */
+	async bootstrap() {
+		await ensureRapier();
+		this._startWorld();
+		return this;
+	}
+
+	/** @returns {void} */
+	_startWorld() {
+		if (!RAPIER || this.world) {
+			return;
+		}
 		this.world = new RAPIER.World({ x: 0, y: -9.8, z: 0 });
 		this.eventQueue = new RAPIER.EventQueue(false);
 		const ip = this.world.integrationParameters;
@@ -239,9 +283,14 @@ class Physics {
 		ip.numSolverIterations = SOLVER_ITERATIONS;
 		ip.numAdditionalFrictionIterations = SOLVER_FRICTION_ITERATIONS;
 		ip.normalizedAllowedLinearError = SOLVER_ALLOWED_LINEAR_ERROR;
-		this.utils = new PhysicsUtils(this, this._render.scene);
 		this.sync_debug_draw(this.config.debug);
-		return this;
+	}
+
+	/**
+	 * @returns {Promise<typeof import("@dimforge/rapier3d").default>}
+	 */
+	ensureRapier() {
+		return ensureRapier();
 	}
 
 	stop() {
@@ -278,12 +327,12 @@ class Physics {
 	}
 
 	/**
-	 * @param {import("../lib/Rapier3d.js").RigidBody} body
+	 * @param {import("@dimforge/rapier3d").RigidBody} body
 	 * @param {boolean} enabled
 	 * @returns {void}
 	 */
 	set_body_collision_events(body, enabled) {
-		if (!body?.isValid()) {
+		if (!RAPIER || !body?.isValid()) {
 			return;
 		}
 		// 2026-06-29, Composer: COLLISION_EVENTS on every body collider [rphct1]
@@ -398,8 +447,8 @@ class Physics {
 	}
 
 	/**
-	 * @param {import("../lib/Rapier3d.js").RigidBody} body
-	 * @param {import("../lib/Rapier3d.js").Collider} collider
+	 * @param {import("@dimforge/rapier3d").RigidBody} body
+	 * @param {import("@dimforge/rapier3d").Collider} collider
 	 * @param {{ itemIndex?: number|null }} [meta]
 	 * @param {boolean} [primary]
 	 * @returns {string|number}
@@ -431,7 +480,7 @@ class Physics {
 
 	/**
 	 * @param {string|number} gameId
-	 * @param {import("../lib/Rapier3d.js").Collider} collider
+	 * @param {import("@dimforge/rapier3d").Collider} collider
 	 * @param {boolean} [primary]
 	 * @returns {void}
 	 */
@@ -461,7 +510,7 @@ class Physics {
 	}
 
 	/**
-	 * @param {import("../lib/Rapier3d.js").RigidBody} body
+	 * @param {import("@dimforge/rapier3d").RigidBody} body
 	 * @returns {void}
 	 */
 	add_body(body) {
@@ -482,13 +531,16 @@ class Physics {
 	 * @param {number} type
 	 * @param {object} [opts]
 	 * @param {boolean} [add]
-	 * @returns {import("../lib/Rapier3d.js").RigidBody}
+	 * @returns {import("@dimforge/rapier3d").RigidBody}
 	 */
 	_create_rigid_body(pos, type, opts) {
+		if (!this.world || !RAPIER) {
+			return null;
+		}
 		const desc =
-			type === RigidBodyType.DYNAMIC
+			type === RAPIER.RigidBodyType.Dynamic
 				? RAPIER.RigidBodyDesc.dynamic()
-				: type === RigidBodyType.KINEMATIC
+				: type === RAPIER.RigidBodyType.KinematicPositionBased
 					? RAPIER.RigidBodyDesc.kinematicPositionBased()
 					: RAPIER.RigidBodyDesc.fixed();
 		if (pos) {
@@ -502,14 +554,17 @@ class Physics {
 
 	/**
 	 * @param {THREE.Vector3|null} pos
-	 * @param {import("../lib/Rapier3d.js").ColliderDesc} colDesc
+	 * @param {import("@dimforge/rapier3d").ColliderDesc} colDesc
 	 * @param {number} type
 	 * @param {object} [opts]
 	 * @param {boolean} [add]
-	 * @returns {import("../lib/Rapier3d.js").RigidBody}
+	 * @returns {import("@dimforge/rapier3d").RigidBody}
 	 */
 	create_body_with_desc(pos, colDesc, type, opts, add = true) {
 		const body = this._create_rigid_body(pos, type, opts);
+		if (!body) {
+			return null;
+		}
 		const collider = this.world.createCollider(colDesc, body);
 		if (add) {
 			this.register_body(body, collider, { itemIndex: null }, true);
@@ -525,6 +580,9 @@ class Physics {
 	 * @param {boolean} [add]
 	 */
 	create_box(pos, size, type, opts, add = true) {
+		if (!RAPIER) {
+			return null;
+		}
 		const colDesc = RAPIER.ColliderDesc.cuboid(
 			size.x * 0.5,
 			size.y * 0.5,
@@ -541,6 +599,9 @@ class Physics {
 	}
 
 	create_sphere(pos, radius, type, opts, add = true) {
+		if (!RAPIER) {
+			return null;
+		}
 		const colDesc = RAPIER.ColliderDesc.ball(radius)
 			.setDensity(opts?.density ?? 1)
 			.setFriction(opts?.friction ?? 1)
@@ -549,6 +610,9 @@ class Physics {
 	}
 
 	create_cylinder(pos, size, type, opts, add = true) {
+		if (!RAPIER) {
+			return null;
+		}
 		const colDesc = RAPIER.ColliderDesc.cylinder(size.y * 0.5, size.x)
 			.setDensity(opts?.density ?? 1)
 			.setFriction(opts?.friction ?? 1)
@@ -557,7 +621,7 @@ class Physics {
 	}
 
 	/**
-	 * @param {import("../lib/Rapier3d.js").RigidBody} body
+	 * @param {import("@dimforge/rapier3d").RigidBody} body
 	 * @param {THREE.Object3D} mesh
 	 * @param {object} [opts]
 	 */
@@ -574,7 +638,7 @@ class Physics {
 	}
 
 	/**
-	 * @param {import("../lib/Rapier3d.js").RigidBody} body
+	 * @param {import("@dimforge/rapier3d").RigidBody} body
 	 * @param {number} x
 	 * @param {number} y
 	 * @param {number} z
@@ -587,7 +651,7 @@ class Physics {
 	}
 
 	/**
-	 * @param {import("../lib/Rapier3d.js").RigidBody} body
+	 * @param {import("@dimforge/rapier3d").RigidBody} body
 	 * @param {import("three").Quaternion} rotation
 	 */
 	setBodyRotation(body, rotation) {
@@ -600,13 +664,13 @@ class Physics {
 	}
 
 	/**
-	 * @param {import("../lib/Rapier3d.js").RigidBody} bodyA
-	 * @param {import("../lib/Rapier3d.js").RigidBody} bodyB
+	 * @param {import("@dimforge/rapier3d").RigidBody} bodyA
+	 * @param {import("@dimforge/rapier3d").RigidBody} bodyB
 	 * @param {{ x: number, y: number, z: number }} anchorWorld
-	 * @returns {import("../lib/Rapier3d.js").ImpulseJoint|null}
+	 * @returns {import("@dimforge/rapier3d").ImpulseJoint|null}
 	 */
 	create_fixed_joint(bodyA, bodyB, anchorWorld) {
-		if (!this.world || !bodyA || !bodyB) {
+		if (!RAPIER || !this.world || !bodyA || !bodyB) {
 			return null;
 		}
 		const posA = bodyA.translation();
@@ -630,7 +694,7 @@ class Physics {
 	}
 
 	/**
-	 * @param {import("../lib/Rapier3d.js").ImpulseJoint} joint
+	 * @param {import("@dimforge/rapier3d").ImpulseJoint} joint
 	 * @returns {void}
 	 */
 	remove_joint(joint) {
@@ -647,7 +711,7 @@ class Physics {
 	}
 
 	/**
-	 * @param {import("../lib/Rapier3d.js").RigidBody} body
+	 * @param {import("@dimforge/rapier3d").RigidBody} body
 	 */
 	remove(body) {
 		if (!body || !this.world) {
@@ -698,10 +762,11 @@ class Physics {
 }
 
 export default Physics;
-export { Physics, RapierDebugDraw as DebugDraw, PhysicsUtils, RigidBodyType, RAPIER };
+export { Physics, RapierDebugDraw as DebugDraw, PhysicsUtils, RAPIER, ensureRapier };
 // 2026-06-29, Composer: Rapier physics world owner and step loop [rph1]
-// 2026-06-29, Composer: await RAPIER.init before world create [rphinit1]
 // 2026-06-29, Composer: fixed substep accumulator drain rdt [rphstep1]
 // 2026-06-29, Composer: resetForces once after substep batch [rphclr1]
 // 2026-06-29, Composer: Rapier debugRender line segments [rphdb1]
 // 2026-06-29, Composer: COLLISION_EVENTS on every body collider [rphct1]
+// 2026-06-29, Composer: sync start empty until bootstrap loads Rapier [rphdyn1]
+// 2026-06-29, Composer: dynamic import rapier3d deferred to bootstrap [rphdyn1]

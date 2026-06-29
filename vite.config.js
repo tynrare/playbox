@@ -3,6 +3,8 @@ import { defineConfig } from "vite";
 import plugin_pug from "vite-plugin-pug";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import legacy from "@vitejs/plugin-legacy";
+import topLevelAwait from "vite-plugin-top-level-await";
+import wasm from "vite-plugin-wasm";
 import { soundBundlePlugin } from "./scripts/vite-plugin-sound-bundle.mjs";
 
 /** @type {import('vite').UserConfig} */
@@ -11,6 +13,9 @@ export default defineConfig({
   base: "./",
   plugins: [
     //basicSsl(),
+    // 2026-06-29, Composer: vite wasm plugins for rapier3d [rphwasm1]
+    wasm(),
+    topLevelAwait(),
     // 2026-06-27, Composer: dev/res/sound → res/sound audiosprite bundle [pbxvc1]
     soundBundlePlugin({ soundRoot: path.resolve("dev/res/sound") }),
     // 2026-06-14, Composer: rename pureplay to playbox [r7n2p4]
@@ -46,6 +51,11 @@ export default defineConfig({
     },
   },
   devtools: false,
+  // 2026-06-29, Composer: skip prebundle for Rapier WASM [rphwasm1]
+  optimizeDeps: {
+    exclude: ["@dimforge/rapier3d"],
+  },
+  assetsInclude: ["**/*.wasm"],
   // 2026-06-14, Composer: vitest node env for toybox stress tests [tbxst1]
   test: {
     environment: "node",
@@ -55,3 +65,4 @@ export default defineConfig({
 // 2026-06-14, Composer: rename pureplay to playbox [r7n2p4]
 // 2026-06-14, Composer: vitest node env for toybox stress tests [tbxst1]
 // 2026-06-27, Composer: dev/res/sound → res/sound audiosprite bundle [pbxvc1]
+// 2026-06-29, Composer: vite wasm plugins for rapier3d [rphwasm1]

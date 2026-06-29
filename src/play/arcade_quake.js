@@ -27,17 +27,17 @@ const _normal = { x: 0, y: 0, z: 0 };
 const _pos = { x: 0, y: 0, z: 0 };
 const _rotPt = { x: 0, y: 0, z: 0 };
 const CONTACT_PREDICTION = 0.1;
-/** @type {Set<import("../lib/Rapier3d.js").RigidBody>} */
+/** @type {Set<import("@dimforge/rapier3d").RigidBody>} */
 const _queryBodies = new Set();
-/** @type {Set<import("../lib/Rapier3d.js").RigidBody>} */
+/** @type {Set<import("@dimforge/rapier3d").RigidBody>} */
 const _surfaceTouch = new Set();
-/** @type {Map<import("../lib/Rapier3d.js").RigidBody, number>} */
+/** @type {Map<import("@dimforge/rapier3d").RigidBody, number>} */
 const _seeds = new Map();
-/** @type {Map<import("../lib/Rapier3d.js").RigidBody, number>} */
+/** @type {Map<import("@dimforge/rapier3d").RigidBody, number>} */
 const _chainTargets = new Map();
-/** @type {Set<import("../lib/Rapier3d.js").RigidBody>} */
+/** @type {Set<import("@dimforge/rapier3d").RigidBody>} */
 const _chainNeighbors = new Set();
-/** @type {{ body: import("../lib/Rapier3d.js").RigidBody, mult: number }[]} */
+/** @type {{ body: import("@dimforge/rapier3d").RigidBody, mult: number }[]} */
 const _chainQueue = [];
 
 /**
@@ -66,7 +66,7 @@ function quakeMassMult(quakerMass, targetMass) {
 }
 
 /**
- * @param {import("../lib/Rapier3d.js").World} world
+ * @param {import("@dimforge/rapier3d").World} world
  * @param {number} collider1
  * @param {number} collider2
  * @returns {number}
@@ -104,11 +104,11 @@ export function contactApproachSpeed(world, collider1, collider2) {
 }
 
 /**
- * @param {import("../lib/Rapier3d.js").World} world
+ * @param {import("@dimforge/rapier3d").World} world
  * @param {number} collider1
  * @param {number} collider2
- * @param {import("../lib/Rapier3d.js").RigidBody} weightBody
- * @returns {import("../lib/Rapier3d.js").RigidBody|null}
+ * @param {import("@dimforge/rapier3d").RigidBody} weightBody
+ * @returns {import("@dimforge/rapier3d").RigidBody|null}
  */
 function resolveSurfaceBody(world, collider1, collider2, weightBody) {
 	const c1 = world.getCollider(collider1);
@@ -141,7 +141,7 @@ function quatRotateVec(q, v, out) {
 }
 
 /**
- * @param {import("../lib/Rapier3d.js").Collider} collider
+ * @param {import("@dimforge/rapier3d").Collider} collider
  * @param {{ x: number, y: number, z: number }} local
  * @param {{ x: number, y: number, z: number }} out
  * @returns {void}
@@ -156,9 +156,9 @@ function localPointToWorld(collider, local, out) {
 }
 
 /**
- * @param {import("../lib/Rapier3d.js").World} world
- * @param {import("../lib/Rapier3d.js").Collider} c1
- * @param {import("../lib/Rapier3d.js").Collider} c2
+ * @param {import("@dimforge/rapier3d").World} world
+ * @param {import("@dimforge/rapier3d").Collider} c1
+ * @param {import("@dimforge/rapier3d").Collider} c2
  * @param {{ x: number, y: number, z: number }} out
  * @returns {number}
  */
@@ -193,9 +193,9 @@ function accumulateContactPairPoints(world, c1, c2, out) {
 }
 
 /**
- * @param {import("../lib/Rapier3d.js").World} world
- * @param {import("../lib/Rapier3d.js").RigidBody} weightBody
- * @param {import("../lib/Rapier3d.js").RigidBody} surfaceBody
+ * @param {import("@dimforge/rapier3d").World} world
+ * @param {import("@dimforge/rapier3d").RigidBody} weightBody
+ * @param {import("@dimforge/rapier3d").RigidBody} surfaceBody
  * @param {{ x: number, y: number, z: number }} out
  * @returns {void}
  */
@@ -239,9 +239,9 @@ function collectImpactPoint(world, weightBody, surfaceBody, out) {
 }
 
 /**
- * @param {import("../lib/Rapier3d.js").World} world
- * @param {import("../lib/Rapier3d.js").Collider} surfaceCollider
- * @param {Set<import("../lib/Rapier3d.js").RigidBody>} out
+ * @param {import("@dimforge/rapier3d").World} world
+ * @param {import("@dimforge/rapier3d").Collider} surfaceCollider
+ * @param {Set<import("@dimforge/rapier3d").RigidBody>} out
  * @returns {void}
  */
 function collectSurfaceTouch(world, surfaceCollider, out) {
@@ -255,11 +255,11 @@ function collectSurfaceTouch(world, surfaceCollider, out) {
 }
 
 /**
- * @param {import("../lib/Rapier3d.js").World} world
- * @param {import("../lib/Rapier3d.js").RigidBody} body
- * @param {import("../lib/Rapier3d.js").RigidBody} skipWeight
- * @param {import("../lib/Rapier3d.js").RigidBody} skipSurface
- * @param {Set<import("../lib/Rapier3d.js").RigidBody>} out
+ * @param {import("@dimforge/rapier3d").World} world
+ * @param {import("@dimforge/rapier3d").RigidBody} body
+ * @param {import("@dimforge/rapier3d").RigidBody} skipWeight
+ * @param {import("@dimforge/rapier3d").RigidBody} skipSurface
+ * @param {Set<import("@dimforge/rapier3d").RigidBody>} out
  * @returns {void}
  */
 function collectTouchingDynamics(world, body, skipWeight, skipSurface, out) {
@@ -280,11 +280,11 @@ function collectTouchingDynamics(world, body, skipWeight, skipSurface, out) {
 }
 
 /**
- * @param {import("../lib/Rapier3d.js").World} world
- * @param {import("../lib/Rapier3d.js").RigidBody} weightBody
- * @param {import("../lib/Rapier3d.js").RigidBody} surfaceBody
- * @param {Map<import("../lib/Rapier3d.js").RigidBody, number>} seeds
- * @returns {Map<import("../lib/Rapier3d.js").RigidBody, number>}
+ * @param {import("@dimforge/rapier3d").World} world
+ * @param {import("@dimforge/rapier3d").RigidBody} weightBody
+ * @param {import("@dimforge/rapier3d").RigidBody} surfaceBody
+ * @param {Map<import("@dimforge/rapier3d").RigidBody, number>} seeds
+ * @returns {Map<import("@dimforge/rapier3d").RigidBody, number>}
  */
 function buildChainTargets(world, weightBody, surfaceBody, seeds) {
 	_chainTargets.clear();
@@ -325,7 +325,7 @@ function buildChainTargets(world, weightBody, surfaceBody, seeds) {
 }
 
 /**
- * @param {import("../lib/Rapier3d.js").RigidBody} body
+ * @param {import("@dimforge/rapier3d").RigidBody} body
  * @param {number} quakerMass
  * @param {number} falloff
  * @param {number} speedScale
@@ -380,10 +380,10 @@ function applyQuakeShake(
 }
 
 /**
- * @param {import("../lib/Rapier3d.js").World} world
+ * @param {import("@dimforge/rapier3d").World} world
  * @param {number} collider1
  * @param {number} collider2
- * @param {import("../lib/Rapier3d.js").RigidBody} weightBody
+ * @param {import("@dimforge/rapier3d").RigidBody} weightBody
  * @returns {void}
  */
 // 2026-06-29, Composer: quake via Rapier AABB and contactPairsWith [plqke1]

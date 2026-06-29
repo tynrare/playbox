@@ -11,12 +11,10 @@
     "build": "vite build",
     "doc": "jsdoc src -d dist/docs -R README.md",
     "build-n-doc": "npm run build && (npm run doc || true)",
-    "rapier:vendor": "node scripts/vendor-rapier.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
-    "@dimforge/rapier3d-compat": "^0.17.3",
     "@vitejs/devtools": "^0.1.13",
     "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-legacy": "^8.0.1",
@@ -26,9 +24,12 @@
     "less": "^4.6.4",
     "vite": "^8.0.7",
     "vite-plugin-pug": "^0.4.1",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.5.0",
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@dimforge/rapier3d": "^0.17.3",
     "@three.ez/instanced-mesh": "^0.3.15",
     "howler": "^2.2.4",
     "postprocessing": "^6.38.0",

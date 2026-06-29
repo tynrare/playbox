@@ -54,7 +54,7 @@ class ArcadeBox {
 	 * @returns {this}
 	 */
 	init() {
-		/** @type {import("../lib/Rapier3d.js").RigidBody[]} */
+		/** @type {import("@dimforge/rapier3d").RigidBody[]} */
 		this._walls = [];
 		/** @type {number|null} */
 		this._equalizer_id = null;
@@ -91,7 +91,7 @@ class ArcadeBox {
 	}
 
 	/**
-	 * @returns {import("../lib/Rapier3d.js").RigidBody}
+	 * @returns {import("@dimforge/rapier3d").RigidBody}
 	 */
 	_make_wall_body() {
 		// 2026-06-29, Composer: Rapier fixed wall cuboid collider [plbox1]

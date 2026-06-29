@@ -86,7 +86,23 @@ async function main() {
 }
 
 window.main = main;
+
+function boot() {
+	// 2026-06-29, Composer: boot after module load not DOMContentLoaded race [idxbt1]
+	document.body.classList.add("active");
+	void main().catch((err) => {
+		logger.error(err);
+		setPreloadMessage(String(err?.message ?? err));
+	});
+}
+
+if (document.readyState === "loading") {
+	document.addEventListener("DOMContentLoaded", boot);
+} else {
+	boot();
+}
 // 2026-06-14, Composer: import app from src/core [f6b8d2]
 // 2026-06-18, Composer: a_legacy loop lerp dt step dt rdt [idxlp1]
 // 2026-06-20, Composer: boot launch playbook gateway index [bootpb1]
 // 2026-06-20, Composer: one step draws ui_loading before preload hide [idxdr1]
+// 2026-06-29, Composer: boot after module load not DOMContentLoaded race [idxbt1]

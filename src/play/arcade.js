@@ -223,7 +223,7 @@ class Arcade {
 
 	/**
 	 * @param {number} weightToyIndex
-	 * @returns {import("../lib/Rapier3d.js").RigidBody|null}
+	 * @returns {import("@dimforge/rapier3d").RigidBody|null}
 	 */
 	_weight_body(weightToyIndex) {
 		const item_index = this._core.toybox.get_item_index(weightToyIndex);

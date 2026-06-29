@@ -36,7 +36,7 @@ class ContactRouter {
 
 	/**
 	 * @param {number} toyIndex
-	 * @returns {import("../lib/Rapier3d.js").RigidBody|null}
+	 * @returns {import("@dimforge/rapier3d").RigidBody|null}
 	 */
 	_body_for_toy(toyIndex) {
 		const item_index = this._toybox.get_item_index(toyIndex);

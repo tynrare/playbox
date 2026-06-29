@@ -104,14 +104,14 @@ class Core {
   /**
    * @returns {Promise<void>}
    */
-  async start() {
+  start() {
     this.render.start();
     this.assets.start();
     this.draw.start();
     // 2026-06-14, Composer: scene environment floor lights csm [scnenv1]
     this.scene.start();
     // 2026-06-29, Composer: await Rapier init in physics.start [rphinit1]
-    await this.physics.start();
+    this.physics.start();
     // 2026-06-17, Composer: itembox toybox alloc moved to init [crcyc5]
     this.inputs?.start();
     this.ui?.start();
