@@ -188,10 +188,26 @@ class Inputs {
 
   /**
    * @param {EventTarget|null} target
+   * @returns {Element|null}
+   */
+  _resolve_event_element(target) {
+    // 2026-06-29, Composer: guard non-Element pointer targets [inpptr2]
+    if (target instanceof Element) {
+      return target;
+    }
+    if (target instanceof Text) {
+      return target.parentElement;
+    }
+    return null;
+  }
+
+  /**
+   * @param {EventTarget|null} target
    * @returns {string|null}
    */
   _pointer_command(target) {
-    return target instanceof HTMLElement ? target.id : null;
+    const el = this._resolve_event_element(target);
+    return el instanceof HTMLElement ? el.id : null;
   }
 
   /**
@@ -199,12 +215,7 @@ class Inputs {
    * @returns {boolean}
    */
   _allowsDefaultPointerBehavior(target) {
-    const el =
-      target instanceof Element
-        ? target
-        : target instanceof Text
-          ? target.parentElement
-          : null;
+    const el = this._resolve_event_element(target);
     if (!el) {
       return false;
     }
@@ -217,7 +228,7 @@ class Inputs {
     ) {
       return true;
     }
-    if (el.closest("a[href]")) {
+    if (typeof el.closest === "function" && el.closest("a[href]")) {
       return true;
     }
     if (el instanceof HTMLElement && el.isContentEditable) {
@@ -234,7 +245,7 @@ class Inputs {
     if (this._allowsDefaultPointerBehavior(ev.target)) {
       return;
     }
-    const target = ev.target;
+    const target = this._resolve_event_element(ev.target);
     if (
       target instanceof HTMLElement &&
       !target.getAttribute("href") &&
@@ -242,6 +253,17 @@ class Inputs {
     ) {
       ev.preventDefault();
     }
+    ev.stopPropagation();
+    ev.stopImmediatePropagation();
+  }
+
+  /**
+   * @param {PointerEvent} ev
+   * @returns {void}
+   */
+  _stopevent(ev) {
+    // 2026-06-29, Composer: stop cancel capture bubbling to document [inpptr2]
+    ev.stopPropagation();
     ev.stopImmediatePropagation();
   }
 
@@ -349,6 +371,7 @@ class Inputs {
    */
   _pointerrelease(ev) {
     // 2026-06-29, Composer: lost capture and cancel release holds [inpptr1]
+    this._stopevent(ev);
     this._onpointerup(
       ev.clientX,
       ev.clientY,
@@ -402,6 +425,7 @@ class Inputs {
 }
 
 export default Inputs;
+// 2026-06-29, Composer: guard non-Element pointer targets [inpptr2]
 // 2026-06-29, Composer: pointer events with capture and blur cancel [inpptr1]
 // 2026-06-14, Composer: stop unbinds listeners, dispose clears init [inpdev4]
 // 2026-06-14, Composer: defer canvas binding to init [inpdev3]
