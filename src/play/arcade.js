@@ -70,7 +70,17 @@ class Arcade {
 
 	/** @returns {void} */
 	start() {
-		// 2026-06-27, Composer: arcade immediate spawn direct position on start [plarc6]
+		// 2026-06-27, Composer: arcade scene.contact handler owns collisions [plcnt3]
+		// 2026-06-29, Composer: register contact listener before toy spawn [plcnt4]
+		this._scene_contact_id = this._core.eventsbus.on(
+			"scene.contact",
+			this._on_scene_contact.bind(this),
+		);
+		this._pick_id = this._core.eventsbus.on(
+			"arcade.pick",
+			this._on_arcade_pick.bind(this),
+		);
+
 		this._core.scene.environment.floorstyle("floor", 0xffffff);
 		this._core.scene.environment.shadowstyle(0x0, 0.5);
 
@@ -126,16 +136,6 @@ class Arcade {
 			this._core.scene.set_itemposition(item_index, -2, ARCADER_Y, 0);
 		}
 
-		// 2026-06-27, Composer: arcade scene.contact handler owns collisions [plcnt3]
-		this._scene_contact_id = this._core.eventsbus.on(
-			"scene.contact",
-			this._on_scene_contact.bind(this),
-		);
-		// 2026-06-28, Composer: arcade.pick resolves item and toy db ids [plinp3]
-		this._pick_id = this._core.eventsbus.on(
-			"arcade.pick",
-			this._on_arcade_pick.bind(this),
-		);
 		this._grab.start();
 		this._inputs.start();
 		this._sound.start();
@@ -306,6 +306,7 @@ export default Arcade;
 // 2026-06-27, Composer: arcade immediate spawn direct position on start [plarc6]
 // 2026-06-27, Composer: arcade spawn weight_a at center [plwgt1]
 // 2026-06-27, Composer: arcade scene.contact handler owns collisions [plcnt3]
+// 2026-06-29, Composer: register contact listener before toy spawn [plcnt4]
 // 2026-06-27, Composer: register coin y passed from spawn loop [plreg1]
 // 2026-06-27, Composer: weight drop quake delegated to arcade_quake [plqke2]
 // 2026-06-27, Composer: arcade spawn arcader_a assembly with welded button [plarc7]

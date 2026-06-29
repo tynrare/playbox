@@ -1,6 +1,5 @@
 /** @namespace ty */
 // 2026-06-29, Composer: ContactRouter EventQueue collision drain [ctrt1]
-import { RAPIER } from "../core/physics.js";
 import { VAR_BODY_ID, VAR_TOY_INDEX, TOY_INDEX_INVALID } from "./itembox.js";
 
 export const CONTACT_PHASE_BEGIN = 1;
@@ -37,18 +36,27 @@ class ContactRouter {
 
 	/**
 	 * @param {number} toyIndex
+	 * @returns {import("../lib/Rapier3d.js").RigidBody|null}
+	 */
+	_body_for_toy(toyIndex) {
+		const item_index = this._toybox.get_item_index(toyIndex);
+		const body_id = this._itembox.mempool.read_ui16(item_index, VAR_BODY_ID);
+		return this._physics.bodylist[body_id] ?? null;
+	}
+
+	/**
+	 * @param {number} toyIndex
 	 * @returns {void}
 	 */
 	watch(toyIndex) {
-		const item_index = this._toybox.get_item_index(toyIndex);
-		const body_id = this._itembox.mempool.read_ui16(item_index, VAR_BODY_ID);
-		const collider = this._physics.colliderlist[body_id];
-		if (!collider) {
+		const body = this._body_for_toy(toyIndex);
+		if (!body) {
 			return;
 		}
 
 		this._watched.add(toyIndex);
-		collider.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+		// 2026-06-29, Composer: bounds bodies need events on all colliders [ctrt2]
+		this._physics.set_body_collision_events(body, true);
 	}
 
 	/**
@@ -56,11 +64,9 @@ class ContactRouter {
 	 * @returns {void}
 	 */
 	unwatch(toyIndex) {
-		const item_index = this._toybox.get_item_index(toyIndex);
-		const body_id = this._itembox.mempool.read_ui16(item_index, VAR_BODY_ID);
-		const collider = this._physics.colliderlist[body_id];
-		if (collider) {
-			collider.setActiveEvents(RAPIER.ActiveEvents.NONE);
+		const body = this._body_for_toy(toyIndex);
+		if (body) {
+			this._physics.set_body_collision_events(body, false);
 		}
 		this._watched.delete(toyIndex);
 	}
@@ -141,3 +147,4 @@ class ContactRouter {
 
 export default ContactRouter;
 // 2026-06-29, Composer: ContactRouter EventQueue collision drain [ctrt1]
+// 2026-06-29, Composer: bounds bodies need events on all colliders [ctrt2]

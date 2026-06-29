@@ -25,6 +25,8 @@ const _impulse = { x: 0, y: 0, z: 0 };
 const _angImpulse = { x: 0, y: 0, z: 0 };
 const _normal = { x: 0, y: 0, z: 0 };
 const _pos = { x: 0, y: 0, z: 0 };
+const _rotPt = { x: 0, y: 0, z: 0 };
+const CONTACT_PREDICTION = 0.1;
 /** @type {Set<import("../lib/Rapier3d.js").RigidBody>} */
 const _queryBodies = new Set();
 /** @type {Set<import("../lib/Rapier3d.js").RigidBody>} */
@@ -70,7 +72,6 @@ function quakeMassMult(quakerMass, targetMass) {
  * @returns {number}
  */
 export function contactApproachSpeed(world, collider1, collider2) {
-	let approach = 0;
 	const c1 = world.getCollider(collider1);
 	const c2 = world.getCollider(collider2);
 	if (!c1 || !c2) {
@@ -81,17 +82,25 @@ export function contactApproachSpeed(world, collider1, collider2) {
 	if (!b1 || !b2) {
 		return 0;
 	}
+	const v1 = b1.linvel();
+	const v2 = b2.linvel();
+	let approach = 0;
 	world.contactPair(c1, c2, (manifold) => {
 		const n = manifold.normal();
-		const v1 = b1.linvel();
-		const v2 = b2.linvel();
 		const relN =
 			(v1.x - v2.x) * n.x +
 			(v1.y - v2.y) * n.y +
 			(v1.z - v2.z) * n.z;
 		approach = Math.max(approach, Math.max(0, -relN));
 	});
-	return approach;
+	if (approach > 0) {
+		return approach;
+	}
+	// 2026-06-29, Composer: post-solver fallback relative speed for sfx [plqke2]
+	const dx = v1.x - v2.x;
+	const dy = v1.y - v2.y;
+	const dz = v1.z - v2.z;
+	return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
 /**
@@ -116,50 +125,117 @@ function resolveSurfaceBody(world, collider1, collider2, weightBody) {
 }
 
 /**
- * @param {import("../lib/Rapier3d.js").World} world
- * @param {number} collider1
- * @param {number} collider2
- * @param {import("../lib/Rapier3d.js").RigidBody} weightBody
+ * @param {{ x: number, y: number, z: number, w: number }} q
+ * @param {{ x: number, y: number, z: number }} v
  * @param {{ x: number, y: number, z: number }} out
  * @returns {void}
  */
-function collectImpactPoint(world, collider1, collider2, weightBody, out) {
-	const c1 = world.getCollider(collider1);
-	const c2 = world.getCollider(collider2);
-	if (!c1 || !c2) {
-		const p = weightBody.translation();
-		out.x = p.x;
-		out.y = p.y;
-		out.z = p.z;
-		return;
-	}
+function quatRotateVec(q, v, out) {
+	const ix = q.w * v.x + q.y * v.z - q.z * v.y;
+	const iy = q.w * v.y + q.z * v.x - q.x * v.z;
+	const iz = q.w * v.z + q.x * v.y - q.y * v.x;
+	const iw = -q.x * v.x - q.y * v.y - q.z * v.z;
+	out.x = ix * q.w + iw * -q.x + iy * -q.z - iz * -q.y;
+	out.y = iy * q.w + iw * -q.y + iz * -q.x - ix * -q.z;
+	out.z = iz * q.w + iw * -q.z + ix * -q.y - iy * -q.x;
+}
+
+/**
+ * @param {import("../lib/Rapier3d.js").Collider} collider
+ * @param {{ x: number, y: number, z: number }} local
+ * @param {{ x: number, y: number, z: number }} out
+ * @returns {void}
+ */
+function localPointToWorld(collider, local, out) {
+	const t = collider.translation();
+	const r = collider.rotation();
+	quatRotateVec(r, local, out);
+	out.x += t.x;
+	out.y += t.y;
+	out.z += t.z;
+}
+
+/**
+ * @param {import("../lib/Rapier3d.js").World} world
+ * @param {import("../lib/Rapier3d.js").Collider} c1
+ * @param {import("../lib/Rapier3d.js").Collider} c2
+ * @param {{ x: number, y: number, z: number }} out
+ * @returns {number}
+ */
+function accumulateContactPairPoints(world, c1, c2, out) {
 	let count = 0;
 	world.contactPair(c1, c2, (manifold, flipped) => {
-		const n = manifold.numSolverContacts();
-		for (let i = 0; i < n; i++) {
+		const nSolver = manifold.numSolverContacts();
+		for (let i = 0; i < nSolver; i++) {
 			const pt = manifold.solverContactPoint(i);
-			if (flipped) {
-				out.x += pt.x;
-				out.y += pt.y;
-				out.z += pt.z;
-			} else {
-				out.x += pt.x;
-				out.y += pt.y;
-				out.z += pt.z;
-			}
+			out.x += pt.x;
+			out.y += pt.y;
+			out.z += pt.z;
+			count++;
+		}
+		if (nSolver > 0) {
+			return;
+		}
+		const col = flipped ? c2 : c1;
+		const nGeom = manifold.numContacts();
+		for (let i = 0; i < nGeom; i++) {
+			const local = flipped
+				? manifold.localContactPoint2(i)
+				: manifold.localContactPoint1(i);
+			localPointToWorld(col, local, _rotPt);
+			out.x += _rotPt.x;
+			out.y += _rotPt.y;
+			out.z += _rotPt.z;
 			count++;
 		}
 	});
+	return count;
+}
+
+/**
+ * @param {import("../lib/Rapier3d.js").World} world
+ * @param {import("../lib/Rapier3d.js").RigidBody} weightBody
+ * @param {import("../lib/Rapier3d.js").RigidBody} surfaceBody
+ * @param {{ x: number, y: number, z: number }} out
+ * @returns {void}
+ */
+// 2026-06-29, Composer: impact from weight-surface world contacts only [plqke3]
+function collectImpactPoint(world, weightBody, surfaceBody, out) {
+	out.x = 0;
+	out.y = 0;
+	out.z = 0;
+	let count = 0;
+
+	const nWeight = weightBody.numColliders();
+	const nSurface = surfaceBody.numColliders();
+	for (let wi = 0; wi < nWeight; wi++) {
+		const wc = weightBody.collider(wi);
+		for (let si = 0; si < nSurface; si++) {
+			const sc = surfaceBody.collider(si);
+			const hit = wc.contactCollider(sc, CONTACT_PREDICTION);
+			if (hit) {
+				out.x += (hit.point1.x + hit.point2.x) * 0.5;
+				out.y += (hit.point1.y + hit.point2.y) * 0.5;
+				out.z += (hit.point1.z + hit.point2.z) * 0.5;
+				count++;
+				continue;
+			}
+			count += accumulateContactPairPoints(world, wc, sc, out);
+		}
+	}
+
 	if (count > 0) {
 		out.x /= count;
 		out.y /= count;
 		out.z /= count;
 		return;
 	}
-	const p = weightBody.translation();
-	out.x = p.x;
-	out.y = p.y;
-	out.z = p.z;
+
+	const wp = weightBody.translation();
+	const sp = surfaceBody.translation();
+	out.x = wp.x;
+	out.z = wp.z;
+	out.y = surfaceBody.isFixed() ? sp.y : wp.y;
 }
 
 /**
@@ -330,7 +406,7 @@ export function quake(world, collider1, collider2, weightBody) {
 	const J = speed * quakerMass * QUAKE_GAIN;
 	const radius = clamp(J * QUAKE_RADIUS_SCALE, QUAKE_RADIUS_MIN, QUAKE_RADIUS_MAX);
 
-	collectImpactPoint(world, collider1, collider2, weightBody, _impact);
+	collectImpactPoint(world, weightBody, surfaceBody, _impact);
 
 	_aabbCenter.x = _impact.x;
 	_aabbCenter.y = _impact.y + (QUAKE_AABB_Y_ABOVE - QUAKE_AABB_Y_BELOW) * 0.5;
@@ -425,3 +501,5 @@ export function quake(world, collider1, collider2, weightBody) {
 }
 
 // 2026-06-29, Composer: quake via Rapier AABB and contactPairsWith [plqke1]
+// 2026-06-29, Composer: post-solver fallback relative speed for sfx [plqke2]
+// 2026-06-29, Composer: impact from weight-surface world contacts only [plqke3]

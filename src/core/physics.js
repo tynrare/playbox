@@ -278,6 +278,24 @@ class Physics {
 	}
 
 	/**
+	 * @param {import("../lib/Rapier3d.js").RigidBody} body
+	 * @param {boolean} enabled
+	 * @returns {void}
+	 */
+	set_body_collision_events(body, enabled) {
+		if (!body?.isValid()) {
+			return;
+		}
+		// 2026-06-29, Composer: COLLISION_EVENTS on every body collider [rphct1]
+		const flags = enabled
+			? RAPIER.ActiveEvents.COLLISION_EVENTS
+			: RAPIER.ActiveEvents.NONE;
+		for (let i = 0; i < body.numColliders(); i++) {
+			body.collider(i).setActiveEvents(flags);
+		}
+	}
+
+	/**
 	 * @param {number} _dt smoothed frame seconds (fallback clock)
 	 * @param {number} rdt real elapsed frame seconds
 	 * @returns {void}
@@ -686,3 +704,4 @@ export { Physics, RapierDebugDraw as DebugDraw, PhysicsUtils, RigidBodyType, RAP
 // 2026-06-29, Composer: fixed substep accumulator drain rdt [rphstep1]
 // 2026-06-29, Composer: resetForces once after substep batch [rphclr1]
 // 2026-06-29, Composer: Rapier debugRender line segments [rphdb1]
+// 2026-06-29, Composer: COLLISION_EVENTS on every body collider [rphct1]
