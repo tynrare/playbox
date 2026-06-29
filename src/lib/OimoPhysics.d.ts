@@ -3495,6 +3495,14 @@ export namespace oimo.dynamics {
 		 * Sets the gravitational acceleration of the simulation world to `gravity`.
 		 */
 		setGravity(gravity: oimo.common.Vec3): void;
+		/**
+		 * Clears accumulated forces and torques on all rigid bodies.
+		 */
+		clearForces(): void;
+		/**
+		 * When `false`, forces persist across `step` calls until `clearForces`.
+		 */
+		setAutoClearForces(autoClearForces: boolean): void;
 	}
 }
 

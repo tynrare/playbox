@@ -1,6 +1,6 @@
 /** @namespace ty */
 // 2026-06-14, Composer: lifespan module sets toy disposed at limit [lifsp1]
-// 2026-06-14, Composer: playbox dt is sec booling dt is ms [lifsp2]
+// 2026-06-14, Composer: playbox dt is sec a_legacy dt is ms [lifsp2]
 import { clamp } from "../math.js";
 import Module from "./module.js";
 import { VAR_FLAGS_A } from "../core/mempool.js";
@@ -69,7 +69,7 @@ class Lifespan extends Module {
 	}
 
 	/**
-	 * @param {number} dt seconds (playbox); booling passes ms
+	 * @param {number} dt seconds (playbox); a_legacy passes ms
 	 * @param {number} index
 	 * @param {number} _moduleindex
 	 * @returns {void}
@@ -79,7 +79,7 @@ class Lifespan extends Module {
 			return;
 		}
 
-		// 2026-06-14, Composer: playbox dt is sec booling dt is ms [lifsp2]
+		// 2026-06-14, Composer: playbox dt is sec a_legacy dt is ms [lifsp2]
 		const dt_ms = dt * 1000;
 		const elapsed = this.read(index, VAR_MODULE_LIFESPAN_MS_ELAPSED) + dt_ms;
 		if (elapsed >= 1000) {
@@ -98,4 +98,4 @@ class Lifespan extends Module {
 
 export default Lifespan;
 // 2026-06-14, Composer: lifespan module sets toy disposed at limit [lifsp1]
-// 2026-06-14, Composer: playbox dt is sec booling dt is ms [lifsp2]
+// 2026-06-14, Composer: playbox dt is sec a_legacy dt is ms [lifsp2]

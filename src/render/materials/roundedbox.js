@@ -1,5 +1,5 @@
 // 2026-06-14, Composer: shared shader default pill uniforms [rbdef1]
-// 2026-06-14, Composer: port booling 2d rounded panel material [rbxm1]
+// 2026-06-14, Composer: port a_legacy 2d rounded panel material [rbxm1]
 // 2026-06-14, Composer: pill+edge mixed normals and colorb lighting [rbmix1]
 import * as THREE from "three";
 
@@ -136,7 +136,7 @@ export const RoundedboxMaterialExtension = {
 	},
 };
 // 2026-06-14, Composer: shared shader default pill uniforms [rbdef1]
-// 2026-06-14, Composer: port booling 2d rounded panel material [rbxm1]
+// 2026-06-14, Composer: port a_legacy 2d rounded panel material [rbxm1]
 // 2026-06-14, Composer: pass edgeWidth into helper for instanced locals [rbfix1]
 // 2026-06-14, Composer: edgeWidth pct of wmin via rbRef [rbedg2]
 // 2026-06-14, Composer: aspect sdf space for w/h scaled mesh [rbasp2]

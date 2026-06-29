@@ -20,7 +20,7 @@ const PIXELATE_SIZE = 4;
 const CAMERA_BASE_FOV = 42;
 const CAMERA_REF_ASPECT = 16 / 9;
 
-// 2026-06-14, Composer: port RenderBoolingSandsphere into Draw [drwprt1]
+// 2026-06-14, Composer: port Rendera_legacySandsphere into Draw [drwprt1]
 /**
  * @class Draw
  * @memberof pb.core
@@ -33,7 +33,7 @@ class Draw {
    * @param {import("./eventsbus.js").default} eventsbus
    */
   constructor(db, render, assets, eventsbus) {
-    // 2026-06-14, Composer: port RenderBoolingSandsphere into Draw [drwprt1]
+    // 2026-06-14, Composer: port Rendera_legacySandsphere into Draw [drwprt1]
     this._db = db;
     this._render = render;
     this._assets = assets;
@@ -326,7 +326,7 @@ class Draw {
       return;
     }
 
-    // 2026-06-18, Composer: booling render equalizer scaled buffer [drwsc3]
+    // 2026-06-18, Composer: a_legacy render equalizer scaled buffer [drwsc3]
     const w = window.innerWidth * this.scale;
     const h = window.innerHeight * this.scale;
     const size = renderer.getSize(this._size_cache);
@@ -470,7 +470,7 @@ class Draw {
    * @returns {void}
    */
   set_render_scale(scale) {
-    // 2026-06-18, Composer: booling render equalizer scaled buffer [drwsc3]
+    // 2026-06-18, Composer: a_legacy render equalizer scaled buffer [drwsc3]
     const next = Number(scale);
     if (!Number.isFinite(next) || next <= 0) {
       return;

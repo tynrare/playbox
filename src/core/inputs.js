@@ -1,5 +1,5 @@
 /** @namespace ty */
-// 2026-06-14, Composer: port booling Inputs without DOM binding [inpdev1]
+// 2026-06-14, Composer: port a_legacy Inputs without DOM binding [inpdev1]
 import Events from "./events.js";
 
 /**
@@ -358,4 +358,4 @@ export default Inputs;
 // 2026-06-14, Composer: defer canvas binding to init [inpdev3]
 // 2026-06-14, Composer: rename run to start on inputs ui [crn1]
 // 2026-06-14, Composer: bind canvas pointer listeners [inpdev2]
-// 2026-06-14, Composer: port booling Inputs without DOM binding [inpdev1]
+// 2026-06-14, Composer: port a_legacy Inputs without DOM binding [inpdev1]

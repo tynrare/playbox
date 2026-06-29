@@ -1,5 +1,5 @@
 /** @namespace ty */
-// 2026-06-14, Composer: localStorage datawork port from booling [dwrk1]
+// 2026-06-14, Composer: localStorage datawork port from a_legacy [dwrk1]
 class Datawork {
 	/**
 	 * @param {string} namespace
@@ -49,4 +49,4 @@ class Datawork {
 }
 
 export default Datawork;
-// 2026-06-14, Composer: localStorage datawork port from booling [dwrk1]
+// 2026-06-14, Composer: localStorage datawork port from a_legacy [dwrk1]

@@ -1,5 +1,5 @@
 /** @namespace ty */
-// 2026-06-14, Composer: port booling fixed-slot mempool [memp1]
+// 2026-06-14, Composer: port a_legacy fixed-slot mempool [memp1]
 import logger from "../logger.js";
 import { clamp } from "../math.js";
 
@@ -150,4 +150,4 @@ class Mempool {
 
 export { Mempool, VAR_INDEX, VAR_INDEX_L2, VAR_FLAGS_A, VAR_FLAG_ACTIVE };
 export default Mempool;
-// 2026-06-14, Composer: port booling fixed-slot mempool [memp1]
+// 2026-06-14, Composer: port a_legacy fixed-slot mempool [memp1]

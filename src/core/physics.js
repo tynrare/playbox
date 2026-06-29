@@ -337,6 +337,8 @@ class Physics {
 		);
 		this.world.setNumVelocityIterations(SOLVER_VELOCITY_ITERATIONS);
 		this.world.setNumPositionIterations(SOLVER_POSITION_ITERATIONS);
+		// 2026-06-28, Composer: defer Oimo force clear to substep batch end [phyclr1]
+		this.world.setAutoClearForces(false);
 		this.utils = new PhysicsUtils(this, this._render.scene);
 		this.sync_debug_draw(this.config.debug);
 		return this;
@@ -382,6 +384,9 @@ class Physics {
 			this.world.step(stepDt);
 			this._acc -= stepDt;
 		}
+
+		// 2026-06-28, Composer: defer Oimo force clear to substep batch end [phyclr1]
+		this.world.clearForces();
 
 		if (this.debug_draw) {
 			const canvas = this._render.renderer?.domElement;
@@ -687,3 +692,4 @@ export { Physics, DebugDraw, PhysicsUtils, RigidBodyType, RigidBody };
 // 2026-06-18, Composer: fixed substep accumulator drain all rdt [phyacc1]
 // 2026-06-26, Composer: setBodyRotation preserves position [phyrot1]
 // 2026-06-27, Composer: Oimo contact solver tuning [physlv1]
+// 2026-06-28, Composer: defer Oimo force clear to substep batch end [phyclr1]

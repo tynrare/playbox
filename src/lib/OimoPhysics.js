@@ -16141,6 +16141,23 @@ oimo.dynamics.World = class oimo_dynamics_World {
 		this._timeStep = new oimo.dynamics.TimeStep();
 		this._pool = new oimo.common.Pool();
 		this._shapeIdCount = 0;
+		// playbox patch: defer force clear until end of substep batch
+		this._autoClearForces = true;
+	}
+	clearForces() {
+		let b = this._rigidBodyList;
+		while(b != null) {
+			b._forceX = 0;
+			b._forceY = 0;
+			b._forceZ = 0;
+			b._torqueX = 0;
+			b._torqueY = 0;
+			b._torqueZ = 0;
+			b = b._next;
+		}
+	}
+	setAutoClearForces(autoClearForces) {
+		this._autoClearForces = autoClearForces;
 	}
 	_updateContacts() {
 		let st = HxOverrides.now() / 1000;
@@ -16202,15 +16219,9 @@ oimo.dynamics.World = class oimo_dynamics_World {
 			b._addedToIsland = false;
 			b = b._next;
 		}
-		b = this._rigidBodyList;
-		while(b != null) {
-			b._forceX = 0;
-			b._forceY = 0;
-			b._forceZ = 0;
-			b._torqueX = 0;
-			b._torqueY = 0;
-			b._torqueZ = 0;
-			b = b._next;
+		// playbox patch: defer force clear until end of substep batch
+		if(this._autoClearForces) {
+			this.clearForces();
 		}
 		while(this._numSolversInIslands > 0) {
 			this._solversInIslands[--this._numSolversInIslands]._addedToIsland = false;

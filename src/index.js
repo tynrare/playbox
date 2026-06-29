@@ -20,7 +20,7 @@
 // Branches / invariants: loop owned here not App; .ready before bootDraw;
 //   bootDraw before preload hide; splash until play.start inside startplay
 // 2026-06-14, Composer: import app from src/core [f6b8d2]
-// 2026-06-18, Composer: booling loop lerp dt step dt rdt [idxlp1]
+// 2026-06-18, Composer: a_legacy loop lerp dt step dt rdt [idxlp1]
 // 2026-06-20, Composer: boot launch playbook gateway index [bootpb1]
 import App from "./core/app.js";
 import Loop from "./core/loop.js";
@@ -34,7 +34,7 @@ const DT_MAX = 100;
  * @returns {void}
  */
 function startLoop(app, loop) {
-	// 2026-06-18, Composer: booling loop lerp dt step dt rdt [idxlp1]
+	// 2026-06-18, Composer: a_legacy loop lerp dt step dt rdt [idxlp1]
 	loop.maxdt = DT_MAX;
 	loop.step = (dt, rdt) => {
 		const code = app.step(dt, rdt);
@@ -87,6 +87,6 @@ async function main() {
 
 window.main = main;
 // 2026-06-14, Composer: import app from src/core [f6b8d2]
-// 2026-06-18, Composer: booling loop lerp dt step dt rdt [idxlp1]
+// 2026-06-18, Composer: a_legacy loop lerp dt step dt rdt [idxlp1]
 // 2026-06-20, Composer: boot launch playbook gateway index [bootpb1]
 // 2026-06-20, Composer: one step draws ui_loading before preload hide [idxdr1]

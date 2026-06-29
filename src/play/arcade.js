@@ -65,8 +65,6 @@ class Arcade {
 		this._scene_contact_id = null;
 		/** @type {number|null} */
 		this._pick_id = null;
-		/** @type {number|null} */
-		this._grab_drop_id = null;
 		return this;
 	}
 
@@ -85,7 +83,7 @@ class Arcade {
 		}
 		this._coin_toys = [];
 
-		this._core.render.camera.position.set(0, 10, 4);
+		this._core.render.camera.position.set(0, 10, 2);
 		this._core.render.camera.lookAt(0, 0, 0);
 		this._core.render.camera.updateMatrixWorld();
 		this._core.render.camera.updateProjectionMatrix();
@@ -138,11 +136,7 @@ class Arcade {
 			"arcade.pick",
 			this._on_arcade_pick.bind(this),
 		);
-		// 2026-06-28, Composer: pointer up drop via arcade.grab.drop [plgrb12]
-		this._grab_drop_id = this._core.eventsbus.on(
-			"arcade.grab.drop",
-			this._on_grab_drop.bind(this),
-		);
+		this._grab.start();
 		this._inputs.start();
 		this._sound.start();
 	}
@@ -173,10 +167,6 @@ class Arcade {
 		if (this._pick_id != null) {
 			this._core.eventsbus.off(this._pick_id);
 			this._pick_id = null;
-		}
-		if (this._grab_drop_id != null) {
-			this._core.eventsbus.off(this._grab_drop_id);
-			this._grab_drop_id = null;
 		}
 		this._inputs.stop();
 		this._grab.stop();
@@ -296,12 +286,6 @@ class Arcade {
 
 		this._grab.grab(toyIndex, x, y, z);
 	}
-
-	/** @returns {void} */
-	_on_grab_drop() {
-		// 2026-06-28, Composer: pointer up drop via arcade.grab.drop [plgrb12]
-		this._grab.drop();
-	}
 }
 
 export default Arcade;
@@ -328,6 +312,5 @@ export default Arcade;
 // 2026-06-28, Composer: arcade.pick resolves item and toy db ids [plinp3]
 // 2026-06-28, Composer: arcade owns ArcadeGrab lifecycle [plgrb3]
 // 2026-06-28, Composer: grab receives raycast pick world position [plgrb8]
-// 2026-06-28, Composer: pointer up drop via arcade.grab.drop [plgrb12]
 // 2026-06-28, Composer: pick adds grabbable without releasing prior [plgrb13]
 // 2026-06-28, Composer: arcade owns ArcadeBox camera walls [plbox3]

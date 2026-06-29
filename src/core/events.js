@@ -1,4 +1,4 @@
-// 2026-06-14, Composer: port booling event bus for inputs [evtb1]
+// 2026-06-14, Composer: port a_legacy event bus for inputs [evtb1]
 /**
  * @typedef {Object} EventListenerDetails
  * @property {function(any): void} callback
@@ -104,5 +104,5 @@ class Events {
 }
 
 export default Events;
-// 2026-06-14, Composer: port booling event bus for inputs [evtb1]
+// 2026-06-14, Composer: port a_legacy event bus for inputs [evtb1]
 // 2026-06-14, Composer: has channel for gated hot-path emits [evbhp1]

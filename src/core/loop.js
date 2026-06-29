@@ -1,5 +1,5 @@
 /** @namespace ty */
-// 2026-06-18, Composer: booling loop lerp dt step dt rdt [loop1]
+// 2026-06-18, Composer: a_legacy loop lerp dt step dt rdt [loop1]
 import logger from "../logger.js";
 import { lerp } from "../math.js";
 
@@ -24,8 +24,8 @@ class Loop {
 		this.step = cstep ?? null;
 		/** @type {((err: Error) => void)|null} */
 		this.onerror = null;
-		this.maxdt = Infinity;
-		// 2026-06-18, Composer: booling loop lerp dt step dt rdt [loop1]
+		this.maxdt = 100;
+		// 2026-06-18, Composer: a_legacy loop lerp dt step dt rdt [loop1]
 		this.ldt = 100 / _ts;
 		this.dt = 0;
 		this.timescale = 1;
@@ -101,4 +101,4 @@ class Loop {
 }
 
 export default Loop;
-// 2026-06-18, Composer: booling loop lerp dt step dt rdt [loop1]
+// 2026-06-18, Composer: a_legacy loop lerp dt step dt rdt [loop1]

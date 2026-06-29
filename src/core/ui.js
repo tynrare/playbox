@@ -1048,7 +1048,7 @@ export default Ui;
 // 2026-06-14, Composer: db attrs lowercase in pug [uidom2]
 // 2026-06-14, Composer: default pill uses shader defaults, second pill tuned [uidb2]
 // 2026-06-14, Composer: color mat, emissive colorb light [rbmix1]
-// 2026-06-14, Composer: scale corner by panel aspect like booling [uicrn1]
+// 2026-06-14, Composer: scale corner by panel aspect like a_legacy [uicrn1]
 // 2026-06-28, Composer: panel raycast NDC via draw.pointer_ndc [drwptr1]
 // 2026-06-14, Composer: corner db 0-1 not layout pct [uicrn2]
 // 2026-06-14, Composer: minimal panel UI from ui_tests db [uicls1]

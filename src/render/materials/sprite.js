@@ -1,4 +1,4 @@
-// 2026-06-14, Composer: port booling spritesheet material [sprmat1]
+// 2026-06-14, Composer: port a_legacy spritesheet material [sprmat1]
 import * as THREE from "three";
 
 export const SpriteMaterialExtension = {
@@ -79,4 +79,4 @@ export class MeshSpritesheetMaterial extends THREE.MeshLambertMaterial {
 		//console.log(shader.fragmentShader)
 	}
 }
-// 2026-06-14, Composer: port booling spritesheet material [sprmat1]
+// 2026-06-14, Composer: port a_legacy spritesheet material [sprmat1]

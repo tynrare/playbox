@@ -378,7 +378,7 @@ class Toybox {
 			return;
 		}
 
-		// 2026-06-26, Composer: ATanks pre/core/post/tail toyupdate [tbxatu1]
+		// 2026-06-26, Composer: a_legacy pre/core/post/tail toyupdate [tbxatu1]
 		this.on_toypreupdate?.(dt, index);
 
 		if (!this._toy_lifecycle_core(dt, index)) {
@@ -480,7 +480,7 @@ export {
 // 2026-06-14, Composer: spawn_conf scalar events gated toy.update [tbxhp1]
 // 2026-06-17, Composer: toybox dispose unwinds start [tbxdsp1]
 // 2026-06-26, Composer: item hook drives toyupdate via VAR_TOY_INDEX [tbxhook1]
-// 2026-06-26, Composer: ATanks pre/core/post/tail toyupdate [tbxatu1]
+// 2026-06-26, Composer: a_legacy pre/core/post/tail toyupdate [tbxatu1]
 // 2026-06-26, Composer: toybox exposes itembox getter for scene [tbxitm1]
 // 2026-06-26, Composer: toy.initialize after init_modules configure [tbxini1]
 // 2026-06-28, Composer: toybox delegates tag queries to tags module [tbxtag1]
