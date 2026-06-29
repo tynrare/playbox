@@ -223,7 +223,7 @@ class Arcade {
 
 	/**
 	 * @param {number} weightToyIndex
-	 * @returns {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody|null}
+	 * @returns {import("../lib/Rapier3d.js").RigidBody|null}
 	 */
 	_weight_body(weightToyIndex) {
 		const item_index = this._core.toybox.get_item_index(weightToyIndex);
@@ -243,16 +243,20 @@ class Arcade {
 	}
 
 	/**
-	 * @param {{ phase: number, toyIndex: number, otherToyIndex: number, contact: import("../lib/OimoPhysics.js").oimo.dynamics.Contact }} payload
+	 * @param {{ phase: number, toyIndex: number, otherToyIndex: number, collider1: number, collider2: number }} payload
 	 * @returns {void}
 	 */
 	_on_scene_contact(payload) {
-		// 2026-06-27, Composer: arcade scene.contact handler owns collisions [plcnt3]
 		if (payload.phase !== CONTACT_PHASE_BEGIN) {
 			return;
 		}
 
-		const speed = contactApproachSpeed(payload.contact);
+		const world = this._core.physics.world;
+		if (world == null) {
+			return;
+		}
+
+		const speed = contactApproachSpeed(world, payload.collider1, payload.collider2);
 		const weightToy = this._is_quake_weight(payload.toyIndex)
 			? payload.toyIndex
 			: this._is_quake_weight(payload.otherToyIndex)
@@ -260,11 +264,9 @@ class Arcade {
 				: TOY_INDEX_INVALID;
 
 		if (weightToy !== TOY_INDEX_INVALID && speed >= QUAKE_SPEED_MIN) {
-			// 2026-06-27, Composer: weight drop quake delegated to arcade_quake [plqke2]
 			const weightBody = this._weight_body(weightToy);
-			const world = this._core.physics.world;
-			if (weightBody != null && world != null) {
-				quake(world, payload.contact, weightBody);
+			if (weightBody != null) {
+				quake(world, payload.collider1, payload.collider2, weightBody);
 			}
 		}
 

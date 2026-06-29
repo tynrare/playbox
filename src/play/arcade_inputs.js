@@ -1,8 +1,8 @@
 /** @namespace ty */
-// Purpose: pointer drag → Oimo raycast pick; emit arcade.pick on target change.
+// Purpose: pointer drag → Rapier raycast pick; emit arcade.pick on target change.
 
 import * as THREE from "three";
-import { oimo } from "../lib/OimoPhysics.js";
+import { RAPIER } from "../core/physics.js";
 import { v3up, vzero } from "../math.js";
 
 const RAY_MAX = 500;
@@ -10,11 +10,10 @@ const RAY_MAX = 500;
 const _raycaster = new THREE.Raycaster();
 const _pointer = new THREE.Vector2();
 const _rayEnd = new THREE.Vector3();
-const _rayBegin = new oimo.common.Vec3();
-const _rayEndOimo = new oimo.common.Vec3();
+const _rayOrigin = { x: 0, y: 0, z: 0 };
+const _rayDir = { x: 0, y: 0, z: 0 };
 const _floorPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(v3up, vzero);
 const _floorHit = new THREE.Vector3();
-const RayCastClosest = oimo.dynamics.callback.RayCastClosest;
 
 /**
  * @class ArcadeInputs
@@ -32,7 +31,6 @@ class ArcadeInputs {
 	 * @returns {this}
 	 */
 	init() {
-		this._rayCast = new RayCastClosest();
 		/** @type {THREE.Vector3} */
 		this.pointer_floor = new THREE.Vector3();
 		/** @type {number|null} */
@@ -46,12 +44,10 @@ class ArcadeInputs {
 
 	/** @returns {void} */
 	start() {
-		// 2026-06-28, Composer: pointer down traces pick [plinp10]
 		this._pointer_down_id = this._core.eventsbus.on(
 			"pointer.down",
 			this._on_pointer_down.bind(this),
 		);
-		// 2026-06-28, Composer: pointer.move floor plane intersect stores floor [plinp4]
 		this._pointer_move_id = this._core.eventsbus.on(
 			"pointer.move",
 			this._on_pointer_move.bind(this),
@@ -87,7 +83,6 @@ class ArcadeInputs {
 			return false;
 		}
 
-		// 2026-06-28, Composer: world ray NDC via draw.pointer_ndc [drwptr1]
 		_raycaster.setFromCamera(_pointer, camera);
 		return true;
 	}
@@ -99,30 +94,34 @@ class ArcadeInputs {
 	 */
 	trace_pick(x, y) {
 		const world = this._core.physics.world;
+		const physics = this._core.physics;
 		if (!world || !this._pointer_ray(x, y)) {
 			return null;
 		}
 
+		// 2026-06-29, Composer: Rapier castRayAndGetNormal pick [plinp1]
 		const origin = _raycaster.ray.origin;
-		_rayEnd.copy(_raycaster.ray.direction).multiplyScalar(RAY_MAX).add(origin);
+		const dir = _raycaster.ray.direction;
+		_rayOrigin.x = origin.x;
+		_rayOrigin.y = origin.y;
+		_rayOrigin.z = origin.z;
+		_rayDir.x = dir.x;
+		_rayDir.y = dir.y;
+		_rayDir.z = dir.z;
 
-		_rayBegin.init(origin.x, origin.y, origin.z);
-		_rayEndOimo.init(_rayEnd.x, _rayEnd.y, _rayEnd.z);
-
-		const hit = this._rayCast;
-		hit.clear();
-		world.rayCast(_rayBegin, _rayEndOimo, hit);
-		if (!hit.hit || !hit.shape) {
+		const ray = new RAPIER.Ray(_rayOrigin, _rayDir);
+		const hit = world.castRayAndGetNormal(ray, RAY_MAX, true);
+		if (!hit) {
 			return null;
 		}
 
-		const body = hit.shape.getRigidBody();
-		const itemIndex = body?.userData?.itemIndex;
+		const gameId = physics.colliderToGameId.get(hit.collider.handle);
+		const itemIndex = gameId != null ? physics.bodyMeta[gameId]?.itemIndex : null;
 		if (itemIndex == null) {
 			return null;
 		}
 
-		const pos = hit.position;
+		const pos = ray.pointAt(hit.timeOfImpact);
 		return { itemIndex, x: pos.x, y: pos.y, z: pos.z };
 	}
 
@@ -145,7 +144,6 @@ class ArcadeInputs {
 	 * @returns {void}
 	 */
 	_on_pointer_down({ x, y }) {
-		// 2026-06-28, Composer: pointer down traces pick [plinp10]
 		this._pick_item_index = null;
 		this.pick_if_changed(x, y);
 	}
@@ -159,7 +157,6 @@ class ArcadeInputs {
 			return;
 		}
 
-		// 2026-06-28, Composer: pointer.move floor plane intersect stores floor [plinp4]
 		const hit = _raycaster.ray.intersectPlane(_floorPlane, _floorHit);
 		if (hit) {
 			this.pointer_floor.copy(hit);
@@ -169,6 +166,4 @@ class ArcadeInputs {
 }
 
 export default ArcadeInputs;
-// 2026-06-28, Composer: pointer.move floor plane intersect stores floor [plinp4]
-// 2026-06-28, Composer: world ray NDC via draw.pointer_ndc [drwptr1]
-// 2026-06-28, Composer: pointer down traces pick [plinp10]
+// 2026-06-29, Composer: Rapier castRayAndGetNormal pick [plinp1]

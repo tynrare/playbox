@@ -2,8 +2,7 @@
 // Purpose: fixed-size static walls aligned to camera frustum on y=0.
 
 import * as THREE from "three";
-import { oimo } from "../lib/OimoPhysics.js";
-import { RigidBody, RigidBodyType } from "../core/physics.js";
+import { RAPIER } from "../core/physics.js";
 import { v3up, vzero } from "../math.js";
 
 const WALL_LENGTH = 256;
@@ -27,11 +26,6 @@ const _centroid = new THREE.Vector3();
 const _inward = new THREE.Vector3();
 const _pos = new THREE.Vector3();
 const _quat = new THREE.Quaternion();
-const _halfExtents = new oimo.common.Vec3(
-	WALL_WIDTH * 0.5,
-	WALL_HEIGHT * 0.5,
-	WALL_LENGTH * 0.5,
-);
 
 /** @type {readonly [number, number][]} */
 const NDC_CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
@@ -60,7 +54,7 @@ class ArcadeBox {
 	 * @returns {this}
 	 */
 	init() {
-		/** @type {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody[]} */
+		/** @type {import("../lib/Rapier3d.js").RigidBody[]} */
 		this._walls = [];
 		/** @type {number|null} */
 		this._equalizer_id = null;
@@ -69,7 +63,6 @@ class ArcadeBox {
 
 	/** @returns {void} */
 	start() {
-		// 2026-06-28, Composer: draw.equalizer aligns fixed walls [plbox1]
 		this._equalizer_id = this._core.eventsbus.on(
 			"draw.equalizer",
 			this._on_equalizer.bind(this),
@@ -98,29 +91,30 @@ class ArcadeBox {
 	}
 
 	/**
-	 * @returns {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody}
+	 * @returns {import("../lib/Rapier3d.js").RigidBody}
 	 */
 	_make_wall_body() {
-		// 2026-06-28, Composer: shape offset bottom flush at body origin [plbox4]
+		// 2026-06-29, Composer: Rapier fixed wall cuboid collider [plbox1]
 		const physics = this._core.physics;
-		const body_config = new oimo.dynamics.rigidbody.RigidBodyConfig();
-		body_config.position.init(0, GROUND_Y, 0);
-		body_config.type = RigidBodyType.STATIC;
-		const body = new RigidBody(body_config);
-		const shape_config = new oimo.dynamics.rigidbody.ShapeConfig();
-		shape_config.position.init(0, WALL_HEIGHT * 0.5, 0);
-		shape_config.geometry = new oimo.collision.geometry.BoxGeometry(_halfExtents);
-		shape_config.density = 1;
-		shape_config.friction = 1;
-		shape_config.restitution = 0;
-		body.addShape(new oimo.dynamics.rigidbody.Shape(shape_config));
-		physics.add_body(body);
+		const world = physics.world;
+		const desc = RAPIER.RigidBodyDesc.fixed().setTranslation(0, GROUND_Y, 0);
+		const body = world.createRigidBody(desc);
+		const colDesc = RAPIER.ColliderDesc.cuboid(
+			WALL_WIDTH * 0.5,
+			WALL_HEIGHT * 0.5,
+			WALL_LENGTH * 0.5,
+		)
+			.setTranslation(0, WALL_HEIGHT * 0.5, 0)
+			.setDensity(1)
+			.setFriction(1)
+			.setRestitution(0);
+		const collider = world.createCollider(colDesc, body);
+		physics.register_body(body, collider, { itemIndex: null }, true);
 		return body;
 	}
 
 	/** @returns {void} */
 	_create_walls() {
-		// 2026-06-28, Composer: fixed len walls created once no resize [plbox2]
 		for (let i = 0; i < 4; i++) {
 			this._walls.push(this._make_wall_body());
 		}
@@ -154,8 +148,6 @@ class ArcadeBox {
 			return;
 		}
 
-		// 2026-06-28, Composer: yaw from ground edge dx dz CCW corners [plbox7]
-		// 2026-06-28, Composer: half thickness plus inset inward from edge [plbox8]
 		const physics = this._core.physics;
 		const inward_offset = -WALL_WIDTH * 0.5 + WALL_INSET;
 
@@ -202,8 +194,4 @@ class ArcadeBox {
 }
 
 export default ArcadeBox;
-// 2026-06-28, Composer: draw.equalizer aligns fixed walls [plbox1]
-// 2026-06-28, Composer: fixed len walls created once no resize [plbox2]
-// 2026-06-28, Composer: shape offset bottom flush at body origin [plbox4]
-// 2026-06-28, Composer: yaw from ground edge dx dz CCW corners [plbox7]
-// 2026-06-28, Composer: half thickness plus inset inward from edge [plbox8]
+// 2026-06-29, Composer: Rapier fixed wall cuboid collider [plbox1]

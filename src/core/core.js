@@ -101,14 +101,17 @@ class Core {
     this.render.dispose();
   }
 
-  start() {
+  /**
+   * @returns {Promise<void>}
+   */
+  async start() {
     this.render.start();
     this.assets.start();
     this.draw.start();
     // 2026-06-14, Composer: scene environment floor lights csm [scnenv1]
     this.scene.start();
-    // 2026-06-14, Composer: physics and itembox on core [itmbx1]
-    this.physics.start();
+    // 2026-06-29, Composer: await Rapier init in physics.start [rphinit1]
+    await this.physics.start();
     // 2026-06-17, Composer: itembox toybox alloc moved to init [crcyc5]
     this.inputs?.start();
     this.ui?.start();
@@ -203,3 +206,4 @@ export default Core;
 // 2026-06-26, Composer: scene ctor takes toybox not itembox [crtbx1]
 // 2026-06-28, Composer: core wires toybox.on_toyupdate to flowbus [crtoy1]
 // 2026-06-28, Composer: draw ctor receives eventsbus [drweq1]
+// 2026-06-29, Composer: await Rapier init in physics.start [rphinit1]

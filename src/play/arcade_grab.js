@@ -2,7 +2,6 @@
 // Purpose: grab toys on pick, pull toward lerped lift target on y plane.
 
 import * as THREE from "three";
-import { oimo } from "../lib/OimoPhysics.js";
 import { TOY_INDEX_INVALID } from "../scene/itembox.js";
 import { cache, clamp, v3up } from "../math.js";
 
@@ -17,11 +16,9 @@ const _raycaster = new THREE.Raycaster();
 const _grabAnchor = new THREE.Vector3(0, GRAB_PLANE_Y, 0);
 const _grabPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(v3up, _grabAnchor);
 const _grabTarget = new THREE.Vector3();
-const _pos = new oimo.common.Vec3();
-const _vel = new oimo.common.Vec3();
-const _force = new oimo.common.Vec3();
-const _impulse = new oimo.common.Vec3();
-const _pickPos = new oimo.common.Vec3();
+const _force = { x: 0, y: 0, z: 0 };
+const _impulse = { x: 0, y: 0, z: 0 };
+const _pickPos = { x: 0, y: 0, z: 0 };
 
 /**
  * @class GrabData
@@ -41,7 +38,6 @@ class GrabData {
 	 * @returns {this}
 	 */
 	init(x, z) {
-		// 2026-06-28, Composer: straight lift snapshot body xz at plane y [plgrb19]
 		this.elapsed = 0;
 		this.straight.set(x, GRAB_PLANE_Y, z);
 		return this;
@@ -98,7 +94,6 @@ class ArcadeGrab {
 	 * @returns {GrabData}
 	 */
 	_acquire_grabdata(x, z) {
-		// 2026-06-28, Composer: grabdata pool pop or alloc on grab [plgrb20]
 		const data = this._grabdata_pool.pop();
 		if (data) {
 			return data.init(x, z);
@@ -117,7 +112,6 @@ class ArcadeGrab {
 
 	/** @returns {void} */
 	start() {
-		// 2026-06-28, Composer: grab owns pointer down move up [plgrb15]
 		this._pointer_down_id = this._core.eventsbus.on(
 			"pointer.down",
 			this._on_pointer_down.bind(this),
@@ -159,7 +153,6 @@ class ArcadeGrab {
 	 * @returns {boolean}
 	 */
 	_trace_grab_target() {
-		// 2026-06-28, Composer: camera ray intersect grab plane y [plgrb16]
 		const camera = this._core.render.camera;
 		if (
 			!camera
@@ -179,7 +172,6 @@ class ArcadeGrab {
 	 * @returns {void}
 	 */
 	grab(toyIndex, x, y, z) {
-		// 2026-06-28, Composer: grab add only no toggle drop [plgrb12]
 		if (toyIndex === TOY_INDEX_INVALID || this._grabbed.has(toyIndex)) {
 			return;
 		}
@@ -190,32 +182,34 @@ class ArcadeGrab {
 			return;
 		}
 
-		body.getPositionTo(_pos);
-		const data = this._acquire_grabdata(_pos.x, _pos.z);
+		const pos = body.translation();
+		const data = this._acquire_grabdata(pos.x, pos.z);
 		const tx = data.straight.x;
 		const ty = data.straight.y;
 		const tz = data.straight.z;
-		// 2026-06-28, Composer: grab impulse uses fixed strength toward target [plgrb11]
-		let dx = tx - _pos.x;
-		let dy = ty - _pos.y;
-		let dz = tz - _pos.z;
+		let dx = tx - pos.x;
+		let dy = ty - pos.y;
+		let dz = tz - pos.z;
 		const len = Math.hypot(dx, dy, dz);
-		const mass = body.getMass();
+		const mass = body.mass();
 		if (len <= 0 || mass <= 0) {
 			this._release_grabdata(data);
 			return;
 		}
 		this._grabbed.set(toyIndex, data);
 		const scale = GRAB_IMPULSE_STRENGTH / len * mass;
-		_impulse.init(dx * scale, dy * scale, dz * scale);
-		_pickPos.init(x, y, z);
+		_impulse.x = dx * scale;
+		_impulse.y = dy * scale;
+		_impulse.z = dz * scale;
+		_pickPos.x = x;
+		_pickPos.y = y;
+		_pickPos.z = z;
 		body.wakeUp();
-		body.applyImpulse(_impulse, _pickPos);
+		body.applyImpulseAtPoint(_impulse, _pickPos, true);
 	}
 
 	/** @returns {void} */
 	drop() {
-		// 2026-06-28, Composer: drop clears all grabbed toys [plgrb1]
 		for (const data of this._grabbed.values()) {
 			this._release_grabdata(data);
 		}
@@ -243,31 +237,27 @@ class ArcadeGrab {
 		const t = clamp(0, 1, data.elapsed / GRAB_BLEND_S);
 		const t1 = clamp(0, 1, data.elapsed / (GRAB_BLEND_S * 0.5));
 
-		// 2026-06-28, Composer: mass-scaled PD so light toys match heavy accel [plgrb6]
-		// 2026-06-28, Composer: lerp straight y5 toward cursor over blend [plgrb18]
-		body.getPositionTo(_pos);
-		body.getLinearVelocityTo(_vel);
-		const mass = body.getMass();
+		// 2026-06-29, Composer: addForce once per frame before physics.step [plgrb1]
+		const pos = body.translation();
+		const vel = body.linvel();
+		const mass = body.mass();
 		if (mass <= 0) {
 			return;
 		}
 		const target = cache.vec3.v0.copy(data.straight).lerp(_grabTarget, t);
-		_force.init(
-			((target.x - _pos.x) * GRAB_STIFFNESS - _vel.x * GRAB_DAMPING),
-			((target.y - _pos.y) * GRAB_STIFFNESS - _vel.y * GRAB_DAMPING),
-			((target.z - _pos.z) * GRAB_STIFFNESS - _vel.z * GRAB_DAMPING),
-		).scaleEq(t1 * mass);
-		// 2026-06-28, Composer: counter world gravity while grabbed [plgrb21]
+		_force.x = ((target.x - pos.x) * GRAB_STIFFNESS - vel.x * GRAB_DAMPING) * t1 * mass;
+		_force.y = ((target.y - pos.y) * GRAB_STIFFNESS - vel.y * GRAB_DAMPING) * t1 * mass;
+		_force.z = ((target.z - pos.z) * GRAB_STIFFNESS - vel.z * GRAB_DAMPING) * t1 * mass;
 		const world = this._core.physics.world;
 		if (world) {
-			const gravity = world.getGravity();
-			const gravity_scale = body.getGravityScale();
+			const gravity = world.gravity;
+			const gravity_scale = body.gravityScale();
 			_force.x -= gravity.x * gravity_scale * mass;
 			_force.y -= gravity.y * gravity_scale * mass;
 			_force.z -= gravity.z * gravity_scale * mass;
 		}
 		body.wakeUp();
-		body.applyForceToCenter(_force);
+		body.addForce(_force, true);
 	}
 
 	/**
@@ -304,16 +294,4 @@ class ArcadeGrab {
 }
 
 export default ArcadeGrab;
-// 2026-06-28, Composer: grab adds toy index to grabbed set [plgrb1]
-// 2026-06-28, Composer: PD grab force spring plus velocity damping [plgrb5]
-// 2026-06-28, Composer: mass-scaled PD so light toys match heavy accel [plgrb6]
-// 2026-06-28, Composer: one-shot pick-point impulse on grab [plgrb10]
-// 2026-06-28, Composer: grab impulse uses fixed strength toward target [plgrb11]
-// 2026-06-28, Composer: grab add only no toggle drop [plgrb12]
-// 2026-06-28, Composer: pull toward camera ray lift plane hit [plgrb14]
-// 2026-06-28, Composer: grab owns pointer down move up [plgrb15]
-// 2026-06-28, Composer: camera ray intersect grab plane y [plgrb16]
-// 2026-06-28, Composer: lerp straight y5 toward cursor over blend [plgrb18]
-// 2026-06-28, Composer: straight lift snapshot body xz at plane y [plgrb19]
-// 2026-06-28, Composer: grabdata pool pop or alloc on grab [plgrb20]
-// 2026-06-28, Composer: counter world gravity while grabbed [plgrb21]
+// 2026-06-29, Composer: addForce once per frame before physics.step [plgrb1]

@@ -1,9 +1,6 @@
 /** @namespace ty */
-// Purpose: weight-drop quake via Oimo aabbTest and contact list.
-// 2026-06-28, Composer: renamed from shenanigans.js [plrqk1]
-import { oimo } from "../lib/OimoPhysics.js";
-
-const RigidBodyType = oimo.dynamics.rigidbody.RigidBodyType;
+// Purpose: weight-drop quake via Rapier AABB query and contact pairs.
+import { RAPIER } from "../core/physics.js";
 
 export const QUAKE_SPEED_MIN = 1.0;
 const QUAKE_GAIN = 0.5;
@@ -12,84 +9,34 @@ const QUAKE_RADIUS_MIN = 6.0;
 const QUAKE_RADIUS_MAX = 8.0;
 const QUAKE_AABB_Y_BELOW = 0.5;
 const QUAKE_AABB_Y_ABOVE = 2.0;
-// 2026-06-27, Composer: quake uniform shake dv Oimo impulse scales by mass [plqke3]
-// 2026-06-27, Composer: quake shake dv scales with impact speed [plqke4]
 const QUAKE_SHAKE_V = 0.2;
-// 2026-06-27, Composer: quake angular shake away from impact source [plqke7]
 const QUAKE_SHAKE_R = 0.08;
-// 2026-06-27, Composer: quake mass factor blends uniform and honest shake [plqke5]
-// 0 = uniform Δv; 1 = full quaker/target ratio (damped by QUAKE_MASS_COMPARE_EXP)
 const QUAKE_MASS_FACTOR = 0.5;
 const QUAKE_MASS_COMPARE_EXP = 0.25;
 const QUAKE_MASS_MULT_MIN = 0.5;
 const QUAKE_MASS_MULT_MAX = 10;
-// 2026-06-27, Composer: quake contact chain propagation decay per hop [plqke8]
 const QUAKE_CHAIN_STEP = 0.9;
 const QUAKE_CHAIN_MIN_MULT = 0.05;
 
-const _aabb = new oimo.collision.geometry.Aabb();
-const _aabbMin = new oimo.common.Vec3();
-const _aabbMax = new oimo.common.Vec3();
-const _impact = new oimo.common.Vec3();
-const _impulse = new oimo.common.Vec3();
-const _angImpulse = new oimo.common.Vec3();
-const _normal = new oimo.common.Vec3();
-const _pos = new oimo.common.Vec3();
-/** @type {Set<import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody>} */
+const _aabbCenter = { x: 0, y: 0, z: 0 };
+const _aabbHalf = { x: 0, y: 0, z: 0 };
+const _impact = { x: 0, y: 0, z: 0 };
+const _impulse = { x: 0, y: 0, z: 0 };
+const _angImpulse = { x: 0, y: 0, z: 0 };
+const _normal = { x: 0, y: 0, z: 0 };
+const _pos = { x: 0, y: 0, z: 0 };
+/** @type {Set<import("../lib/Rapier3d.js").RigidBody>} */
 const _queryBodies = new Set();
-/** @type {Set<import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody>} */
+/** @type {Set<import("../lib/Rapier3d.js").RigidBody>} */
 const _surfaceTouch = new Set();
-/** @type {Map<import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody, number>} */
+/** @type {Map<import("../lib/Rapier3d.js").RigidBody, number>} */
 const _seeds = new Map();
-/** @type {Map<import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody, number>} */
+/** @type {Map<import("../lib/Rapier3d.js").RigidBody, number>} */
 const _chainTargets = new Map();
-/** @type {Set<import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody>} */
+/** @type {Set<import("../lib/Rapier3d.js").RigidBody>} */
 const _chainNeighbors = new Set();
-/** @type {{ body: import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody, mult: number }[]} */
+/** @type {{ body: import("../lib/Rapier3d.js").RigidBody, mult: number }[]} */
 const _chainQueue = [];
-
-/**
- * @extends {oimo.dynamics.callback.AabbTestCallback}
- */
-class QuakeAabbCallback extends oimo.dynamics.callback.AabbTestCallback {
-	constructor() {
-		super();
-		/** @type {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody|null} */
-		this._skipWeight = null;
-		/** @type {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody|null} */
-		this._skipSurface = null;
-		/** @type {Set<import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody>} */
-		this._results = _queryBodies;
-	}
-
-	/**
-	 * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody} skipWeight
-	 * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody} skipSurface
-	 * @returns {void}
-	 */
-	reset(skipWeight, skipSurface) {
-		this._skipWeight = skipWeight;
-		this._skipSurface = skipSurface;
-		this._results.clear();
-	}
-
-	/**
-	 * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.Shape} shape
-	 * @returns {void}
-	 */
-	process(shape) {
-		const body = shape.getRigidBody();
-		if (body === this._skipWeight || body === this._skipSurface) {
-			return;
-		}
-		if (body.getType() !== RigidBodyType.DYNAMIC) {
-			return;
-		}
-		this._results.add(body);
-	}
-}
-
-const _aabbCb = new QuakeAabbCallback();
 
 /**
  * @param {number} v
@@ -117,30 +64,48 @@ function quakeMassMult(quakerMass, targetMass) {
 }
 
 /**
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.Contact} contact
+ * @param {import("../lib/Rapier3d.js").World} world
+ * @param {number} collider1
+ * @param {number} collider2
  * @returns {number}
  */
-export function contactApproachSpeed(contact) {
-	const b1 = contact.getShape1().getRigidBody();
-	const b2 = contact.getShape2().getRigidBody();
-	const n = contact.getManifold().getNormal();
-	const v1 = b1.getLinearVelocity();
-	const v2 = b2.getLinearVelocity();
-	const relN =
-		(v1.x - v2.x) * n.x +
-		(v1.y - v2.y) * n.y +
-		(v1.z - v2.z) * n.z;
-	return Math.max(0, -relN);
+export function contactApproachSpeed(world, collider1, collider2) {
+	let approach = 0;
+	const c1 = world.getCollider(collider1);
+	const c2 = world.getCollider(collider2);
+	if (!c1 || !c2) {
+		return 0;
+	}
+	const b1 = c1.parent();
+	const b2 = c2.parent();
+	if (!b1 || !b2) {
+		return 0;
+	}
+	world.contactPair(c1, c2, (manifold) => {
+		const n = manifold.normal();
+		const v1 = b1.linvel();
+		const v2 = b2.linvel();
+		const relN =
+			(v1.x - v2.x) * n.x +
+			(v1.y - v2.y) * n.y +
+			(v1.z - v2.z) * n.z;
+		approach = Math.max(approach, Math.max(0, -relN));
+	});
+	return approach;
 }
 
 /**
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.Contact} contact
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody} weightBody
- * @returns {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody|null}
+ * @param {import("../lib/Rapier3d.js").World} world
+ * @param {number} collider1
+ * @param {number} collider2
+ * @param {import("../lib/Rapier3d.js").RigidBody} weightBody
+ * @returns {import("../lib/Rapier3d.js").RigidBody|null}
  */
-function resolveSurfaceBody(contact, weightBody) {
-	const b1 = contact.getShape1().getRigidBody();
-	const b2 = contact.getShape2().getRigidBody();
+function resolveSurfaceBody(world, collider1, collider2, weightBody) {
+	const c1 = world.getCollider(collider1);
+	const c2 = world.getCollider(collider2);
+	const b1 = c1?.parent() ?? null;
+	const b2 = c2?.parent() ?? null;
 	if (b1 === weightBody) {
 		return b2;
 	}
@@ -151,99 +116,99 @@ function resolveSurfaceBody(contact, weightBody) {
 }
 
 /**
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.Contact} contact
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody} weightBody
- * @param {oimo.common.Vec3} out
+ * @param {import("../lib/Rapier3d.js").World} world
+ * @param {number} collider1
+ * @param {number} collider2
+ * @param {import("../lib/Rapier3d.js").RigidBody} weightBody
+ * @param {{ x: number, y: number, z: number }} out
  * @returns {void}
  */
-function collectImpactPoint(contact, weightBody, out) {
-	const manifold = contact.getManifold();
-	const count = manifold.getNumPoints();
-	if (count > 0) {
-		out.zero();
-		const points = manifold.getPoints();
-		for (let i = 0; i < count; i++) {
-			const p = points[i].getPosition1();
-			out.x += p.x;
-			out.y += p.y;
-			out.z += p.z;
+function collectImpactPoint(world, collider1, collider2, weightBody, out) {
+	const c1 = world.getCollider(collider1);
+	const c2 = world.getCollider(collider2);
+	if (!c1 || !c2) {
+		const p = weightBody.translation();
+		out.x = p.x;
+		out.y = p.y;
+		out.z = p.z;
+		return;
+	}
+	let count = 0;
+	world.contactPair(c1, c2, (manifold, flipped) => {
+		const n = manifold.numSolverContacts();
+		for (let i = 0; i < n; i++) {
+			const pt = manifold.solverContactPoint(i);
+			if (flipped) {
+				out.x += pt.x;
+				out.y += pt.y;
+				out.z += pt.z;
+			} else {
+				out.x += pt.x;
+				out.y += pt.y;
+				out.z += pt.z;
+			}
+			count++;
 		}
+	});
+	if (count > 0) {
 		out.x /= count;
 		out.y /= count;
 		out.z /= count;
 		return;
 	}
-	weightBody.getPositionTo(out);
+	const p = weightBody.translation();
+	out.x = p.x;
+	out.y = p.y;
+	out.z = p.z;
 }
 
 /**
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.World} world
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody} surfaceBody
- * @param {Set<import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody>} out
+ * @param {import("../lib/Rapier3d.js").World} world
+ * @param {import("../lib/Rapier3d.js").Collider} surfaceCollider
+ * @param {Set<import("../lib/Rapier3d.js").RigidBody>} out
  * @returns {void}
  */
-function collectSurfaceTouch(world, surfaceBody, out) {
+function collectSurfaceTouch(world, surfaceCollider, out) {
 	out.clear();
-	const cm = world.getContactManager();
-	for (let c = cm.getContactList(); c != null; c = c.getNext()) {
-		if (!c.isTouching()) {
-			continue;
+	world.contactPairsWith(surfaceCollider, (other) => {
+		const body = other.parent();
+		if (body && body.isDynamic()) {
+			out.add(body);
 		}
-		const b1 = c.getShape1().getRigidBody();
-		const b2 = c.getShape2().getRigidBody();
-		if (b1 === surfaceBody && b2 !== surfaceBody) {
-			if (b2.getType() === RigidBodyType.DYNAMIC) {
-				out.add(b2);
-			}
-		} else if (b2 === surfaceBody && b1 !== surfaceBody) {
-			if (b1.getType() === RigidBodyType.DYNAMIC) {
-				out.add(b1);
-			}
-		}
-	}
+	});
 }
 
 /**
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.World} world
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody} body
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody} skipWeight
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody} skipSurface
- * @param {Set<import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody>} out
+ * @param {import("../lib/Rapier3d.js").World} world
+ * @param {import("../lib/Rapier3d.js").RigidBody} body
+ * @param {import("../lib/Rapier3d.js").RigidBody} skipWeight
+ * @param {import("../lib/Rapier3d.js").RigidBody} skipSurface
+ * @param {Set<import("../lib/Rapier3d.js").RigidBody>} out
  * @returns {void}
  */
 function collectTouchingDynamics(world, body, skipWeight, skipSurface, out) {
 	out.clear();
-	const cm = world.getContactManager();
-	for (let c = cm.getContactList(); c != null; c = c.getNext()) {
-		if (!c.isTouching()) {
-			continue;
-		}
-		const b1 = c.getShape1().getRigidBody();
-		const b2 = c.getShape2().getRigidBody();
-		let other;
-		if (b1 === body) {
-			other = b2;
-		} else if (b2 === body) {
-			other = b1;
-		} else {
-			continue;
-		}
-		if (other === skipWeight || other === skipSurface) {
-			continue;
-		}
-		if (other.getType() !== RigidBodyType.DYNAMIC) {
-			continue;
-		}
-		out.add(other);
+	if (body.numColliders() <= 0) {
+		return;
 	}
+	const col = body.collider(0);
+	world.contactPairsWith(col, (other) => {
+		const otherBody = other.parent();
+		if (!otherBody || otherBody === skipWeight || otherBody === skipSurface) {
+			return;
+		}
+		if (otherBody.isDynamic()) {
+			out.add(otherBody);
+		}
+	});
 }
 
 /**
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.World} world
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody} weightBody
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody} surfaceBody
- * @param {Map<import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody, number>} seeds
- * @returns {Map<import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody, number>}
+ * @param {import("../lib/Rapier3d.js").World} world
+ * @param {import("../lib/Rapier3d.js").RigidBody} weightBody
+ * @param {import("../lib/Rapier3d.js").RigidBody} surfaceBody
+ * @param {Map<import("../lib/Rapier3d.js").RigidBody, number>} seeds
+ * @returns {Map<import("../lib/Rapier3d.js").RigidBody, number>}
  */
 function buildChainTargets(world, weightBody, surfaceBody, seeds) {
 	_chainTargets.clear();
@@ -284,7 +249,7 @@ function buildChainTargets(world, weightBody, surfaceBody, seeds) {
 }
 
 /**
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody} body
+ * @param {import("../lib/Rapier3d.js").RigidBody} body
  * @param {number} quakerMass
  * @param {number} falloff
  * @param {number} speedScale
@@ -306,7 +271,7 @@ function applyQuakeShake(
 	dz,
 	dist,
 ) {
-	const targetMass = body.getMass();
+	const targetMass = body.mass();
 	if (targetMass <= 0) {
 		return;
 	}
@@ -315,46 +280,49 @@ function applyQuakeShake(
 	const massMult = quakeMassMult(quakerMass, targetMass);
 	const impulseMag = shakeDv * targetMass * massMult;
 	if (surfaceStatic) {
-		_impulse.init(0, impulseMag, 0);
+		_impulse.x = 0;
+		_impulse.y = impulseMag;
+		_impulse.z = 0;
 	} else {
-		_impulse.init(
-			_normal.x * impulseMag,
-			_normal.y * impulseMag,
-			_normal.z * impulseMag,
-		);
+		_impulse.x = _normal.x * impulseMag;
+		_impulse.y = _normal.y * impulseMag;
+		_impulse.z = _normal.z * impulseMag;
 	}
 	body.wakeUp();
-	body.applyLinearImpulse(_impulse);
+	body.applyImpulse(_impulse, true);
 
 	if (dist > 1e-4 && QUAKE_SHAKE_R > 0) {
 		const shakeRv = QUAKE_SHAKE_R * falloff * speedScale * chainMult;
 		const angMag = shakeRv * targetMass * massMult * 0.1;
 		const axisX = dz / dist;
 		const axisZ = -dx / dist;
-		_angImpulse.init(axisX * angMag, 0, axisZ * angMag);
-		body.applyAngularImpulse(_angImpulse);
+		_angImpulse.x = axisX * angMag;
+		_angImpulse.y = 0;
+		_angImpulse.z = axisZ * angMag;
+		body.applyTorqueImpulse(_angImpulse, true);
 	}
 }
 
 /**
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.World} world
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.Contact} contact
- * @param {import("../lib/OimoPhysics.js").oimo.dynamics.rigidbody.RigidBody} weightBody
+ * @param {import("../lib/Rapier3d.js").World} world
+ * @param {number} collider1
+ * @param {number} collider2
+ * @param {import("../lib/Rapier3d.js").RigidBody} weightBody
  * @returns {void}
  */
-// 2026-06-27, Composer: quake via Oimo aabbTest and contact list [plqke1]
-export function quake(world, contact, weightBody) {
-	const speed = contactApproachSpeed(contact);
+// 2026-06-29, Composer: quake via Rapier AABB and contactPairsWith [plqke1]
+export function quake(world, collider1, collider2, weightBody) {
+	const speed = contactApproachSpeed(world, collider1, collider2);
 	if (speed < QUAKE_SPEED_MIN) {
 		return;
 	}
 
-	const surfaceBody = resolveSurfaceBody(contact, weightBody);
+	const surfaceBody = resolveSurfaceBody(world, collider1, collider2, weightBody);
 	if (surfaceBody == null) {
 		return;
 	}
 
-	const quakerMass = weightBody.getMass();
+	const quakerMass = weightBody.mass();
 	if (quakerMass <= 0) {
 		return;
 	}
@@ -362,45 +330,67 @@ export function quake(world, contact, weightBody) {
 	const J = speed * quakerMass * QUAKE_GAIN;
 	const radius = clamp(J * QUAKE_RADIUS_SCALE, QUAKE_RADIUS_MIN, QUAKE_RADIUS_MAX);
 
-	collectImpactPoint(contact, weightBody, _impact);
+	collectImpactPoint(world, collider1, collider2, weightBody, _impact);
 
-	_aabbMin.init(
-		_impact.x - radius,
-		_impact.y - QUAKE_AABB_Y_BELOW,
-		_impact.z - radius,
-	);
-	_aabbMax.init(
-		_impact.x + radius,
-		_impact.y + QUAKE_AABB_Y_ABOVE,
-		_impact.z + radius,
-	);
-	_aabb.init(_aabbMin, _aabbMax);
+	_aabbCenter.x = _impact.x;
+	_aabbCenter.y = _impact.y + (QUAKE_AABB_Y_ABOVE - QUAKE_AABB_Y_BELOW) * 0.5;
+	_aabbCenter.z = _impact.z;
+	_aabbHalf.x = radius;
+	_aabbHalf.y = (QUAKE_AABB_Y_ABOVE + QUAKE_AABB_Y_BELOW) * 0.5;
+	_aabbHalf.z = radius;
 
-	_aabbCb.reset(weightBody, surfaceBody);
-	world.aabbTest(_aabb, _aabbCb);
+	_queryBodies.clear();
+	world.collidersWithAabbIntersectingAabb(_aabbCenter, _aabbHalf, (collider) => {
+		const body = collider.parent();
+		if (!body || body === weightBody || body === surfaceBody) {
+			return true;
+		}
+		if (!body.isDynamic()) {
+			return true;
+		}
+		_queryBodies.add(body);
+		return true;
+	});
 
-	collectSurfaceTouch(world, surfaceBody, _surfaceTouch);
+	const surfaceCollider =
+		surfaceBody.numColliders() > 0 ? surfaceBody.collider(0) : null;
+	if (surfaceCollider) {
+		collectSurfaceTouch(world, surfaceCollider, _surfaceTouch);
+	} else {
+		_surfaceTouch.clear();
+	}
 
-	contact.getManifold().getNormalTo(_normal);
+	const c1 = world.getCollider(collider1);
+	const c2 = world.getCollider(collider2);
+	_normal.x = 0;
+	_normal.y = 1;
+	_normal.z = 0;
+	if (c1 && c2) {
+		world.contactPair(c1, c2, (manifold) => {
+			const n = manifold.normal();
+			_normal.x = n.x;
+			_normal.y = n.y;
+			_normal.z = n.z;
+		});
+	}
 
-	const surfaceStatic = surfaceBody.getType() === RigidBodyType.STATIC;
+	const surfaceStatic = surfaceBody.isFixed();
 	const speedScale = speed / QUAKE_SPEED_MIN;
 
-	// 2026-06-27, Composer: quake contact chain propagation decay per hop [plqke8]
 	_seeds.clear();
 	for (const body of _queryBodies) {
 		if (!_surfaceTouch.has(body)) {
 			continue;
 		}
-		body.getPositionTo(_pos);
-		const dx = _pos.x - _impact.x;
-		const dz = _pos.z - _impact.z;
+		const p = body.translation();
+		const dx = p.x - _impact.x;
+		const dz = p.z - _impact.z;
 		const dist = Math.sqrt(dx * dx + dz * dz);
 		if (dist > radius) {
 			continue;
 		}
 		const falloff = 1 - dist / radius;
-		if (falloff <= 0 || body.getMass() <= 0) {
+		if (falloff <= 0 || body.mass() <= 0) {
 			continue;
 		}
 		_seeds.set(body, 1);
@@ -409,9 +399,9 @@ export function quake(world, contact, weightBody) {
 	buildChainTargets(world, weightBody, surfaceBody, _seeds);
 
 	for (const [body, chainMult] of _chainTargets) {
-		body.getPositionTo(_pos);
-		const dx = _pos.x - _impact.x;
-		const dz = _pos.z - _impact.z;
+		const p = body.translation();
+		const dx = p.x - _impact.x;
+		const dz = p.z - _impact.z;
 		const dist = Math.sqrt(dx * dx + dz * dz);
 		if (dist > radius) {
 			continue;
@@ -434,11 +424,4 @@ export function quake(world, contact, weightBody) {
 	}
 }
 
-// 2026-06-27, Composer: quake via Oimo aabbTest and contact list [plqke1]
-// 2026-06-27, Composer: quake uniform shake dv Oimo impulse scales by mass [plqke3]
-// 2026-06-27, Composer: quake shake dv scales with impact speed [plqke4]
-// 2026-06-27, Composer: quake mass factor blends uniform and honest shake [plqke5]
-// 2026-06-27, Composer: quake mass mult from damped quaker/target ratio [plqke6]
-// 2026-06-27, Composer: quake angular shake away from impact source [plqke7]
-// 2026-06-27, Composer: quake contact chain propagation decay per hop [plqke8]
-// 2026-06-28, Composer: renamed from shenanigans.js [plrqk1]
+// 2026-06-29, Composer: quake via Rapier AABB and contactPairsWith [plqke1]

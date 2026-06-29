@@ -1,63 +1,54 @@
 /** @namespace ty */
-// 2026-06-14, Composer: Oimo physics DebugDraw PhysicsUtils port [phy1]
+// 2026-06-29, Composer: Rapier physics world owner and step loop [rph1]
 import * as THREE from "three";
 import { cache } from "../math.js";
-import { oimo } from "../lib/OimoPhysics.js";
+import RAPIER from "../lib/Rapier3d.js";
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 
-const RigidBodyType = oimo.dynamics.rigidbody.RigidBodyType;
-const RigidBody = oimo.dynamics.rigidbody.RigidBody;
-const PositionCorrectionAlgorithm =
-	oimo.dynamics.constraint.PositionCorrectionAlgorithm;
+const RigidBodyType = {
+	DYNAMIC: RAPIER.RigidBodyType.Dynamic,
+	STATIC: RAPIER.RigidBodyType.Fixed,
+	KINEMATIC: RAPIER.RigidBodyType.KinematicPositionBased,
+};
 
-// 2026-06-27, Composer: Oimo contact solver tuning [physlv1]
-const SOLVER_VELOCITY_ITERATIONS = 10;
-const SOLVER_POSITION_ITERATIONS = 5;
-const SOLVER_LINEAR_SLOP = 0.005;
-const SOLVER_DEFAULT_CONTACT_POSITION_ALG =
-	PositionCorrectionAlgorithm.BAUMGARTE;
-const SOLVER_ALT_CONTACT_POSITION_ALG = PositionCorrectionAlgorithm.SPLIT_IMPULSE;
-const SOLVER_CONTACT_ALT_DEPTH_THRESHOLD = 0.05;
-const SOLVER_VELOCITY_BAUMGARTE = 0.2;
-const SOLVER_POSITION_SPLIT_IMPULSE_BAUMGARTE = 0.4;
-const SOLVER_POSITION_NGS_BAUMGARTE = 1.0;
+const SOLVER_ITERATIONS = 10;
+const SOLVER_FRICTION_ITERATIONS = 5;
+const SOLVER_ALLOWED_LINEAR_ERROR = 0.005;
 
 const DEFAULT_CONFIG = {
 	ref_dt: 0.008,
 	debug: false,
 };
 
-/** @returns {void} */
-function apply_solver_settings() {
-	const s = oimo.common.Setting;
-	s.linearSlop = SOLVER_LINEAR_SLOP;
-	s.defaultContactPositionCorrectionAlgorithm =
-		SOLVER_DEFAULT_CONTACT_POSITION_ALG;
-	s.alternativeContactPositionCorrectionAlgorithm =
-		SOLVER_ALT_CONTACT_POSITION_ALG;
-	s.contactUseAlternativePositionCorrectionAlgorithmDepthThreshold =
-		SOLVER_CONTACT_ALT_DEPTH_THRESHOLD;
-	s.velocityBaumgarte = SOLVER_VELOCITY_BAUMGARTE;
-	s.positionSplitImpulseBaumgarte = SOLVER_POSITION_SPLIT_IMPULSE_BAUMGARTE;
-	s.positionNgsBaumgarte = SOLVER_POSITION_NGS_BAUMGARTE;
+const _IDENTITY_ROT = { w: 1, x: 0, y: 0, z: 0 };
+const _worldQuat = new THREE.Quaternion();
+const _localVec = new THREE.Vector3();
+
+/**
+ * @param {{ x: number, y: number, z: number }} world
+ * @param {{ x: number, y: number, z: number }} bodyPos
+ * @param {{ x: number, y: number, z: number, w: number }} bodyRot
+ * @returns {{ x: number, y: number, z: number }}
+ */
+function world_to_local_point(world, bodyPos, bodyRot) {
+	_worldQuat.set(bodyRot.x, bodyRot.y, bodyRot.z, bodyRot.w);
+	_localVec.set(world.x - bodyPos.x, world.y - bodyPos.y, world.z - bodyPos.z);
+	_localVec.applyQuaternion(_worldQuat.invert());
+	return { x: _localVec.x, y: _localVec.y, z: _localVec.z };
 }
 
 /**
- * @class DebugDraw
+ * @class RapierDebugDraw
  * @memberof pb.core
  */
-class DebugDraw extends oimo.dynamics.common.DebugDraw {
+class RapierDebugDraw {
 	/**
 	 * @param {THREE.Scene} scene
 	 */
 	constructor(scene) {
-		super();
-		// 2026-06-14, Composer: wireframe only line() implemented not triangle [phydb1]
-		this.wireframe = true;
-		this.drawJointLimits = true;
-		this.drawBases = true;
+		// 2026-06-29, Composer: Rapier debugRender line segments [rphdb1]
 		this._scene = scene;
 		const lineMaterial = new LineMaterial({
 			color: 0xffffff,
@@ -66,70 +57,38 @@ class DebugDraw extends oimo.dynamics.common.DebugDraw {
 			alphaToCoverage: true,
 		});
 		this.lineMaterial = lineMaterial;
-		this.init(900);
-	}
-
-	begin() {
-		this.iterator = 0;
+		this._geometry = new LineSegmentsGeometry();
+		this._lines = new LineSegments2(this._geometry, lineMaterial);
+		this._scene.add(this._lines);
 	}
 
 	/**
-	 * @param {oimo.common.Vec3} from
-	 * @param {oimo.common.Vec3} to
-	 * @param {oimo.common.Vec3} color
+	 * @param {import("../lib/Rapier3d.js").DebugRenderBuffers} buffers
+	 * @returns {void}
 	 */
-	line(from, to, color) {
-		const i = this.iterator;
-		if (i + 6 > this.linePositions.length) {
-			this.init(this.linePositions.length * 2);
-			return;
+	update(buffers) {
+		const verts = buffers.vertices;
+		const colors = buffers.colors;
+		const linePositions = new Float32Array(verts.length);
+		const lineColors = new Float32Array((colors.length / 4) * 3);
+		for (let i = 0; i < verts.length; i++) {
+			linePositions[i] = verts[i];
 		}
-
-		this.linePositions[i + 0] = from.x;
-		this.linePositions[i + 1] = from.y;
-		this.linePositions[i + 2] = from.z;
-		this.linePositions[i + 3] = to.x;
-		this.linePositions[i + 4] = to.y;
-		this.linePositions[i + 5] = to.z;
-		this.lineColors[i + 0] = color.x;
-		this.lineColors[i + 1] = color.y;
-		this.lineColors[i + 2] = color.z;
-		this.lineColors[i + 3] = color.x;
-		this.lineColors[i + 4] = color.y;
-		this.lineColors[i + 5] = color.z;
-		this.iterator += 6;
-	}
-
-	/**
-	 * @param {number} pointscount
-	 */
-	init(pointscount) {
-		this.linePositions = new Float32Array(pointscount);
-		this.lineColors = new Float32Array(pointscount);
-		const geometry = new LineSegmentsGeometry();
-		this.geometry = geometry;
-		this.lines?.removeFromParent();
-		this.lines = new LineSegments2(geometry, this.lineMaterial);
-		this._scene.add(this.lines);
+		for (let i = 0, j = 0; i < colors.length; i += 4, j += 3) {
+			lineColors[j] = colors[i];
+			lineColors[j + 1] = colors[i + 1];
+			lineColors[j + 2] = colors[i + 2];
+		}
+		this._geometry.setPositions(linePositions);
+		this._geometry.setColors(lineColors);
 	}
 
 	dispose() {
-		this.lines?.removeFromParent();
-		this.geometry?.dispose();
+		this._lines?.removeFromParent();
+		this._geometry?.dispose();
 		this.lineMaterial?.dispose();
-		this.lines = null;
-		this.geometry = null;
-		this.linePositions = null;
-		this.lineColors = null;
-	}
-
-	end() {
-		for (let i = this.iterator; i < this.linePositions.length; i++) {
-			this.linePositions[i] = 1;
-			this.lineColors[i] = 1;
-		}
-		this.geometry.setPositions(this.linePositions);
-		this.geometry.setColors(this.lineColors);
+		this._lines = null;
+		this._geometry = null;
 	}
 }
 
@@ -210,67 +169,6 @@ class PhysicsUtils {
 		this._physics.attach(body, mesh);
 		return body.id;
 	}
-
-	/**
-	 * @param {oimo.dynamics.rigidbody.RigidBody} a
-	 * @param {oimo.dynamics.rigidbody.RigidBody} b
-	 * @param {oimo.common.Vec3} anchor
-	 */
-	create_generic_joint(a, b, anchor) {
-		const j = oimo.dynamics.constraint.joint;
-		const config = new j.GenericJointConfig();
-		const m = new oimo.common.Mat3();
-		config.init(b, a, anchor, m, m);
-		const rotXLimit = new j.RotationalLimitMotor().setLimits(0, 0);
-		const rotYLimit = new j.RotationalLimitMotor().setLimits(0, 0);
-		const rotZLimit = new j.RotationalLimitMotor().setLimits(0, 0);
-		const translXLimit = new j.TranslationalLimitMotor().setLimits(0, 0);
-		const translYLimit = new j.TranslationalLimitMotor().setLimits(0, 0);
-		const translZLimit = new j.TranslationalLimitMotor().setLimits(0, 0);
-		const transXSd = new j.SpringDamper().setSpring(4, 1);
-		const transYSd = new j.SpringDamper().setSpring(4, 1);
-		const transZSd = new j.SpringDamper().setSpring(4, 1);
-		const rotXSd = new j.SpringDamper().setSpring(4, 1);
-		const rotYSd = new j.SpringDamper().setSpring(4, 1);
-		const rotZSd = new j.SpringDamper().setSpring(4, 1);
-		config.translationalLimitMotors = [
-			translXLimit,
-			translYLimit,
-			translZLimit,
-		];
-		config.translationalSpringDampers = [transXSd, transYSd, transZSd];
-		config.rotationalLimitMotors = [rotXLimit, rotYLimit, rotZLimit];
-		config.rotationalSpringDampers = [rotXSd, rotYSd, rotZSd];
-		const joint = new oimo.dynamics.constraint.joint.GenericJoint(config);
-		this._physics.world.addJoint(joint);
-		const rlm = joint.getRotationalLimitMotors();
-		const tsd = joint.getTranslationalSpringDampers();
-		return {
-			joint,
-			rotXLimit: rlm[0],
-			rotYLimit: rlm[1],
-			rotZLimit: rlm[2],
-			transXSd: tsd[0],
-			transYSd: tsd[1],
-			transZSd: tsd[2],
-		};
-	}
-
-	/**
-	 * @param {oimo.dynamics.rigidbody.RigidBody} a
-	 * @param {oimo.dynamics.rigidbody.RigidBody} b
-	 * @param {oimo.common.Vec3} anchor
-	 */
-	create_spherical_joint(a, b, anchor) {
-		const j = oimo.dynamics.constraint.joint;
-		const config = new j.SphericalJointConfig();
-		config.init(a, b, anchor);
-		config.springDamper.frequency = 4.0;
-		config.springDamper.dampingRatio = 1.0;
-		const joint = new j.SphericalJoint(config);
-		this._physics.world.addJoint(joint);
-		return joint;
-	}
 }
 
 /**
@@ -287,58 +185,60 @@ class Physics {
 		this.config = config;
 		this.tds = 1;
 		this._acc = 0;
-		/** @type {oimo.dynamics.World|null} */
+		/** @type {import("../lib/Rapier3d.js").World|null} */
 		this.world = null;
-		/** @type {DebugDraw|null} */
+		/** @type {import("../lib/Rapier3d.js").EventQueue|null} */
+		this.eventQueue = null;
+		/** @type {RapierDebugDraw|null} */
 		this.debug_draw = null;
-		/** @type {Object<string, oimo.dynamics.rigidbody.RigidBody>} */
+		/** @type {Object<string, import("../lib/Rapier3d.js").RigidBody>} */
 		this.bodylist = {};
+		/** @type {Object<string, { itemIndex?: number|null }>} */
+		this.bodyMeta = {};
+		/** @type {Object<string, import("../lib/Rapier3d.js").Collider>} */
+		this.colliderlist = {};
+		/** @type {Map<number, string>} */
+		this.colliderToGameId = new Map();
 		/** @type {Object<string, THREE.Object3D>} */
 		this.meshlist = {};
 		/** @type {Object<string, { shift?: THREE.Vector3, allow_rotate?: boolean, allow_translate?: boolean }>} */
 		this.attachopts = {};
 		this.cache = {
-			vec3_0: new oimo.common.Vec3(),
-			vec3_1: new oimo.common.Vec3(),
-			vec3_2: new oimo.common.Vec3(),
-			vec3_3: new oimo.common.Vec3(),
-			vec3up: new oimo.common.Vec3().init(0, 1, 0),
-			quat: new oimo.common.Quat(),
-			mat3: new oimo.common.Mat3(),
-			transform: new oimo.common.Transform(),
-			transformZero: new oimo.common.Transform(),
+			vec3_0: { x: 0, y: 0, z: 0 },
+			vec3_1: { x: 0, y: 0, z: 0 },
+			vec3_2: { x: 0, y: 0, z: 0 },
+			vec3_3: { x: 0, y: 0, z: 0 },
+			quat: { x: 0, y: 0, z: 0, w: 1 },
 		};
 		this.guids = 0;
-		/** @type {import("../lib/OimoPhysics.js").oimo.dynamics.constraint.joint.GenericJoint[]} */
+		/** @type {import("../lib/Rapier3d.js").ImpulseJoint[]} */
 		this._fixed_joints = [];
+		/** @type {((started: boolean, h1: number, h2: number) => void)|null} */
+		this._collision_handler = null;
 	}
 
 	/**
 	 * @returns {Physics}
 	 */
 	init() {
-		// 2026-06-17, Composer: core init drives all children [crcyc5]
 		return this;
 	}
 
 	/**
-	 * @returns {Physics}
+	 * @returns {Promise<Physics>}
 	 */
-	start() {
-		// 2026-06-14, Composer: Oimo world on start floor via toybox [phy3]
-		// 2026-06-18, Composer: fixed substep accumulator reset on start [phyacc1]
-		// 2026-06-27, Composer: Oimo contact solver tuning [physlv1]
+	async start() {
+		// 2026-06-29, Composer: await RAPIER.init before world create [rphinit1]
+		await RAPIER.init();
 		this.guids = 0;
 		this._acc = 0;
-		apply_solver_settings();
-		this.world = new oimo.dynamics.World(
-			oimo.collision.broadphase.BroadPhaseType.BVH,
-			new oimo.common.Vec3(0, -9.8, 0),
-		);
-		this.world.setNumVelocityIterations(SOLVER_VELOCITY_ITERATIONS);
-		this.world.setNumPositionIterations(SOLVER_POSITION_ITERATIONS);
-		// 2026-06-28, Composer: defer Oimo force clear to substep batch end [phyclr1]
-		this.world.setAutoClearForces(false);
+		this.world = new RAPIER.World({ x: 0, y: -9.8, z: 0 });
+		this.eventQueue = new RAPIER.EventQueue(false);
+		const ip = this.world.integrationParameters;
+		ip.dt = this.config.ref_dt * this.tds;
+		ip.numSolverIterations = SOLVER_ITERATIONS;
+		ip.numAdditionalFrictionIterations = SOLVER_FRICTION_ITERATIONS;
+		ip.normalizedAllowedLinearError = SOLVER_ALLOWED_LINEAR_ERROR;
 		this.utils = new PhysicsUtils(this, this._render.scene);
 		this.sync_debug_draw(this.config.debug);
 		return this;
@@ -349,18 +249,32 @@ class Physics {
 		for (const k in this.bodylist) {
 			this.remove(this.bodylist[k]);
 		}
+		this.eventQueue?.free();
+		this.eventQueue = null;
+		this.world?.free();
 		this.world = null;
 		this.bodylist = {};
+		this.bodyMeta = {};
+		this.colliderlist = {};
+		this.colliderToGameId.clear();
 		this.meshlist = {};
 		this.attachopts = {};
 		this._fixed_joints = [];
+		this._collision_handler = null;
 		this._acc = 0;
 	}
 
 	/** @returns {void} */
 	dispose() {
-		// 2026-06-17, Composer: physics dispose unwinds start [phydsp1]
 		this.stop();
+	}
+
+	/**
+	 * @param {(started: boolean, h1: number, h2: number) => void|null} handler
+	 * @returns {void}
+	 */
+	set_collision_handler(handler) {
+		this._collision_handler = handler;
 	}
 
 	/**
@@ -369,38 +283,54 @@ class Physics {
 	 * @returns {void}
 	 */
 	step(_dt, rdt) {
-		if (!this.world) {
+		if (!this.world || !this.eventQueue) {
 			return;
 		}
 
 		this.sync_debug_draw(this.config.debug);
 
-		// 2026-06-18, Composer: fixed substep accumulator drain all rdt [phyacc1]
+		// 2026-06-29, Composer: fixed substep accumulator drain rdt [rphstep1]
 		const stepDt = this.config.ref_dt * this.tds;
 		const frameDt = rdt > 0 ? rdt : _dt;
 		this._acc += frameDt;
 
 		while (this._acc >= stepDt) {
-			this.world.step(stepDt);
+			this.world.integrationParameters.dt = stepDt;
+			this.world.step(this.eventQueue);
+			this._drain_contacts();
 			this._acc -= stepDt;
 		}
 
-		// 2026-06-28, Composer: defer Oimo force clear to substep batch end [phyclr1]
-		this.world.clearForces();
+		// 2026-06-29, Composer: resetForces once after substep batch [rphclr1]
+		for (const id in this.bodylist) {
+			const body = this.bodylist[id];
+			if (body.isDynamic()) {
+				body.resetForces(true);
+			}
+		}
 
 		if (this.debug_draw) {
 			const canvas = this._render.renderer?.domElement;
 			if (canvas) {
 				this.debug_draw.lineMaterial.resolution.set(canvas.width, canvas.height);
 			}
-			this.debug_draw.begin();
-			this.world.debugDraw();
-			this.debug_draw.end();
+			this.debug_draw.update(this.world.debugRender());
 		}
 
 		for (const k in this.meshlist) {
 			this.step_attach(k);
 		}
+	}
+
+	/** @returns {void} */
+	_drain_contacts() {
+		if (!this._collision_handler || !this.eventQueue) {
+			return;
+		}
+		const handler = this._collision_handler;
+		this.eventQueue.drainCollisionEvents((h1, h2, started) => {
+			handler(started, h1, h2);
+		});
 	}
 
 	/**
@@ -418,15 +348,15 @@ class Physics {
 		const parent_wp =
 			mesh.parent?.getWorldPosition(cache.vec3.v9) ??
 			cache.vec3.v9.set(0, 0, 0);
-		const position = this.cache.vec3_0;
-		body.getPositionTo(position);
-		const quaternion = this.cache.quat;
-		body.getOrientationTo(quaternion);
+		const position = body.translation();
+		const rotation = body.rotation();
 		const shift = cache.vec3.v0;
 		shift.set(0, 0, 0);
 		if (opts?.shift) {
 			shift.copy(opts.shift);
-			shift.applyQuaternion(quaternion);
+			shift.applyQuaternion(
+				_worldQuat.set(rotation.x, rotation.y, rotation.z, rotation.w),
+			);
 		}
 		if (opts?.allow_translate ?? true) {
 			mesh.position.x = position.x + shift.x - parent_wp.x;
@@ -434,10 +364,10 @@ class Physics {
 			mesh.position.z = position.z + shift.z - parent_wp.z;
 		}
 		if (opts?.allow_rotate ?? true) {
-			mesh.quaternion.x = quaternion.x;
-			mesh.quaternion.y = quaternion.y;
-			mesh.quaternion.z = quaternion.z;
-			mesh.quaternion.w = quaternion.w;
+			mesh.quaternion.x = rotation.x;
+			mesh.quaternion.y = rotation.y;
+			mesh.quaternion.z = rotation.z;
+			mesh.quaternion.w = rotation.w;
 		}
 
 		if (mesh.isInstanceEntity) {
@@ -450,57 +380,123 @@ class Physics {
 	}
 
 	/**
-	 * @param {THREE.Vector3|null} pos
-	 * @param {oimo.collision.geometry.Geometry} geometry
-	 * @param {number} type
-	 * @param {object} [opts]
-	 * @param {boolean} [add]
-	 * @returns {oimo.dynamics.rigidbody.RigidBody}
+	 * @param {import("../lib/Rapier3d.js").RigidBody} body
+	 * @param {import("../lib/Rapier3d.js").Collider} collider
+	 * @param {{ itemIndex?: number|null }} [meta]
+	 * @param {boolean} [primary]
+	 * @returns {string|number}
 	 */
-	create_body(pos, geometry, type, opts, add = true) {
-		const body_config = new oimo.dynamics.rigidbody.RigidBodyConfig();
-		if (pos) {
-			body_config.position.init(pos.x, pos.y, pos.z);
-		}
-		body_config.type = type;
-		body_config.angularDamping = opts?.adamping ?? 0;
-		body_config.linearDamping = opts?.ldamping ?? 0;
-		const body = new RigidBody(body_config);
-		const shape_config = new oimo.dynamics.rigidbody.ShapeConfig();
-		shape_config.geometry = geometry;
-		shape_config.density = opts?.density ?? 1;
-		shape_config.friction = opts?.friction ?? 1;
-		shape_config.restitution = opts?.restitution ?? 0.1;
-		const shape = new oimo.dynamics.rigidbody.Shape(shape_config);
-		body.addShape(shape);
-		body.setGravityScale(opts?.gravityscale ?? 1);
-		if (add) {
-			this.add_body(body);
-		}
-		return body;
-	}
-
-	/**
-	 * @param {oimo.dynamics.rigidbody.RigidBody} body
-	 * @returns {void}
-	 */
-	add_body(body) {
-		this.world.addRigidBody(body);
+	register_body(body, collider, meta, primary = true) {
 		let id = body.id;
-		while (!body.id) {
-			this.guids = (this.guids + 1) % 0xffff;
-			id = this.guids;
-			if (this.bodylist[id]) {
-				continue;
-			}
+		if (id == null) {
+			do {
+				this.guids = (this.guids + 1) % 0xffff;
+				id = this.guids;
+			} while (this.bodylist[id]);
 			body.id = id;
 		}
 		this.bodylist[id] = body;
-		body.id = id;
+		this.bodyMeta[id] = meta ?? { itemIndex: null };
+		if (body.userData == null) {
+			body.userData = {};
+		}
+		body.userData.itemIndex = this.bodyMeta[id].itemIndex;
+		this._register_collider(id, collider, primary);
+		for (let i = 0; i < body.numColliders(); i++) {
+			const c = body.collider(i);
+			if (c.handle !== collider.handle) {
+				this._register_collider(id, c, false);
+			}
+		}
+		return id;
+	}
+
+	/**
+	 * @param {string|number} gameId
+	 * @param {import("../lib/Rapier3d.js").Collider} collider
+	 * @param {boolean} [primary]
+	 * @returns {void}
+	 */
+	_register_collider(gameId, collider, primary = false) {
+		this.colliderToGameId.set(collider.handle, gameId);
+		if (primary || !this.colliderlist[gameId]) {
+			this.colliderlist[gameId] = collider;
+		}
+	}
+
+	/**
+	 * @param {string|number} gameId
+	 * @param {{ itemIndex?: number|null }} patch
+	 * @returns {void}
+	 */
+	set_body_meta(gameId, patch) {
+		const meta = this.bodyMeta[gameId] ?? { itemIndex: null };
+		Object.assign(meta, patch);
+		this.bodyMeta[gameId] = meta;
+		const body = this.bodylist[gameId];
+		if (body) {
+			if (body.userData == null) {
+				body.userData = {};
+			}
+			body.userData.itemIndex = meta.itemIndex;
+		}
+	}
+
+	/**
+	 * @param {import("../lib/Rapier3d.js").RigidBody} body
+	 * @returns {void}
+	 */
+	add_body(body) {
+		const n = body.numColliders();
+		const collider = n > 0 ? body.collider(0) : null;
+		if (!collider) {
+			return;
+		}
+		this.register_body(body, collider, { itemIndex: null }, true);
 	}
 
 	addBody(body) {
 		this.add_body(body);
+	}
+
+	/**
+	 * @param {THREE.Vector3|null} pos
+	 * @param {number} type
+	 * @param {object} [opts]
+	 * @param {boolean} [add]
+	 * @returns {import("../lib/Rapier3d.js").RigidBody}
+	 */
+	_create_rigid_body(pos, type, opts) {
+		const desc =
+			type === RigidBodyType.DYNAMIC
+				? RAPIER.RigidBodyDesc.dynamic()
+				: type === RigidBodyType.KINEMATIC
+					? RAPIER.RigidBodyDesc.kinematicPositionBased()
+					: RAPIER.RigidBodyDesc.fixed();
+		if (pos) {
+			desc.setTranslation(pos.x, pos.y, pos.z);
+		}
+		desc.setLinearDamping(opts?.ldamping ?? 0);
+		desc.setAngularDamping(opts?.adamping ?? 0);
+		desc.setGravityScale(opts?.gravityscale ?? 1);
+		return this.world.createRigidBody(desc);
+	}
+
+	/**
+	 * @param {THREE.Vector3|null} pos
+	 * @param {import("../lib/Rapier3d.js").ColliderDesc} colDesc
+	 * @param {number} type
+	 * @param {object} [opts]
+	 * @param {boolean} [add]
+	 * @returns {import("../lib/Rapier3d.js").RigidBody}
+	 */
+	create_body_with_desc(pos, colDesc, type, opts, add = true) {
+		const body = this._create_rigid_body(pos, type, opts);
+		const collider = this.world.createCollider(colDesc, body);
+		if (add) {
+			this.register_body(body, collider, { itemIndex: null }, true);
+		}
+		return body;
 	}
 
 	/**
@@ -511,10 +507,15 @@ class Physics {
 	 * @param {boolean} [add]
 	 */
 	create_box(pos, size, type, opts, add = true) {
-		const geometry = new oimo.collision.geometry.BoxGeometry(
-			new oimo.common.Vec3(size.x * 0.5, size.y * 0.5, size.z * 0.5),
-		);
-		return this.create_body(pos, geometry, type, opts, add);
+		const colDesc = RAPIER.ColliderDesc.cuboid(
+			size.x * 0.5,
+			size.y * 0.5,
+			size.z * 0.5,
+		)
+			.setDensity(opts?.density ?? 1)
+			.setFriction(opts?.friction ?? 1)
+			.setRestitution(opts?.restitution ?? 0.1);
+		return this.create_body_with_desc(pos, colDesc, type, opts, add);
 	}
 
 	createBox(pos, size, type, opts, add = true) {
@@ -522,20 +523,23 @@ class Physics {
 	}
 
 	create_sphere(pos, radius, type, opts, add = true) {
-		const geometry = new oimo.collision.geometry.SphereGeometry(radius);
-		return this.create_body(pos, geometry, type, opts, add);
+		const colDesc = RAPIER.ColliderDesc.ball(radius)
+			.setDensity(opts?.density ?? 1)
+			.setFriction(opts?.friction ?? 1)
+			.setRestitution(opts?.restitution ?? 0.1);
+		return this.create_body_with_desc(pos, colDesc, type, opts, add);
 	}
 
 	create_cylinder(pos, size, type, opts, add = true) {
-		const geometry = new oimo.collision.geometry.CylinderGeometry(
-			size.x,
-			size.y * 0.5,
-		);
-		return this.create_body(pos, geometry, type, opts, add);
+		const colDesc = RAPIER.ColliderDesc.cylinder(size.y * 0.5, size.x)
+			.setDensity(opts?.density ?? 1)
+			.setFriction(opts?.friction ?? 1)
+			.setRestitution(opts?.restitution ?? 0.1);
+		return this.create_body_with_desc(pos, colDesc, type, opts, add);
 	}
 
 	/**
-	 * @param {oimo.dynamics.rigidbody.RigidBody} body
+	 * @param {import("../lib/Rapier3d.js").RigidBody} body
 	 * @param {THREE.Object3D} mesh
 	 * @param {object} [opts]
 	 */
@@ -552,64 +556,54 @@ class Physics {
 	}
 
 	/**
-	 * @param {oimo.dynamics.rigidbody.RigidBody} body
+	 * @param {import("../lib/Rapier3d.js").RigidBody} body
 	 * @param {number} x
 	 * @param {number} y
 	 * @param {number} z
 	 */
 	setBodyPosition(body, x, y, z) {
-		const v = this.cache.vec3_0.init(x, y, z);
-		const t = this.cache.transformZero;
-		t.setPosition(v);
-		body.setTransform(t);
-		body.setLinearVelocity(this.cache.vec3_1.init(0, 0, 0));
-		body.setAngularVelocity(this.cache.vec3_2.init(0, 0, 0));
+		body.setTranslation({ x, y, z }, true);
+		body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+		body.setAngvel({ x: 0, y: 0, z: 0 }, true);
 		this.step_attach(body.id);
 	}
 
 	/**
-	 * @param {oimo.dynamics.rigidbody.RigidBody} body
+	 * @param {import("../lib/Rapier3d.js").RigidBody} body
 	 * @param {import("three").Quaternion} rotation
 	 */
-	// 2026-06-26, Composer: setBodyRotation preserves position [phyrot1]
 	setBodyRotation(body, rotation) {
-		const t = this.cache.transformZero;
-		body.getTransformTo(t);
-		const oq = this.cache.quat;
-		oq.x = rotation.x;
-		oq.y = rotation.y;
-		oq.z = rotation.z;
-		oq.w = rotation.w;
-		t.setOrientation(oq);
-		body.setTransform(t);
-		body.setAngularVelocity(this.cache.vec3_2.init(0, 0, 0));
+		body.setRotation(
+			{ x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w },
+			true,
+		);
+		body.setAngvel({ x: 0, y: 0, z: 0 }, true);
 		this.step_attach(body.id);
 	}
 
 	/**
-	 * @param {oimo.dynamics.rigidbody.RigidBody} bodyA
-	 * @param {oimo.dynamics.rigidbody.RigidBody} bodyB
-	 * @param {oimo.common.Vec3} anchorWorld
-	 * @returns {import("../lib/OimoPhysics.js").oimo.dynamics.constraint.joint.GenericJoint|null}
+	 * @param {import("../lib/Rapier3d.js").RigidBody} bodyA
+	 * @param {import("../lib/Rapier3d.js").RigidBody} bodyB
+	 * @param {{ x: number, y: number, z: number }} anchorWorld
+	 * @returns {import("../lib/Rapier3d.js").ImpulseJoint|null}
 	 */
-	// 2026-06-28, Composer: fixed joint weld for welded toys [phywld1]
 	create_fixed_joint(bodyA, bodyB, anchorWorld) {
 		if (!this.world || !bodyA || !bodyB) {
 			return null;
 		}
-		const j = oimo.dynamics.constraint.joint;
-		const config = new j.GenericJointConfig();
-		const m = new oimo.common.Mat3();
-		config.init(bodyB, bodyA, anchorWorld, m, m);
-		const rotLimit = () => new j.RotationalLimitMotor().setLimits(0, 0);
-		const transLimit = () => new j.TranslationalLimitMotor().setLimits(0, 0);
-		const sd = () => new j.SpringDamper().setSpring(4, 1);
-		config.translationalLimitMotors = [transLimit(), transLimit(), transLimit()];
-		config.translationalSpringDampers = [sd(), sd(), sd()];
-		config.rotationalLimitMotors = [rotLimit(), rotLimit(), rotLimit()];
-		config.rotationalSpringDampers = [sd(), sd(), sd()];
-		const joint = new j.GenericJoint(config);
-		this.world.addJoint(joint);
+		const posA = bodyA.translation();
+		const rotA = bodyA.rotation();
+		const posB = bodyB.translation();
+		const rotB = bodyB.rotation();
+		const anchor1 = world_to_local_point(anchorWorld, posA, rotA);
+		const anchor2 = world_to_local_point(anchorWorld, posB, rotB);
+		const params = RAPIER.JointData.fixed(
+			anchor1,
+			_IDENTITY_ROT,
+			anchor2,
+			_IDENTITY_ROT,
+		);
+		const joint = this.world.createImpulseJoint(params, bodyA, bodyB, true);
 		if (!this._fixed_joints) {
 			this._fixed_joints = [];
 		}
@@ -618,16 +612,14 @@ class Physics {
 	}
 
 	/**
-	 * @param {import("../lib/OimoPhysics.js").oimo.dynamics.constraint.joint.GenericJoint} joint
+	 * @param {import("../lib/Rapier3d.js").ImpulseJoint} joint
 	 * @returns {void}
 	 */
 	remove_joint(joint) {
 		if (!joint || !this.world) {
 			return;
 		}
-		if (joint._world === this.world) {
-			this.world.removeJoint(joint);
-		}
+		this.world.removeImpulseJoint(joint, true);
 		if (this._fixed_joints) {
 			const i = this._fixed_joints.indexOf(joint);
 			if (i >= 0) {
@@ -637,24 +629,34 @@ class Physics {
 	}
 
 	/**
-	 * @param {oimo.dynamics.rigidbody.RigidBody} body
+	 * @param {import("../lib/Rapier3d.js").RigidBody} body
 	 */
 	remove(body) {
-		if (!body) {
+		if (!body || !this.world) {
 			return;
 		}
-		if (body._world === this.world) {
+		const id = body.id;
+		if (id != null) {
+			for (let i = 0; i < body.numColliders(); i++) {
+				this.colliderToGameId.delete(body.collider(i).handle);
+			}
+			delete this.bodylist[id];
+			delete this.bodyMeta[id];
+			delete this.colliderlist[id];
+		}
+		if (body.isValid()) {
 			this.world.removeRigidBody(body);
 		}
-		const mesh = this.meshlist[body.id];
+		const mesh = id != null ? this.meshlist[id] : null;
 		if (mesh?.isInstanceEntity) {
 			mesh.remove();
 		} else {
 			mesh?.removeFromParent?.();
 		}
-		delete this.bodylist[body.id];
-		delete this.meshlist[body.id];
-		delete this.attachopts[body.id];
+		if (id != null) {
+			delete this.meshlist[id];
+			delete this.attachopts[id];
+		}
 	}
 
 	/**
@@ -666,17 +668,11 @@ class Physics {
 		}
 		if (enabled) {
 			if (!this.debug_draw) {
-				this.debug_draw = new DebugDraw(this._render.scene);
+				this.debug_draw = new RapierDebugDraw(this._render.scene);
 			}
-			// 2026-06-14, Composer: wireframe only line() implemented not triangle [phydb1]
-			this.debug_draw.wireframe = true;
-			this.debug_draw.drawJointLimits = true;
-			this.debug_draw.drawBases = true;
-			this.world.setDebugDraw(this.debug_draw);
 			return;
 		}
 		if (this.debug_draw) {
-			this.world.setDebugDraw(null);
 			this.debug_draw.dispose?.();
 			this.debug_draw = null;
 		}
@@ -684,12 +680,9 @@ class Physics {
 }
 
 export default Physics;
-export { Physics, DebugDraw, PhysicsUtils, RigidBodyType, RigidBody };
-// 2026-06-14, Composer: wireframe only line() implemented not triangle [phydb1]
-// 2026-06-14, Composer: Oimo physics DebugDraw PhysicsUtils port [phy1]
-// 2026-06-14, Composer: Oimo world on start floor via toybox [phy3]
-// 2026-06-17, Composer: physics dispose unwinds start [phydsp1]
-// 2026-06-18, Composer: fixed substep accumulator drain all rdt [phyacc1]
-// 2026-06-26, Composer: setBodyRotation preserves position [phyrot1]
-// 2026-06-27, Composer: Oimo contact solver tuning [physlv1]
-// 2026-06-28, Composer: defer Oimo force clear to substep batch end [phyclr1]
+export { Physics, RapierDebugDraw as DebugDraw, PhysicsUtils, RigidBodyType, RAPIER };
+// 2026-06-29, Composer: Rapier physics world owner and step loop [rph1]
+// 2026-06-29, Composer: await RAPIER.init before world create [rphinit1]
+// 2026-06-29, Composer: fixed substep accumulator drain rdt [rphstep1]
+// 2026-06-29, Composer: resetForces once after substep batch [rphclr1]
+// 2026-06-29, Composer: Rapier debugRender line segments [rphdb1]

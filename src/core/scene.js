@@ -16,8 +16,7 @@ import ContactRouter from "../scene/contact_router.js";
 import RigidModel, { RigidModelPart } from "../scene/rigid_model.js";
 import { VAR_FLAGS_MODULES, VAR_MFLAG_CONTACTS, VAR_MFLAG_WELDS } from "../scene/modulebox.js";
 import { VAR_BODY_ID, VAR_TOY_INDEX, TOY_INDEX_INVALID } from "../scene/itembox.js";
-import { oimo } from "../lib/OimoPhysics.js";
-import { RigidBody, RigidBodyType } from "./physics.js";
+import { RAPIER } from "./physics.js";
 
 const _billboardMatrix = new THREE.Matrix4();
 const _boundsSrcInv = new THREE.Matrix4();
@@ -70,11 +69,10 @@ class Scene {
     // 2026-06-27, Composer: scene Howler audiosprite loader [scnau1]
     this.audio = new Audio();
     this._billboards = {};
-    /** @type {Record<string, oimo.dynamics.rigidbody.RigidBody[]>} */
+    /** @type {Record<string, import("../lib/Rapier3d.js").RigidBody[]>} */
     this._body_pool = {};
     this._body_cache = {
-      vec3: new oimo.common.Vec3(),
-      transform: new oimo.common.Transform(),
+      vec3: { x: 0, y: 0, z: 0 },
     };
     /** @type {Record<string, THREE.Material>} */
     this._cache_materials = {};
@@ -88,7 +86,7 @@ class Scene {
     this._collect_meshes_buf = [];
     /** @type {Set<string>} */
     this._collect_meshes_seen = new Set();
-    /** @type {Map<number, { joints: import("../lib/OimoPhysics.js").oimo.dynamics.constraint.joint.GenericJoint[], childIndices: number[], childKeys: string[] }>} */
+    /** @type {Map<number, { joints: import("../lib/Rapier3d.js").ImpulseJoint[], childIndices: number[], childKeys: string[] }>} */
     this._weld_joints = new Map();
     /** @type {Set<number>} */
     this._weld_spawned = new Set();
@@ -743,7 +741,7 @@ class Scene {
 
   /**
    * @param {import("@three.ez/instanced-mesh").InstancedEntity|THREE.Object3D|null} entity
-   * @param {oimo.dynamics.rigidbody.RigidBody} [body]
+   * @param {import("../lib/Rapier3d.js").RigidBody} [body]
    * @returns {void}
    */
   delmodel(entity, body) {
@@ -774,18 +772,11 @@ class Scene {
 
   /**
    * @param {string} name bodies db key
-   * @returns {oimo.dynamics.rigidbody.RigidBody|null}
+   * @returns {import("../lib/Rapier3d.js").RigidBody|null}
    */
   makebody(name) {
-    // 2026-06-14, Composer: pooled makebody delbody by bodies db name [scnbd1]
-    const pool = this._body_pool[name];
-    let body = null;
-    if (pool?.length) {
-      body = pool.pop();
-      this._reset_body(body);
-    } else {
-      body = this._create_body(name);
-    }
+    // 2026-06-29, Composer: Rapier bodies recreated each makebody [scnrbd1]
+    const body = this._create_body(name);
     if (!body) {
       return null;
     }
@@ -795,7 +786,7 @@ class Scene {
 
   /**
    * @param {string} name bodies db key
-   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {import("../lib/Rapier3d.js").RigidBody} body
    * @returns {void}
    */
   delbody(name, body) {
@@ -803,15 +794,10 @@ class Scene {
       return;
     }
     this._physics.remove(body);
-    this._reset_body(body);
-    if (!this._body_pool[name]) {
-      this._body_pool[name] = [];
-    }
-    this._body_pool[name].push(body);
   }
 
   /**
-   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {import("../lib/Rapier3d.js").RigidBody} body
    * @param {import("@three.ez/instanced-mesh").InstancedEntity} entity
    * @param {object} [opts]
    * @returns {void}
@@ -821,7 +807,7 @@ class Scene {
   }
 
   /**
-   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {import("../lib/Rapier3d.js").RigidBody} body
    * @param {number} x
    * @param {number} y
    * @param {number} z
@@ -833,7 +819,7 @@ class Scene {
   }
 
   /**
-   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {import("../lib/Rapier3d.js").RigidBody} body
    * @param {import("three").Quaternion} rotation
    * @returns {void}
    */
@@ -872,7 +858,7 @@ class Scene {
 
   /**
    * @param {number} index
-   * @returns {oimo.dynamics.rigidbody.RigidBody|null}
+   * @returns {import("../lib/Rapier3d.js").RigidBody|null}
    */
   get_itembody(index) {
     const body_id = this._itembox.mempool.read_ui16(index, VAR_BODY_ID);
@@ -930,25 +916,19 @@ class Scene {
   }
 
   /**
-   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {import("../lib/Rapier3d.js").RigidBody} body
    * @param {THREE.Matrix4} worldMat
    * @returns {void}
    */
   _set_body_world_matrix(body, worldMat) {
     worldMat.decompose(_weldPos, _weldQuat, _weldScale);
-    const t = this._body_cache.transform;
-    const p = this._body_cache.vec3;
-    const q = this._physics.cache.quat;
-    p.init(_weldPos.x, _weldPos.y, _weldPos.z);
-    q.x = _weldQuat.x;
-    q.y = _weldQuat.y;
-    q.z = _weldQuat.z;
-    q.w = _weldQuat.w;
-    t.setPosition(p);
-    t.setOrientation(q);
-    body.setTransform(t);
-    body.setLinearVelocity(this._physics.cache.vec3_1.init(0, 0, 0));
-    body.setAngularVelocity(this._physics.cache.vec3_2.init(0, 0, 0));
+    body.setTranslation({ x: _weldPos.x, y: _weldPos.y, z: _weldPos.z }, true);
+    body.setRotation(
+      { x: _weldQuat.x, y: _weldQuat.y, z: _weldQuat.z, w: _weldQuat.w },
+      true,
+    );
+    body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     this._physics.step_attach(body.id);
     const rigid = this._rigid_by_root.get(this._physics.meshlist[body.id]);
     rigid?.sync();
@@ -1033,7 +1013,11 @@ class Scene {
       _weldChildMat.copy(_weldParentMat).multiply(relMat);
       this._set_body_world_matrix(childBody, _weldChildMat);
 
-      childBody.getPositionTo(anchor);
+      const anchor = this._physics.cache.vec3_3;
+      const childPos = childBody.translation();
+      anchor.x = childPos.x;
+      anchor.y = childPos.y;
+      anchor.z = childPos.z;
       pack.joints[i] = this._physics.create_fixed_joint(parentBody, childBody, anchor);
 
       this._sync_weld_subtree(childIndex);
@@ -1083,6 +1067,7 @@ class Scene {
       body.userData = {};
     }
     body.userData.itemIndex = index;
+    this._physics.set_body_meta(body.id, { itemIndex: index });
     this._itembox.mempool.write_ui16(index, VAR_BODY_ID, body.id);
   }
 
@@ -1108,7 +1093,7 @@ class Scene {
 
   /**
    * @param {string} name
-   * @returns {oimo.dynamics.rigidbody.RigidBody|null}
+   * @returns {import("../lib/Rapier3d.js").RigidBody|null}
    */
   _create_body(name) {
     const bodyconf = this._db.get("bodies")?.getconfig(name);
@@ -1117,67 +1102,66 @@ class Scene {
       return null;
     }
 
-    const rbody_config = new oimo.dynamics.rigidbody.RigidBodyConfig();
-    rbody_config.position.init(0, 1, 0);
-    rbody_config.type = bodyconf.dynamics
-      ? RigidBodyType.DYNAMIC
-      : RigidBodyType.STATIC;
-    rbody_config.angularDamping = bodyconf.adamping ?? 1;
-    rbody_config.linearDamping = bodyconf.ldamping ?? 1;
+    const world = this._physics.world;
+    if (!world) {
+      return null;
+    }
 
-    const body = new RigidBody(rbody_config);
+    // 2026-06-29, Composer: scene bodies via RigidBodyDesc ColliderDesc [scnrbd2]
+    const desc = bodyconf.dynamics
+      ? RAPIER.RigidBodyDesc.dynamic()
+      : RAPIER.RigidBodyDesc.fixed();
+    desc.setTranslation(0, 1, 0);
+    desc.setAngularDamping(bodyconf.adamping ?? 1);
+    desc.setLinearDamping(bodyconf.ldamping ?? 1);
+    desc.setGravityScale(bodyconf.gravityscale ?? 1);
+    const body = world.createRigidBody(desc);
 
-    // 2026-06-26, Composer: bounds body from model mesh bbox [scnbnd1]
     if (bodyconf.type === "bounds") {
       if (!this._makebodyshape_bounds(bodyconf, body)) {
+        world.removeRigidBody(body);
         return null;
       }
-      body.setGravityScale(bodyconf.gravityscale ?? 1);
       return body;
     }
 
-    let geometry = null;
-
+    let colDesc = null;
     switch (bodyconf.shape) {
       case "box":
-        geometry = new oimo.collision.geometry.BoxGeometry(
-          this._body_cache.vec3.init(
-            (bodyconf.w ?? 1) * 0.5,
-            (bodyconf.h ?? 1) * 0.5,
-            (bodyconf.l ?? 1) * 0.5,
-          ),
+        colDesc = RAPIER.ColliderDesc.cuboid(
+          (bodyconf.w ?? 1) * 0.5,
+          (bodyconf.h ?? 1) * 0.5,
+          (bodyconf.l ?? 1) * 0.5,
         );
         break;
       case "cylinder":
-        geometry = new oimo.collision.geometry.CylinderGeometry(
-          bodyconf.r ?? 0.5,
+        colDesc = RAPIER.ColliderDesc.cylinder(
           (bodyconf.h ?? 1) * 0.5,
+          bodyconf.r ?? 0.5,
         );
         break;
       default:
         logger.error(
           `Scene::_create_body error: unsupported shape "${bodyconf.shape}"`,
         );
+        world.removeRigidBody(body);
         return null;
     }
 
-    if (geometry) {
-      const rshape_config = new oimo.dynamics.rigidbody.ShapeConfig();
-      rshape_config.geometry = geometry;
-      rshape_config.density = bodyconf.density ?? 1;
-      rshape_config.friction = bodyconf.friction ?? 1;
-      rshape_config.restitution = bodyconf.restitution ?? 0;
-      const rshape = new oimo.dynamics.rigidbody.Shape(rshape_config);
-      body.addShape(rshape);
+    if (colDesc) {
+      colDesc
+        .setDensity(bodyconf.density ?? 1)
+        .setFriction(bodyconf.friction ?? 1)
+        .setRestitution(bodyconf.restitution ?? 0);
+      world.createCollider(colDesc, body);
     }
 
-    body.setGravityScale(bodyconf.gravityscale ?? 1);
     return body;
   }
 
   /**
    * @param {Record<string, any>} bodyconf
-   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {import("../lib/Rapier3d.js").RigidBody} body
    * @returns {boolean}
    */
   _makebodyshape_bounds(bodyconf, body) {
@@ -1262,10 +1246,10 @@ class Scene {
   /**
    * @param {THREE.InstancedMesh} mesh
    * @param {number} index
-   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {import("../lib/Rapier3d.js").RigidBody} body
    * @param {Record<string, any>} bodyconf
    * @param {THREE.Matrix4} srcInv
-   * @returns {oimo.dynamics.rigidbody.Shape|null}
+   * @returns {import("../lib/Rapier3d.js").Collider|null}
    */
   create_instanced_mesh_shape(mesh, index, body, bodyconf, srcInv) {
     if (!mesh.geometry.boundingBox) {
@@ -1283,10 +1267,10 @@ class Scene {
 
   /**
    * @param {THREE.Mesh} mesh
-   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {import("../lib/Rapier3d.js").RigidBody} body
    * @param {Record<string, any>} bodyconf
    * @param {THREE.Matrix4} srcInv
-   * @returns {oimo.dynamics.rigidbody.Shape|null}
+   * @returns {import("../lib/Rapier3d.js").Collider|null}
    */
   create_mesh_shape(mesh, body, bodyconf, srcInv) {
     if (!mesh.geometry.boundingBox) {
@@ -1307,9 +1291,9 @@ class Scene {
   /**
    * @param {THREE.Box3} boundbox
    * @param {THREE.Matrix4} matrix
-   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {import("../lib/Rapier3d.js").RigidBody} body
    * @param {Record<string, any>} bodyconf
-   * @returns {oimo.dynamics.rigidbody.Shape|null}
+   * @returns {import("../lib/Rapier3d.js").Collider|null}
    */
   create_shape(boundbox, matrix, body, bodyconf) {
     const size = boundbox.getSize(cache.vec3.v0);
@@ -1323,53 +1307,27 @@ class Scene {
     size.y *= scale.y;
     size.z *= scale.z;
 
-    let geometry = null;
+    let colDesc = null;
     if (bodyconf.shape === "cylinder") {
       const radius = Math.max(size.x, size.z) * 0.5;
       const halfHeight = size.y * 0.5;
-      geometry = new oimo.collision.geometry.CylinderGeometry(radius, halfHeight);
+      colDesc = RAPIER.ColliderDesc.cylinder(halfHeight, radius);
     } else {
-      geometry = new oimo.collision.geometry.BoxGeometry(
-        this._body_cache.vec3.init(size.x * 0.5, size.y * 0.5, size.z * 0.5),
+      colDesc = RAPIER.ColliderDesc.cuboid(
+        size.x * 0.5,
+        size.y * 0.5,
+        size.z * 0.5,
       );
     }
 
-    const rshape_config = new oimo.dynamics.rigidbody.ShapeConfig();
-    rshape_config.geometry = geometry;
-    rshape_config.density = bodyconf.density ?? 1;
-    rshape_config.friction = bodyconf.friction ?? 1;
-    rshape_config.restitution = bodyconf.restitution ?? 0;
-    const rshape = new oimo.dynamics.rigidbody.Shape(rshape_config);
-    body.addShape(rshape);
+    colDesc
+      .setDensity(bodyconf.density ?? 1)
+      .setFriction(bodyconf.friction ?? 1)
+      .setRestitution(bodyconf.restitution ?? 0)
+      .setTranslation(pos.x, pos.y, pos.z)
+      .setRotation({ x: rot.x, y: rot.y, z: rot.z, w: rot.w });
 
-    const t = this._body_cache.transform;
-    const oq = this._physics.cache.quat;
-    oq.x = rot.x;
-    oq.y = rot.y;
-    oq.z = rot.z;
-    oq.w = rot.w;
-    t.setPosition(this._body_cache.vec3.init(pos.x, pos.y, pos.z));
-    t.setOrientation(oq);
-    rshape.setLocalTransform(t);
-
-    return rshape;
-  }
-
-  /**
-   * @param {oimo.dynamics.rigidbody.RigidBody} body
-   * @returns {void}
-   */
-  _reset_body(body) {
-    const v = this._body_cache.vec3.init(0, 1, 0);
-    const t = this._body_cache.transform;
-    t.setPosition(v);
-    body.setTransform(t);
-    body.setLinearVelocity(this._body_cache.vec3.init(0, 0, 0));
-    body.setAngularVelocity(this._body_cache.vec3.init(0, 0, 0));
-    // 2026-06-26, Composer: clear pooled body userData itemIndex [scnud1]
-    if (body.userData != null) {
-      body.userData.itemIndex = null;
-    }
+    return this._physics.world.createCollider(colDesc, body);
   }
 
   /**
@@ -1427,7 +1385,7 @@ class Scene {
   }
 
   /**
-   * @param {oimo.dynamics.rigidbody.RigidBody} body
+   * @param {import("../lib/Rapier3d.js").RigidBody} body
    * @param {THREE.Matrix4} out
    * @returns {THREE.Matrix4|null}
    */
@@ -1435,10 +1393,8 @@ class Scene {
     if (!body) {
       return null;
     }
-    const t = this._body_cache.transform;
-    body.getTransformTo(t);
-    const p = t.getPosition();
-    const q = t.getOrientation();
+    const p = body.translation();
+    const q = body.rotation();
     _weldPos.set(p.x, p.y, p.z);
     _weldBodyQuat.set(q.x, q.y, q.z, q.w);
     return out.compose(_weldPos, _weldBodyQuat, _weldScale.set(1, 1, 1));
@@ -1490,7 +1446,7 @@ class Scene {
       return;
     }
 
-    /** @type {import("../lib/OimoPhysics.js").oimo.dynamics.constraint.joint.GenericJoint[]} */
+    /** @type {import("../lib/Rapier3d.js").ImpulseJoint[]} */
     const joints = [];
     /** @type {number[]} */
     const childIndices = [];
@@ -1535,7 +1491,10 @@ class Scene {
         continue;
       }
 
-      childBody.getPositionTo(anchor);
+      const childPos = childBody.translation();
+      anchor.x = childPos.x;
+      anchor.y = childPos.y;
+      anchor.z = childPos.z;
       const joint = this._physics.create_fixed_joint(rootBody, childBody, anchor);
       if (joint) {
         joints.push(joint);
@@ -1695,3 +1654,5 @@ export default Scene;
 // 2026-06-28, Composer: reposition welded children from root body pose [scnwld4]
 // 2026-06-28, Composer: scene weld dispose joints only welds owns cascade [scnwld5]
 // 2026-06-28, Composer: recursive weld subtree sync from parent pose [scnwld6]
+// 2026-06-29, Composer: Rapier bodies recreated each makebody [scnrbd1]
+// 2026-06-29, Composer: scene bodies via RigidBodyDesc ColliderDesc [scnrbd2]
