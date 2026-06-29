@@ -1,6 +1,6 @@
 /** @namespace ty */
 // Purpose: weight-drop quake via Rapier AABB query and contact pairs.
-import { RAPIER } from "../core/physics.js";
+import { RAPIER, physicsRead } from "../core/physics.js";
 
 export const QUAKE_SPEED_MIN = 1.0;
 const QUAKE_GAIN = 0.5;
@@ -26,6 +26,10 @@ const _angImpulse = { x: 0, y: 0, z: 0 };
 const _normal = { x: 0, y: 0, z: 0 };
 const _pos = { x: 0, y: 0, z: 0 };
 const _rotPt = { x: 0, y: 0, z: 0 };
+const _colliderQuat = { x: 0, y: 0, z: 0, w: 1 };
+const _localContact = { x: 0, y: 0, z: 0 };
+const _vel1 = { x: 0, y: 0, z: 0 };
+const _vel2 = { x: 0, y: 0, z: 0 };
 const CONTACT_PREDICTION = 0.1;
 /** @type {Set<import("@dimforge/rapier3d").RigidBody>} */
 const _queryBodies = new Set();
@@ -82,24 +86,24 @@ export function contactApproachSpeed(world, collider1, collider2) {
 	if (!b1 || !b2) {
 		return 0;
 	}
-	const v1 = b1.linvel();
-	const v2 = b2.linvel();
+	physicsRead.body_linvel(b1, _vel1);
+	physicsRead.body_linvel(b2, _vel2);
 	let approach = 0;
 	world.contactPair(c1, c2, (manifold) => {
-		const n = manifold.normal();
+		physicsRead.manifold_normal(manifold, _normal);
 		const relN =
-			(v1.x - v2.x) * n.x +
-			(v1.y - v2.y) * n.y +
-			(v1.z - v2.z) * n.z;
+			(_vel1.x - _vel2.x) * _normal.x +
+			(_vel1.y - _vel2.y) * _normal.y +
+			(_vel1.z - _vel2.z) * _normal.z;
 		approach = Math.max(approach, Math.max(0, -relN));
 	});
 	if (approach > 0) {
 		return approach;
 	}
 	// 2026-06-29, Composer: post-solver fallback relative speed for sfx [plqke2]
-	const dx = v1.x - v2.x;
-	const dy = v1.y - v2.y;
-	const dz = v1.z - v2.z;
+	const dx = _vel1.x - _vel2.x;
+	const dy = _vel1.y - _vel2.y;
+	const dz = _vel1.z - _vel2.z;
 	return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
@@ -147,12 +151,12 @@ function quatRotateVec(q, v, out) {
  * @returns {void}
  */
 function localPointToWorld(collider, local, out) {
-	const t = collider.translation();
-	const r = collider.rotation();
-	quatRotateVec(r, local, out);
-	out.x += t.x;
-	out.y += t.y;
-	out.z += t.z;
+	physicsRead.collider_translation(collider, _pos);
+	physicsRead.collider_rotation(collider, _colliderQuat);
+	quatRotateVec(_colliderQuat, local, out);
+	out.x += _pos.x;
+	out.y += _pos.y;
+	out.z += _pos.z;
 }
 
 /**
@@ -167,10 +171,10 @@ function accumulateContactPairPoints(world, c1, c2, out) {
 	world.contactPair(c1, c2, (manifold, flipped) => {
 		const nSolver = manifold.numSolverContacts();
 		for (let i = 0; i < nSolver; i++) {
-			const pt = manifold.solverContactPoint(i);
-			out.x += pt.x;
-			out.y += pt.y;
-			out.z += pt.z;
+			physicsRead.manifold_solver_contact(manifold, i, _rotPt);
+			out.x += _rotPt.x;
+			out.y += _rotPt.y;
+			out.z += _rotPt.z;
 			count++;
 		}
 		if (nSolver > 0) {
@@ -179,10 +183,12 @@ function accumulateContactPairPoints(world, c1, c2, out) {
 		const col = flipped ? c2 : c1;
 		const nGeom = manifold.numContacts();
 		for (let i = 0; i < nGeom; i++) {
-			const local = flipped
-				? manifold.localContactPoint2(i)
-				: manifold.localContactPoint1(i);
-			localPointToWorld(col, local, _rotPt);
+			if (flipped) {
+				physicsRead.manifold_local_contact2(manifold, i, _localContact);
+			} else {
+				physicsRead.manifold_local_contact1(manifold, i, _localContact);
+			}
+			localPointToWorld(col, _localContact, _rotPt);
 			out.x += _rotPt.x;
 			out.y += _rotPt.y;
 			out.z += _rotPt.z;
@@ -231,11 +237,11 @@ function collectImpactPoint(world, weightBody, surfaceBody, out) {
 		return;
 	}
 
-	const wp = weightBody.translation();
-	const sp = surfaceBody.translation();
-	out.x = wp.x;
-	out.z = wp.z;
-	out.y = surfaceBody.isFixed() ? sp.y : wp.y;
+	physicsRead.body_translation(weightBody, _pos);
+	out.x = _pos.x;
+	out.z = _pos.z;
+	physicsRead.body_translation(surfaceBody, _rotPt);
+	out.y = surfaceBody.isFixed() ? _rotPt.y : _pos.y;
 }
 
 /**
@@ -443,10 +449,7 @@ export function quake(world, collider1, collider2, weightBody) {
 	_normal.z = 0;
 	if (c1 && c2) {
 		world.contactPair(c1, c2, (manifold) => {
-			const n = manifold.normal();
-			_normal.x = n.x;
-			_normal.y = n.y;
-			_normal.z = n.z;
+			physicsRead.manifold_normal(manifold, _normal);
 		});
 	}
 
@@ -458,9 +461,9 @@ export function quake(world, collider1, collider2, weightBody) {
 		if (!_surfaceTouch.has(body)) {
 			continue;
 		}
-		const p = body.translation();
-		const dx = p.x - _impact.x;
-		const dz = p.z - _impact.z;
+		physicsRead.body_translation(body, _pos);
+		const dx = _pos.x - _impact.x;
+		const dz = _pos.z - _impact.z;
 		const dist = Math.sqrt(dx * dx + dz * dz);
 		if (dist > radius) {
 			continue;
@@ -475,9 +478,9 @@ export function quake(world, collider1, collider2, weightBody) {
 	buildChainTargets(world, weightBody, surfaceBody, _seeds);
 
 	for (const [body, chainMult] of _chainTargets) {
-		const p = body.translation();
-		const dx = p.x - _impact.x;
-		const dz = p.z - _impact.z;
+		physicsRead.body_translation(body, _pos);
+		const dx = _pos.x - _impact.x;
+		const dz = _pos.z - _impact.z;
 		const dist = Math.sqrt(dx * dx + dz * dz);
 		if (dist > radius) {
 			continue;
@@ -503,3 +506,4 @@ export function quake(world, collider1, collider2, weightBody) {
 // 2026-06-29, Composer: quake via Rapier AABB and contactPairsWith [plqke1]
 // 2026-06-29, Composer: post-solver fallback relative speed for sfx [plqke2]
 // 2026-06-29, Composer: impact from weight-surface world contacts only [plqke3]
+// 2026-06-29, Composer: quake uses physicsRead zero-alloc getters [rphrd1]

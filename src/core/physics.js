@@ -40,6 +40,175 @@ const DEFAULT_CONFIG = {
 const _IDENTITY_ROT = { w: 1, x: 0, y: 0, z: 0 };
 const _worldQuat = new THREE.Quaternion();
 const _localVec = new THREE.Vector3();
+// 2026-06-29, Composer: zero-alloc body pose read scratch for mesh sync [rphsyn1]
+// 2026-06-29, Composer: InstancedEntity world to owner-local setMatrixAt [rphsyn2]
+// 2026-06-29, Composer: shared zero-alloc Rapier read API [rphrd1]
+const _bodyPos = cache.vec3.v2;
+const _bodyQuat = cache.quat.q0;
+const _bodyWorld = cache.mat4;
+const _parentInv = new THREE.Matrix4();
+const _instanceLocal = new THREE.Matrix4();
+const _unitScale = cache.vec3.v3.set(1, 1, 1);
+
+/**
+ * Zero-alloc Rapier pose/contact reads into caller scratch.
+ * @class PhysicsRead
+ * @memberof pb.core
+ */
+class PhysicsRead {
+	/**
+	 * @param {import("@dimforge/rapier3d").RigidBody} body
+	 * @param {{ x: number, y: number, z: number }} out
+	 * @returns {void}
+	 */
+	body_translation(body, out) {
+		const raw = body.rawSet.rbTranslation(body.handle);
+		out.x = raw.x;
+		out.y = raw.y;
+		out.z = raw.z;
+		raw.free();
+	}
+
+	/**
+	 * @param {import("@dimforge/rapier3d").RigidBody} body
+	 * @param {{ x: number, y: number, z: number, w: number }} out
+	 * @returns {void}
+	 */
+	body_rotation(body, out) {
+		const raw = body.rawSet.rbRotation(body.handle);
+		out.x = raw.x;
+		out.y = raw.y;
+		out.z = raw.z;
+		out.w = raw.w;
+		raw.free();
+	}
+
+	/**
+	 * @param {import("@dimforge/rapier3d").RigidBody} body
+	 * @param {{ x: number, y: number, z: number }} out
+	 * @returns {void}
+	 */
+	body_linvel(body, out) {
+		const raw = body.rawSet.rbLinvel(body.handle);
+		out.x = raw.x;
+		out.y = raw.y;
+		out.z = raw.z;
+		raw.free();
+	}
+
+	/**
+	 * @param {import("@dimforge/rapier3d").Collider} collider
+	 * @param {{ x: number, y: number, z: number }} out
+	 * @returns {void}
+	 */
+	collider_translation(collider, out) {
+		const raw = collider.colliderSet.raw.coTranslation(collider.handle);
+		out.x = raw.x;
+		out.y = raw.y;
+		out.z = raw.z;
+		raw.free();
+	}
+
+	/**
+	 * @param {import("@dimforge/rapier3d").Collider} collider
+	 * @param {{ x: number, y: number, z: number, w: number }} out
+	 * @returns {void}
+	 */
+	collider_rotation(collider, out) {
+		const raw = collider.colliderSet.raw.coRotation(collider.handle);
+		out.x = raw.x;
+		out.y = raw.y;
+		out.z = raw.z;
+		out.w = raw.w;
+		raw.free();
+	}
+
+	/**
+	 * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
+	 * @param {{ x: number, y: number, z: number }} out
+	 * @returns {void}
+	 */
+	manifold_normal(manifold, out) {
+		const raw = manifold.raw.normal();
+		out.x = raw.x;
+		out.y = raw.y;
+		out.z = raw.z;
+		raw.free();
+	}
+
+	/**
+	 * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
+	 * @param {number} i
+	 * @param {{ x: number, y: number, z: number }} out
+	 * @returns {void}
+	 */
+	manifold_solver_contact(manifold, i, out) {
+		const raw = manifold.raw.solver_contact_point(i);
+		out.x = raw.x;
+		out.y = raw.y;
+		out.z = raw.z;
+		raw.free();
+	}
+
+	/**
+	 * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
+	 * @param {number} i
+	 * @param {{ x: number, y: number, z: number }} out
+	 * @returns {void}
+	 */
+	manifold_local_contact1(manifold, i, out) {
+		const raw = manifold.raw.contact_local_p1(i);
+		out.x = raw.x;
+		out.y = raw.y;
+		out.z = raw.z;
+		raw.free();
+	}
+
+	/**
+	 * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
+	 * @param {number} i
+	 * @param {{ x: number, y: number, z: number }} out
+	 * @returns {void}
+	 */
+	manifold_local_contact2(manifold, i, out) {
+		const raw = manifold.raw.contact_local_p2(i);
+		out.x = raw.x;
+		out.y = raw.y;
+		out.z = raw.z;
+		raw.free();
+	}
+}
+
+// 2026-06-29, Composer: shared zero-alloc Rapier read API [rphrd1]
+const physicsRead = new PhysicsRead();
+
+/**
+ * @param {import("@dimforge/rapier3d").RigidBody} body
+ * @param {THREE.Object3D} mesh
+ * @returns {void}
+ */
+function syncMeshFromBody(body, mesh) {
+	physicsRead.body_translation(body, _bodyPos);
+	physicsRead.body_rotation(body, _bodyQuat);
+	_bodyWorld.compose(_bodyPos, _bodyQuat, _unitScale);
+	// 2026-06-29, Composer: InstancedEntity world to owner-local setMatrixAt [rphsyn2]
+	if (mesh.isInstanceEntity) {
+		const owner = mesh.owner;
+		owner.updateMatrixWorld(true);
+		_instanceLocal.copy(_bodyWorld).premultiply(
+			_parentInv.copy(owner.matrixWorld).invert(),
+		);
+		owner.setMatrixAt(mesh.id, _instanceLocal);
+		return;
+	}
+	if (mesh.parent) {
+		_parentInv.copy(mesh.parent.matrixWorld).invert();
+		mesh.matrix.copy(_bodyWorld).premultiply(_parentInv);
+	} else {
+		mesh.matrix.copy(_bodyWorld);
+	}
+	mesh.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
+}
 
 /**
  * @param {{ x: number, y: number, z: number }} world
@@ -225,8 +394,8 @@ class Physics {
 		this.colliderToGameId = new Map();
 		/** @type {Object<string, THREE.Object3D>} */
 		this.meshlist = {};
-		/** @type {Object<string, { shift?: THREE.Vector3, allow_rotate?: boolean, allow_translate?: boolean }>} */
-		this.attachopts = {};
+		// 2026-06-29, Composer: shared zero-alloc Rapier read API [rphrd1]
+		this.read = physicsRead;
 		this.cache = {
 			vec3_0: { x: 0, y: 0, z: 0 },
 			vec3_1: { x: 0, y: 0, z: 0 },
@@ -307,7 +476,6 @@ class Physics {
 		this.colliderlist = {};
 		this.colliderToGameId.clear();
 		this.meshlist = {};
-		this.attachopts = {};
 		this._fixed_joints = [];
 		this._collision_handler = null;
 		this._acc = 0;
@@ -384,9 +552,18 @@ class Physics {
 			this.debug_draw.update(this.world.debugRender());
 		}
 
-		for (const k in this.meshlist) {
-			this.step_attach(k);
-		}
+		// 2026-06-29, Composer: sync active bodies only zero-alloc matrix attach [rphsyn1]
+		this.world.forEachActiveRigidBody((body) => {
+			const id = body.id;
+			if (id == null) {
+				return;
+			}
+			const mesh = this.meshlist[id];
+			if (!mesh) {
+				return;
+			}
+			syncMeshFromBody(body, mesh);
+		});
 	}
 
 	/** @returns {void} */
@@ -407,43 +584,10 @@ class Physics {
 	step_attach(id) {
 		const body = this.bodylist[id];
 		const mesh = this.meshlist[id];
-		const opts = this.attachopts[id];
 		if (!body || !mesh) {
 			return;
 		}
-
-		const parent_wp =
-			mesh.parent?.getWorldPosition(cache.vec3.v9) ??
-			cache.vec3.v9.set(0, 0, 0);
-		const position = body.translation();
-		const rotation = body.rotation();
-		const shift = cache.vec3.v0;
-		shift.set(0, 0, 0);
-		if (opts?.shift) {
-			shift.copy(opts.shift);
-			shift.applyQuaternion(
-				_worldQuat.set(rotation.x, rotation.y, rotation.z, rotation.w),
-			);
-		}
-		if (opts?.allow_translate ?? true) {
-			mesh.position.x = position.x + shift.x - parent_wp.x;
-			mesh.position.y = position.y + shift.y - parent_wp.y;
-			mesh.position.z = position.z + shift.z - parent_wp.z;
-		}
-		if (opts?.allow_rotate ?? true) {
-			mesh.quaternion.x = rotation.x;
-			mesh.quaternion.y = rotation.y;
-			mesh.quaternion.z = rotation.z;
-			mesh.quaternion.w = rotation.w;
-		}
-
-		if (mesh.isInstanceEntity) {
-			if (opts?.allow_rotate ?? true) {
-				mesh.updateMatrix();
-			} else {
-				mesh.updateMatrixPosition();
-			}
-		}
+		syncMeshFromBody(body, mesh);
 	}
 
 	/**
@@ -623,18 +767,14 @@ class Physics {
 	/**
 	 * @param {import("@dimforge/rapier3d").RigidBody} body
 	 * @param {THREE.Object3D} mesh
-	 * @param {object} [opts]
 	 */
-	attach(body, mesh, opts) {
+	attach(body, mesh) {
 		this.meshlist[body.id] = mesh;
-		if (opts) {
-			this.attachopts[body.id] = opts;
-		}
 		this.step_attach(body.id);
 	}
 
-	weld(body, mesh, opts) {
-		this.attach(body, mesh, opts);
+	weld(body, mesh) {
+		this.attach(body, mesh);
 	}
 
 	/**
@@ -673,12 +813,15 @@ class Physics {
 		if (!RAPIER || !this.world || !bodyA || !bodyB) {
 			return null;
 		}
-		const posA = bodyA.translation();
-		const rotA = bodyA.rotation();
-		const posB = bodyB.translation();
-		const rotB = bodyB.rotation();
-		const anchor1 = world_to_local_point(anchorWorld, posA, rotA);
-		const anchor2 = world_to_local_point(anchorWorld, posB, rotB);
+		const posA = this.cache.vec3_0;
+		const posB = this.cache.vec3_1;
+		const rot = this.cache.quat;
+		physicsRead.body_translation(bodyA, posA);
+		physicsRead.body_rotation(bodyA, rot);
+		const anchor1 = world_to_local_point(anchorWorld, posA, rot);
+		physicsRead.body_translation(bodyB, posB);
+		physicsRead.body_rotation(bodyB, rot);
+		const anchor2 = world_to_local_point(anchorWorld, posB, rot);
 		const params = RAPIER.JointData.fixed(
 			anchor1,
 			_IDENTITY_ROT,
@@ -737,7 +880,6 @@ class Physics {
 		}
 		if (id != null) {
 			delete this.meshlist[id];
-			delete this.attachopts[id];
 		}
 	}
 
@@ -762,7 +904,15 @@ class Physics {
 }
 
 export default Physics;
-export { Physics, RapierDebugDraw as DebugDraw, PhysicsUtils, RAPIER, ensureRapier };
+export {
+	Physics,
+	PhysicsRead,
+	physicsRead,
+	RapierDebugDraw as DebugDraw,
+	PhysicsUtils,
+	RAPIER,
+	ensureRapier,
+};
 // 2026-06-29, Composer: Rapier physics world owner and step loop [rph1]
 // 2026-06-29, Composer: fixed substep accumulator drain rdt [rphstep1]
 // 2026-06-29, Composer: resetForces once after substep batch [rphclr1]
@@ -770,3 +920,6 @@ export { Physics, RapierDebugDraw as DebugDraw, PhysicsUtils, RAPIER, ensureRapi
 // 2026-06-29, Composer: COLLISION_EVENTS on every body collider [rphct1]
 // 2026-06-29, Composer: sync start empty until bootstrap loads Rapier [rphdyn1]
 // 2026-06-29, Composer: dynamic import rapier3d deferred to bootstrap [rphdyn1]
+// 2026-06-29, Composer: zero-alloc body pose read scratch for mesh sync [rphsyn1]
+// 2026-06-29, Composer: InstancedEntity world to owner-local setMatrixAt [rphsyn2]
+// 2026-06-29, Composer: shared zero-alloc Rapier read API [rphrd1]

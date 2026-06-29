@@ -182,14 +182,15 @@ class ArcadeGrab {
 			return;
 		}
 
-		const pos = body.translation();
-		const data = this._acquire_grabdata(pos.x, pos.z);
+		const read = this._core.physics.read;
+		read.body_translation(body, _pickPos);
+		const data = this._acquire_grabdata(_pickPos.x, _pickPos.z);
 		const tx = data.straight.x;
 		const ty = data.straight.y;
 		const tz = data.straight.z;
-		let dx = tx - pos.x;
-		let dy = ty - pos.y;
-		let dz = tz - pos.z;
+		let dx = tx - _pickPos.x;
+		let dy = ty - _pickPos.y;
+		let dz = tz - _pickPos.z;
 		const len = Math.hypot(dx, dy, dz);
 		const mass = body.mass();
 		if (len <= 0 || mass <= 0) {
@@ -238,8 +239,11 @@ class ArcadeGrab {
 		const t1 = clamp(0, 1, data.elapsed / (GRAB_BLEND_S * 0.5));
 
 		// 2026-06-29, Composer: addForce once per frame before physics.step [plgrb1]
-		const pos = body.translation();
-		const vel = body.linvel();
+		const read = this._core.physics.read;
+		const pos = cache.vec3.v1;
+		const vel = cache.vec3.v2;
+		read.body_translation(body, pos);
+		read.body_linvel(body, vel);
 		const mass = body.mass();
 		if (mass <= 0) {
 			return;
@@ -295,3 +299,4 @@ class ArcadeGrab {
 
 export default ArcadeGrab;
 // 2026-06-29, Composer: addForce once per frame before physics.step [plgrb1]
+// 2026-06-29, Composer: grab uses physics.read zero-alloc getters [rphrd1]

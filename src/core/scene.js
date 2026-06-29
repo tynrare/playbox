@@ -754,7 +754,6 @@ class Scene {
       // 2026-06-27, Composer: rigid despawn releases part entities [rgmd3]
       if (body?.id != null && this._physics.meshlist[body.id] === entity) {
         delete this._physics.meshlist[body.id];
-        delete this._physics.attachopts[body.id];
       }
       this._release_rigid_model(rigid);
       return;
@@ -763,7 +762,6 @@ class Scene {
     // 2026-06-14, Composer: delmodel before delbody clears weld ref [scnmd2]
     if (body?.id != null && this._physics.meshlist[body.id] === entity) {
       delete this._physics.meshlist[body.id];
-      delete this._physics.attachopts[body.id];
     }
     if (/** @type {any} */ (entity).isInstanceEntity) {
       /** @type {import("@three.ez/instanced-mesh").InstancedEntity} */ (entity).remove();
@@ -799,11 +797,11 @@ class Scene {
   /**
    * @param {import("@dimforge/rapier3d").RigidBody} body
    * @param {import("@three.ez/instanced-mesh").InstancedEntity} entity
-   * @param {object} [opts]
    * @returns {void}
    */
-  weldbody(body, entity, opts) {
-    this._physics.weld(body, entity, opts);
+  weldbody(body, entity) {
+    // 2026-06-29, Composer: weldbody without attach opts [rphsyn1]
+    this._physics.weld(body, entity);
   }
 
   /**
@@ -1014,10 +1012,7 @@ class Scene {
       this._set_body_world_matrix(childBody, _weldChildMat);
 
       const anchor = this._physics.cache.vec3_3;
-      const childPos = childBody.translation();
-      anchor.x = childPos.x;
-      anchor.y = childPos.y;
-      anchor.z = childPos.z;
+      this._physics.read.body_translation(childBody, anchor);
       pack.joints[i] = this._physics.create_fixed_joint(parentBody, childBody, anchor);
 
       this._sync_weld_subtree(childIndex);
@@ -1053,12 +1048,12 @@ class Scene {
       // 2026-06-27, Composer: weld RigidModel root and track for sync [rgmd4]
       if (/** @type {any} */ (entity).isRigidModel) {
         const rigid = /** @type {RigidModel} */ (entity);
-        this.weldbody(body, rigid.root, { allow_rotate: true });
+        this.weldbody(body, rigid.root);
         this._rigid_models.add(rigid);
         this._rigid_by_root.set(rigid.root, rigid);
         rigid.sync();
       } else {
-        this.weldbody(body, entity, { allow_rotate: true });
+        this.weldbody(body, entity);
       }
     }
 
@@ -1394,10 +1389,10 @@ class Scene {
     if (!body) {
       return null;
     }
-    const p = body.translation();
-    const q = body.rotation();
-    _weldPos.set(p.x, p.y, p.z);
-    _weldBodyQuat.set(q.x, q.y, q.z, q.w);
+    // 2026-06-29, Composer: weld pose via physics.read zero-alloc getters [rphrd1]
+    const read = this._physics.read;
+    read.body_translation(body, _weldPos);
+    read.body_rotation(body, _weldBodyQuat);
     return out.compose(_weldPos, _weldBodyQuat, _weldScale.set(1, 1, 1));
   }
 
@@ -1492,10 +1487,7 @@ class Scene {
         continue;
       }
 
-      const childPos = childBody.translation();
-      anchor.x = childPos.x;
-      anchor.y = childPos.y;
-      anchor.z = childPos.z;
+      this._physics.read.body_translation(childBody, anchor);
       const joint = this._physics.create_fixed_joint(rootBody, childBody, anchor);
       if (joint) {
         joints.push(joint);
@@ -1658,3 +1650,5 @@ export default Scene;
 // 2026-06-29, Composer: Rapier bodies recreated each makebody [scnrbd1]
 // 2026-06-29, Composer: scene bodies via RigidBodyDesc ColliderDesc [scnrbd2]
 // 2026-06-29, Composer: guard _create_body when Rapier not loaded [rphdyn1]
+// 2026-06-29, Composer: weldbody without attach opts [rphsyn1]
+// 2026-06-29, Composer: weld pose via physics.read zero-alloc getters [rphrd1]
