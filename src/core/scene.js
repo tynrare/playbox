@@ -29,6 +29,27 @@ const _weldQuat = new THREE.Quaternion();
 const _weldScale = new THREE.Vector3();
 const _weldBodyQuat = new THREE.Quaternion();
 
+const CYLINDER_BORDER_RADIUS = 0.02;
+
+/**
+ * @brief Rapier cylinder collider with small rounded rim by default.
+ * @param {number} halfHeight
+ * @param {number} radius
+ * @returns {import("@dimforge/rapier3d").ColliderDesc}
+ */
+function cylinder_col_desc(halfHeight, radius) {
+  const border = Math.min(
+    CYLINDER_BORDER_RADIUS,
+    halfHeight * 0.9,
+    radius * 0.9,
+  );
+  // 2026-06-30, Composer: roundCylinder default for resting edge contacts [scncy1]
+  if (border > 1e-4) {
+    return RAPIER.ColliderDesc.roundCylinder(halfHeight, radius, border);
+  }
+  return RAPIER.ColliderDesc.cylinder(halfHeight, radius);
+}
+
 // 2026-06-14, Composer: Scene facade for model and text [scnfac1]
 /**
  * @class Scene
@@ -1012,7 +1033,7 @@ class Scene {
       this._set_body_world_matrix(childBody, _weldChildMat);
 
       const anchor = this._physics.cache.vec3_3;
-      this._physics.read.body_translation(childBody, anchor);
+      childBody.translation(anchor);
       pack.joints[i] = this._physics.create_fixed_joint(parentBody, childBody, anchor);
 
       this._sync_weld_subtree(childIndex);
@@ -1131,7 +1152,7 @@ class Scene {
         );
         break;
       case "cylinder":
-        colDesc = RAPIER.ColliderDesc.cylinder(
+        colDesc = cylinder_col_desc(
           (bodyconf.h ?? 1) * 0.5,
           bodyconf.r ?? 0.5,
         );
@@ -1307,7 +1328,7 @@ class Scene {
     if (bodyconf.shape === "cylinder") {
       const radius = Math.max(size.x, size.z) * 0.5;
       const halfHeight = size.y * 0.5;
-      colDesc = RAPIER.ColliderDesc.cylinder(halfHeight, radius);
+      colDesc = cylinder_col_desc(halfHeight, radius);
     } else {
       colDesc = RAPIER.ColliderDesc.cuboid(
         size.x * 0.5,
@@ -1389,10 +1410,9 @@ class Scene {
     if (!body) {
       return null;
     }
-    // 2026-06-29, Composer: weld pose via physics.read zero-alloc getters [rphrd1]
-    const read = this._physics.read;
-    read.body_translation(body, _weldPos);
-    read.body_rotation(body, _weldBodyQuat);
+    // 2026-06-30, Composer: #337 target-out body pose reads [rphlib1]
+    body.translation(_weldPos);
+    body.rotation(_weldBodyQuat);
     return out.compose(_weldPos, _weldBodyQuat, _weldScale.set(1, 1, 1));
   }
 
@@ -1487,7 +1507,7 @@ class Scene {
         continue;
       }
 
-      this._physics.read.body_translation(childBody, anchor);
+      childBody.translation(anchor);
       const joint = this._physics.create_fixed_joint(rootBody, childBody, anchor);
       if (joint) {
         joints.push(joint);
@@ -1651,4 +1671,6 @@ export default Scene;
 // 2026-06-29, Composer: scene bodies via RigidBodyDesc ColliderDesc [scnrbd2]
 // 2026-06-29, Composer: guard _create_body when Rapier not loaded [rphdyn1]
 // 2026-06-29, Composer: weldbody without attach opts [rphsyn1]
-// 2026-06-29, Composer: weld pose via physics.read zero-alloc getters [rphrd1]
+// 2026-06-30, Composer: #337 target-out body pose reads [rphlib1]
+// 2026-06-30, Composer: roundCylinder default for resting edge contacts [scncy1]
+// 2026-06-30, Composer: roundCylinder default for resting edge contacts [scncy1]

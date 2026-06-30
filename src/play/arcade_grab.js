@@ -182,8 +182,7 @@ class ArcadeGrab {
 			return;
 		}
 
-		const read = this._core.physics.read;
-		read.body_translation(body, _pickPos);
+		body.translation(_pickPos);
 		const data = this._acquire_grabdata(_pickPos.x, _pickPos.z);
 		const tx = data.straight.x;
 		const ty = data.straight.y;
@@ -239,11 +238,10 @@ class ArcadeGrab {
 		const t1 = clamp(0, 1, data.elapsed / (GRAB_BLEND_S * 0.5));
 
 		// 2026-06-29, Composer: addForce once per frame before physics.step [plgrb1]
-		const read = this._core.physics.read;
 		const pos = cache.vec3.v1;
 		const vel = cache.vec3.v2;
-		read.body_translation(body, pos);
-		read.body_linvel(body, vel);
+		body.translation(pos);
+		body.linvel(vel);
 		const mass = body.mass();
 		if (mass <= 0) {
 			return;

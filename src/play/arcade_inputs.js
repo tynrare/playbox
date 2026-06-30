@@ -2,7 +2,7 @@
 // Purpose: pointer drag → Rapier raycast pick; emit arcade.pick on target change.
 
 import * as THREE from "three";
-import { RAPIER } from "../core/physics.js";
+import { RAPIER, cast_ray_and_get_normal } from "../core/physics.js";
 import { v3up, vzero } from "../math.js";
 
 const RAY_MAX = 500;
@@ -110,7 +110,8 @@ class ArcadeInputs {
 		_rayDir.z = dir.z;
 
 		const ray = new RAPIER.Ray(_rayOrigin, _rayDir);
-		const hit = world.castRayAndGetNormal(ray, RAY_MAX, true);
+		// 2026-06-30, Composer: castRay target-out via broadPhase helper [plinp2]
+		const hit = cast_ray_and_get_normal(world, ray, RAY_MAX, true);
 		if (!hit) {
 			return null;
 		}
@@ -167,3 +168,4 @@ class ArcadeInputs {
 
 export default ArcadeInputs;
 // 2026-06-29, Composer: Rapier castRayAndGetNormal pick [plinp1]
+// 2026-06-30, Composer: castRay target-out via broadPhase helper [plinp2]

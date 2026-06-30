@@ -50,154 +50,75 @@ const _instanceLocal = new THREE.Matrix4();
 const _unitScale = cache.vec3.v3.set(1, 1, 1);
 
 /**
- * Zero-alloc Rapier pose/contact reads into caller scratch.
- * @class PhysicsRead
- * @memberof pb.core
+ * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
+ * @returns {number}
  */
-class PhysicsRead {
-	/**
-	 * @param {import("@dimforge/rapier3d").RigidBody} body
-	 * @param {{ x: number, y: number, z: number }} out
-	 * @returns {void}
-	 */
-	body_translation(body, out) {
-		const raw = body.rawSet.rbTranslation(body.handle);
-		out.x = raw.x;
-		out.y = raw.y;
-		out.z = raw.z;
-		raw.free();
+// 2026-06-30, Composer: max solver impulse from contact manifold [rphrd2]
+function max_manifold_impulse(manifold) {
+	let maxImpulse = 0;
+	const n = manifold.numContacts();
+	for (let i = 0; i < n; i++) {
+		const impulse = manifold.contactImpulse(i);
+		if (impulse > maxImpulse) {
+			maxImpulse = impulse;
+		}
 	}
-
-	/**
-	 * @param {import("@dimforge/rapier3d").RigidBody} body
-	 * @param {{ x: number, y: number, z: number, w: number }} out
-	 * @returns {void}
-	 */
-	body_rotation(body, out) {
-		const raw = body.rawSet.rbRotation(body.handle);
-		out.x = raw.x;
-		out.y = raw.y;
-		out.z = raw.z;
-		out.w = raw.w;
-		raw.free();
-	}
-
-	/**
-	 * @param {import("@dimforge/rapier3d").RigidBody} body
-	 * @param {{ x: number, y: number, z: number }} out
-	 * @returns {void}
-	 */
-	body_linvel(body, out) {
-		const raw = body.rawSet.rbLinvel(body.handle);
-		out.x = raw.x;
-		out.y = raw.y;
-		out.z = raw.z;
-		raw.free();
-	}
-
-	/**
-	 * @param {import("@dimforge/rapier3d").Collider} collider
-	 * @param {{ x: number, y: number, z: number }} out
-	 * @returns {void}
-	 */
-	collider_translation(collider, out) {
-		const raw = collider.colliderSet.raw.coTranslation(collider.handle);
-		out.x = raw.x;
-		out.y = raw.y;
-		out.z = raw.z;
-		raw.free();
-	}
-
-	/**
-	 * @param {import("@dimforge/rapier3d").Collider} collider
-	 * @param {{ x: number, y: number, z: number, w: number }} out
-	 * @returns {void}
-	 */
-	collider_rotation(collider, out) {
-		const raw = collider.colliderSet.raw.coRotation(collider.handle);
-		out.x = raw.x;
-		out.y = raw.y;
-		out.z = raw.z;
-		out.w = raw.w;
-		raw.free();
-	}
-
-	/**
-	 * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
-	 * @param {{ x: number, y: number, z: number }} out
-	 * @returns {void}
-	 */
-	manifold_normal(manifold, out) {
-		const raw = manifold.raw.normal();
-		out.x = raw.x;
-		out.y = raw.y;
-		out.z = raw.z;
-		raw.free();
-	}
-
-	/**
-	 * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
-	 * @param {number} i
-	 * @param {{ x: number, y: number, z: number }} out
-	 * @returns {void}
-	 */
-	manifold_solver_contact(manifold, i, out) {
-		const raw = manifold.raw.solver_contact_point(i);
-		out.x = raw.x;
-		out.y = raw.y;
-		out.z = raw.z;
-		raw.free();
-	}
-
-	/**
-	 * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
-	 * @param {number} i
-	 * @param {{ x: number, y: number, z: number }} out
-	 * @returns {void}
-	 */
-	manifold_local_contact1(manifold, i, out) {
-		const raw = manifold.raw.contact_local_p1(i);
-		out.x = raw.x;
-		out.y = raw.y;
-		out.z = raw.z;
-		raw.free();
-	}
-
-	/**
-	 * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
-	 * @param {number} i
-	 * @param {{ x: number, y: number, z: number }} out
-	 * @returns {void}
-	 */
-	manifold_local_contact2(manifold, i, out) {
-		const raw = manifold.raw.contact_local_p2(i);
-		out.x = raw.x;
-		out.y = raw.y;
-		out.z = raw.z;
-		raw.free();
-	}
-
-	/**
-	 * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
-	 * @returns {number}
-	 */
-	manifold_num_contacts(manifold) {
-		return manifold.numContacts();
-	}
-
-	/**
-	 * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
-	 * @param {number} i
-	 * @returns {number}
-	 */
-	// 2026-06-30, Composer: solver normal impulse from contact manifold [rphrd2]
-	manifold_contact_impulse(manifold, i) {
-		return manifold.contactImpulse(i);
-	}
+	return maxImpulse;
 }
 
-// 2026-06-29, Composer: shared zero-alloc Rapier read API [rphrd1]
-const physicsRead = new PhysicsRead();
+const _rayHitScratch = {
+	collider: null,
+	timeOfImpact: 0,
+	normal: { x: 0, y: 0, z: 0 },
+};
+
+/**
+ * @param {import("@dimforge/rapier3d").World} world
+ * @param {import("@dimforge/rapier3d").Ray} ray
+ * @param {number} maxToi
+ * @param {boolean} solid
+ * @returns {import("@dimforge/rapier3d").RayColliderIntersection|null}
+ */
+// 2026-06-30, Composer: broadPhase castRay target-out (World lacks target param) [rphscr1]
+function cast_ray_and_get_normal(world, ray, maxToi, solid) {
+	return world.broadPhase.castRayAndGetNormal(
+		world.narrowPhase,
+		world.bodies,
+		world.colliders,
+		ray,
+		maxToi,
+		solid,
+		undefined,
+		undefined,
+		null,
+		null,
+		null,
+		_rayHitScratch,
+	);
+}
+
+/**
+ * @param {import("@dimforge/rapier3d").World} world
+ * @param {number} h1
+ * @param {number} h2
+ * @returns {number}
+ */
+// 2026-06-30, Composer: max solver impulse at collision drain [rphimp1]
+function contact_pair_impulse(world, h1, h2) {
+	const c1 = world.getCollider(h1);
+	const c2 = world.getCollider(h2);
+	if (!c1 || !c2) {
+		return 0;
+	}
+	let maxImpulse = 0;
+	world.contactPair(c1, c2, (manifold) => {
+		const impulse = max_manifold_impulse(manifold);
+		if (impulse > maxImpulse) {
+			maxImpulse = impulse;
+		}
+	});
+	return maxImpulse;
+}
 
 /**
  * @param {import("@dimforge/rapier3d").RigidBody} body
@@ -205,8 +126,9 @@ const physicsRead = new PhysicsRead();
  * @returns {void}
  */
 function syncMeshFromBody(body, mesh) {
-	physicsRead.body_translation(body, _bodyPos);
-	physicsRead.body_rotation(body, _bodyQuat);
+	// 2026-06-30, Composer: #337 target-out body pose reads [rphlib1]
+	body.translation(_bodyPos);
+	body.rotation(_bodyQuat);
 	_bodyWorld.compose(_bodyPos, _bodyQuat, _unitScale);
 	// 2026-06-29, Composer: InstancedEntity world to owner-local setMatrixAt [rphsyn2]
 	if (mesh.isInstanceEntity) {
@@ -410,8 +332,6 @@ class Physics {
 		this.colliderToGameId = new Map();
 		/** @type {Object<string, THREE.Object3D>} */
 		this.meshlist = {};
-		// 2026-06-29, Composer: shared zero-alloc Rapier read API [rphrd1]
-		this.read = physicsRead;
 		this.cache = {
 			vec3_0: { x: 0, y: 0, z: 0 },
 			vec3_1: { x: 0, y: 0, z: 0 },
@@ -505,7 +425,7 @@ class Physics {
 	}
 
 	/**
-	 * @param {(started: boolean, h1: number, h2: number) => void|null} handler
+	 * @param {(started: boolean, h1: number, h2: number, impulse: number) => void|null} handler
 	 * @returns {void}
 	 */
 	set_collision_handler(handler) {
@@ -585,13 +505,16 @@ class Physics {
 	}
 
 	/** @returns {void} */
+	// 2026-06-30, Composer: max solver impulse at collision drain [rphimp1]
 	_drain_contacts() {
-		if (!this._collision_handler || !this.eventQueue) {
+		if (!this._collision_handler || !this.eventQueue || !this.world) {
 			return;
 		}
 		const handler = this._collision_handler;
+		const world = this.world;
 		this.eventQueue.drainCollisionEvents((h1, h2, started) => {
-			handler(started, h1, h2);
+			const impulse = started ? contact_pair_impulse(world, h1, h2) : 0;
+			handler(started, h1, h2, impulse);
 		});
 	}
 
@@ -834,11 +757,11 @@ class Physics {
 		const posA = this.cache.vec3_0;
 		const posB = this.cache.vec3_1;
 		const rot = this.cache.quat;
-		physicsRead.body_translation(bodyA, posA);
-		physicsRead.body_rotation(bodyA, rot);
+		bodyA.translation(posA);
+		bodyA.rotation(rot);
 		const anchor1 = world_to_local_point(anchorWorld, posA, rot);
-		physicsRead.body_translation(bodyB, posB);
-		physicsRead.body_rotation(bodyB, rot);
+		bodyB.translation(posB);
+		bodyB.rotation(rot);
 		const anchor2 = world_to_local_point(anchorWorld, posB, rot);
 		const params = RAPIER.JointData.fixed(
 			anchor1,
@@ -924,8 +847,8 @@ class Physics {
 export default Physics;
 export {
 	Physics,
-	PhysicsRead,
-	physicsRead,
+	max_manifold_impulse,
+	cast_ray_and_get_normal,
 	RapierDebugDraw as DebugDraw,
 	PhysicsUtils,
 	RAPIER,
@@ -942,3 +865,5 @@ export {
 // 2026-06-29, Composer: InstancedEntity world to owner-local setMatrixAt [rphsyn2]
 // 2026-06-29, Composer: shared zero-alloc Rapier read API [rphrd1]
 // 2026-06-30, Composer: solver normal impulse from contact manifold [rphrd2]
+// 2026-06-30, Composer: scratch-buffer reads from vendored rapier master [rphlib1]
+// 2026-06-30, Composer: broadPhase castRay target-out (World lacks target param) [rphscr1]

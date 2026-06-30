@@ -30,6 +30,7 @@ class ContactRouter {
 			collider1: 0,
 			collider2: 0,
 			started: false,
+			impulse: 0,
 		};
 		physics.set_collision_handler(this._on_collision.bind(this));
 	}
@@ -99,9 +100,11 @@ class ContactRouter {
 	 * @param {boolean} started
 	 * @param {number} h1
 	 * @param {number} h2
+	 * @param {number} impulse
 	 * @returns {void}
 	 */
-	_on_collision(started, h1, h2) {
+	// 2026-06-30, Composer: forward drain impulse on scene.contact [ctrt3]
+	_on_collision(started, h1, h2, impulse) {
 		if (!this._eventsbus.has("scene.contact")) {
 			return;
 		}
@@ -139,6 +142,7 @@ class ContactRouter {
 		emit.collider1 = h1;
 		emit.collider2 = h2;
 		emit.started = started;
+		emit.impulse = impulse;
 		emit.toyIndex = primary;
 		emit.otherToyIndex = other;
 		this._eventsbus.emit("scene.contact", emit);
@@ -148,3 +152,4 @@ class ContactRouter {
 export default ContactRouter;
 // 2026-06-29, Composer: ContactRouter EventQueue collision drain [ctrt1]
 // 2026-06-29, Composer: bounds bodies need events on all colliders [ctrt2]
+// 2026-06-30, Composer: forward drain impulse on scene.contact [ctrt3]

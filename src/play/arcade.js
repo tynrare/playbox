@@ -17,7 +17,6 @@ import ArcadeInputs from "./arcade_inputs.js";
 import ArcadeSound from "./sound.js";
 // 2026-06-28, Composer: rename shenanigans import to arcade_quake [plrqk1]
 import {
-	contactImpactImpulse,
 	quake,
 	QUAKE_IMPULSE_MIN,
 } from "./arcade_quake.js";
@@ -247,7 +246,7 @@ class Arcade {
 	}
 
 	/**
-	 * @param {{ phase: number, toyIndex: number, otherToyIndex: number, collider1: number, collider2: number }} payload
+	 * @param {{ phase: number, toyIndex: number, otherToyIndex: number, collider1: number, collider2: number, impulse: number }} payload
 	 * @returns {void}
 	 */
 	_on_scene_contact(payload) {
@@ -255,16 +254,8 @@ class Arcade {
 			return;
 		}
 
-		const world = this._core.physics.world;
-		if (world == null) {
-			return;
-		}
-
-		const impulse = contactImpactImpulse(
-			world,
-			payload.collider1,
-			payload.collider2,
-		);
+		const impulse = payload.impulse;
+		// 2026-06-30, Composer: contact impulse from physics drain payload [plqke11]
 
 		// 2026-06-30, Composer: quake and sfx from solver contact impulse [plqke7]
 		const weightToy = this._is_quake_weight(payload.toyIndex)
@@ -275,7 +266,8 @@ class Arcade {
 
 		if (weightToy !== TOY_INDEX_INVALID && impulse >= QUAKE_IMPULSE_MIN) {
 			const weightBody = this._weight_body(weightToy);
-			if (weightBody != null) {
+			const world = this._core.physics.world;
+			if (weightBody != null && world != null) {
 				quake(
 					world,
 					payload.collider1,
@@ -334,3 +326,4 @@ export default Arcade;
 // 2026-06-28, Composer: pick adds grabbable without releasing prior [plgrb13]
 // 2026-06-28, Composer: arcade owns ArcadeBox camera walls [plbox3]
 // 2026-06-30, Composer: quake and sfx from solver contact impulse [plqke7]
+// 2026-06-30, Composer: contact impulse from physics drain payload [plqke11]

@@ -11,6 +11,12 @@ import { soundBundlePlugin } from "./scripts/vite-plugin-sound-bundle.mjs";
 export default defineConfig({
   publicDir: "res",
   base: "./",
+  // 2026-06-30, Composer: vendored rapier3d master in src/lib [rphlib1]
+  resolve: {
+    alias: {
+      "@dimforge/rapier3d": path.resolve(__dirname, "src/lib/rapier3d/rapier.js"),
+    },
+  },
   plugins: [
     //basicSsl(),
     // 2026-06-29, Composer: vite wasm plugins for rapier3d [rphwasm1]
@@ -66,3 +72,4 @@ export default defineConfig({
 // 2026-06-14, Composer: vitest node env for toybox stress tests [tbxst1]
 // 2026-06-27, Composer: dev/res/sound → res/sound audiosprite bundle [pbxvc1]
 // 2026-06-29, Composer: vite wasm plugins for rapier3d [rphwasm1]
+// 2026-06-30, Composer: vendored rapier3d master in src/lib [rphlib1]
