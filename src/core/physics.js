@@ -28,8 +28,7 @@ import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 
-const SOLVER_ITERATIONS = 10;
-const SOLVER_FRICTION_ITERATIONS = 5;
+const SOLVER_ITERATIONS = 8;
 const SOLVER_ALLOWED_LINEAR_ERROR = 0.005;
 
 const DEFAULT_CONFIG = {
@@ -450,8 +449,10 @@ class Physics {
 		const ip = this.world.integrationParameters;
 		ip.dt = this.config.ref_dt * this.tds;
 		ip.numSolverIterations = SOLVER_ITERATIONS;
-		ip.numAdditionalFrictionIterations = SOLVER_FRICTION_ITERATIONS;
 		ip.normalizedAllowedLinearError = SOLVER_ALLOWED_LINEAR_ERROR;
+		ip.numInternalPgsIterations = 2;
+		ip.normalizedPredictionDistance = 0.002;
+
 		this.sync_debug_draw(this.config.debug);
 	}
 
