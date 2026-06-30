@@ -17,8 +17,9 @@ db#db_pb_bodies(name="bodies")
    d(name="weight_a" inherits="dice_a" source="weight_a" density="10")
    //- 2026-06-27, Composer: arcader_a body inherits weight_a bounds [bdarc1]
    //- 2026-06-28, Composer: arcader_a body parts exclude button [bdarc2]
+   //- 2026-06-30, Composer: arcader_a revolver slots 0-2 in body parts [bdarc3]
    d(name="arcader_a" inherits="weight_a" source="arcader_a"
-      parts="[arcader_a, arcader_a_revolver_0]")
+      parts="[arcader_a, arcader_a_revolver_0, arcader_a_revolver_1, arcader_a_revolver_2]")
    //- 2026-06-28, Composer: arcader_a_button bounds body [bdarcb1]
    d(name="arcader_a_button" inherits="coin_a" source="arcader_a_button" density="2")
 //- 2026-06-14, Composer: physics bodies db for toybox spawn [bdb1]
@@ -30,3 +31,4 @@ db#db_pb_bodies(name="bodies")
 //- 2026-06-27, Composer: arcader_a body inherits weight_a bounds [bdarc1]
 //- 2026-06-28, Composer: arcader_a body parts exclude button [bdarc2]
 //- 2026-06-28, Composer: arcader_a_button bounds body [bdarcb1]
+//- 2026-06-30, Composer: arcader_a revolver slots 0-2 in body parts [bdarc3]

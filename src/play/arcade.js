@@ -13,6 +13,7 @@ import {
 } from "../scene/itembox.js";
 import ArcadeGrab from "./arcade_grab.js";
 import ArcadeBox from "./arcade_box.js";
+import ArcadeToys from "./arcade_toys.js";
 import ArcadeInputs from "./arcade_inputs.js";
 import ArcadeSound from "./sound.js";
 // 2026-06-28, Composer: rename shenanigans import to arcade_quake [plrqk1]
@@ -21,7 +22,7 @@ import {
 	QUAKE_IMPULSE_MIN,
 } from "./arcade_quake.js";
 
-const COIN_A_COUNT = 100;
+const COIN_A_COUNT = 10;
 const COIN_B_COUNT = 0;
 const COIN_C_COUNT = 0;
 const DICE_COUNT = 1;
@@ -64,6 +65,8 @@ class Arcade {
 		this._grab = new ArcadeGrab(this._core, this._inputs).init();
 		// 2026-06-28, Composer: arcade owns ArcadeBox camera walls [plbox3]
 		this._box = new ArcadeBox(this._core).init();
+		// 2026-06-30, Composer: arcade owns ArcadeToys per-toy handlers [pltoy4]
+		this._toys = new ArcadeToys(this._core).init();
 		/** @type {number|null} */
 		this._scene_contact_id = null;
 		/** @type {number|null} */
@@ -83,6 +86,8 @@ class Arcade {
 			"arcade.pick",
 			this._on_arcade_pick.bind(this),
 		);
+		// 2026-06-30, Composer: toys start before spawn for toy.initialize [pltoy5]
+		this._toys.start();
 
 		this._core.scene.environment.floorstyle("floor", 0xffffff);
 		this._core.scene.environment.shadowstyle(0x0, 0.5);
@@ -159,6 +164,7 @@ class Arcade {
 	toyupdate(dt, index) {
 		// 2026-06-28, Composer: arcade delegates toyupdate to grab [plgrb3]
 		this._grab.toyupdate(dt, index);
+		this._toys.toyupdate(dt, index);
 	}
 
 	/** @returns {void} */
@@ -172,6 +178,7 @@ class Arcade {
 			this._pick_id = null;
 		}
 		this._inputs.stop();
+		this._toys.stop();
 		this._grab.stop();
 		this._box.stop();
 		this._sound.stop();
@@ -327,3 +334,5 @@ export default Arcade;
 // 2026-06-28, Composer: arcade owns ArcadeBox camera walls [plbox3]
 // 2026-06-30, Composer: quake and sfx from solver contact impulse [plqke7]
 // 2026-06-30, Composer: contact impulse from physics drain payload [plqke11]
+// 2026-06-30, Composer: arcade owns ArcadeToys per-toy handlers [pltoy4]
+// 2026-06-30, Composer: toys start before spawn for toy.initialize [pltoy5]
