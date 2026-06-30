@@ -28,11 +28,11 @@ import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 
-const SOLVER_ITERATIONS = 8;
+const SOLVER_ITERATIONS = 4;
 const SOLVER_ALLOWED_LINEAR_ERROR = 0.005;
 
 const DEFAULT_CONFIG = {
-	ref_dt: 0.008,
+	ref_dt: 1/60,
 	debug: false,
 };
 
@@ -176,6 +176,24 @@ class PhysicsRead {
 		out.z = raw.z;
 		raw.free();
 	}
+
+	/**
+	 * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
+	 * @returns {number}
+	 */
+	manifold_num_contacts(manifold) {
+		return manifold.numContacts();
+	}
+
+	/**
+	 * @param {import("@dimforge/rapier3d").TempContactManifold} manifold
+	 * @param {number} i
+	 * @returns {number}
+	 */
+	// 2026-06-30, Composer: solver normal impulse from contact manifold [rphrd2]
+	manifold_contact_impulse(manifold, i) {
+		return manifold.contactImpulse(i);
+	}
 }
 
 // 2026-06-29, Composer: shared zero-alloc Rapier read API [rphrd1]
@@ -193,7 +211,6 @@ function syncMeshFromBody(body, mesh) {
 	// 2026-06-29, Composer: InstancedEntity world to owner-local setMatrixAt [rphsyn2]
 	if (mesh.isInstanceEntity) {
 		const owner = mesh.owner;
-		owner.updateMatrixWorld(true);
 		_instanceLocal.copy(_bodyWorld).premultiply(
 			_parentInv.copy(owner.matrixWorld).invert(),
 		);
@@ -450,7 +467,7 @@ class Physics {
 		ip.dt = this.config.ref_dt * this.tds;
 		ip.numSolverIterations = SOLVER_ITERATIONS;
 		ip.normalizedAllowedLinearError = SOLVER_ALLOWED_LINEAR_ERROR;
-		ip.numInternalPgsIterations = 2;
+		ip.numInternalPgsIterations = 1;
 		ip.normalizedPredictionDistance = 0.002;
 
 		this.sync_debug_draw(this.config.debug);
@@ -924,3 +941,4 @@ export {
 // 2026-06-29, Composer: zero-alloc body pose read scratch for mesh sync [rphsyn1]
 // 2026-06-29, Composer: InstancedEntity world to owner-local setMatrixAt [rphsyn2]
 // 2026-06-29, Composer: shared zero-alloc Rapier read API [rphrd1]
+// 2026-06-30, Composer: solver normal impulse from contact manifold [rphrd2]

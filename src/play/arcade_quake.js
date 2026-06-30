@@ -2,15 +2,14 @@
 // Purpose: weight-drop quake via Rapier AABB query and contact pairs.
 import { RAPIER, physicsRead } from "../core/physics.js";
 
-export const QUAKE_SPEED_MIN = 1.0;
-const QUAKE_GAIN = 0.5;
-const QUAKE_RADIUS_SCALE = 0.15;
-const QUAKE_RADIUS_MIN = 6.0;
+export const QUAKE_IMPULSE_MIN = 1.0;
+const QUAKE_GAIN = 0.2;
+const QUAKE_RADIUS_SCALE = 0.03;
+const QUAKE_RADIUS_MIN = 2.0;
 const QUAKE_RADIUS_MAX = 8.0;
 const QUAKE_AABB_Y_BELOW = 0.5;
 const QUAKE_AABB_Y_ABOVE = 2.0;
-const QUAKE_SHAKE_V = 0.2;
-const QUAKE_SHAKE_R = 0.08;
+const QUAKE_SPIN_GAIN = 0.08;
 const QUAKE_MASS_FACTOR = 0.5;
 const QUAKE_MASS_COMPARE_EXP = 0.25;
 const QUAKE_MASS_MULT_MIN = 0.5;
@@ -28,8 +27,6 @@ const _pos = { x: 0, y: 0, z: 0 };
 const _rotPt = { x: 0, y: 0, z: 0 };
 const _colliderQuat = { x: 0, y: 0, z: 0, w: 1 };
 const _localContact = { x: 0, y: 0, z: 0 };
-const _vel1 = { x: 0, y: 0, z: 0 };
-const _vel2 = { x: 0, y: 0, z: 0 };
 const CONTACT_PREDICTION = 0.1;
 /** @type {Set<import("@dimforge/rapier3d").RigidBody>} */
 const _queryBodies = new Set();
@@ -75,36 +72,24 @@ function quakeMassMult(quakerMass, targetMass) {
  * @param {number} collider2
  * @returns {number}
  */
-export function contactApproachSpeed(world, collider1, collider2) {
+// 2026-06-30, Composer: max solver normal impulse from contact pair [plqke7]
+export function contactImpactImpulse(world, collider1, collider2) {
 	const c1 = world.getCollider(collider1);
 	const c2 = world.getCollider(collider2);
 	if (!c1 || !c2) {
 		return 0;
 	}
-	const b1 = c1.parent();
-	const b2 = c2.parent();
-	if (!b1 || !b2) {
-		return 0;
-	}
-	physicsRead.body_linvel(b1, _vel1);
-	physicsRead.body_linvel(b2, _vel2);
-	let approach = 0;
+	let maxImpulse = 0;
 	world.contactPair(c1, c2, (manifold) => {
-		physicsRead.manifold_normal(manifold, _normal);
-		const relN =
-			(_vel1.x - _vel2.x) * _normal.x +
-			(_vel1.y - _vel2.y) * _normal.y +
-			(_vel1.z - _vel2.z) * _normal.z;
-		approach = Math.max(approach, Math.max(0, -relN));
+		const n = physicsRead.manifold_num_contacts(manifold);
+		for (let i = 0; i < n; i++) {
+			const impulse = physicsRead.manifold_contact_impulse(manifold, i);
+			if (impulse > maxImpulse) {
+				maxImpulse = impulse;
+			}
+		}
 	});
-	if (approach > 0) {
-		return approach;
-	}
-	// 2026-06-29, Composer: post-solver fallback relative speed for sfx [plqke2]
-	const dx = _vel1.x - _vel2.x;
-	const dy = _vel1.y - _vel2.y;
-	const dz = _vel1.z - _vel2.z;
-	return Math.sqrt(dx * dx + dy * dy + dz * dz);
+	return maxImpulse;
 }
 
 /**
@@ -332,35 +317,19 @@ function buildChainTargets(world, weightBody, surfaceBody, seeds) {
 
 /**
  * @param {import("@dimforge/rapier3d").RigidBody} body
- * @param {number} quakerMass
- * @param {number} falloff
- * @param {number} speedScale
- * @param {number} chainMult
+ * @param {number} impulseMag
  * @param {boolean} surfaceStatic
  * @param {number} dx
  * @param {number} dz
  * @param {number} dist
  * @returns {void}
  */
-function applyQuakeShake(
-	body,
-	quakerMass,
-	falloff,
-	speedScale,
-	chainMult,
-	surfaceStatic,
-	dx,
-	dz,
-	dist,
-) {
-	const targetMass = body.mass();
-	if (targetMass <= 0) {
+// 2026-06-30, Composer: quake shake applies solver impulse Ns [plqke8]
+function applyQuakeShake(body, impulseMag, surfaceStatic, dx, dz, dist) {
+	if (impulseMag <= 0) {
 		return;
 	}
 
-	const shakeDv = QUAKE_SHAKE_V * falloff * speedScale * chainMult;
-	const massMult = quakeMassMult(quakerMass, targetMass);
-	const impulseMag = shakeDv * targetMass * massMult;
 	if (surfaceStatic) {
 		_impulse.x = 0;
 		_impulse.y = impulseMag;
@@ -373,9 +342,8 @@ function applyQuakeShake(
 	body.wakeUp();
 	body.applyImpulse(_impulse, true);
 
-	if (dist > 1e-4 && QUAKE_SHAKE_R > 0) {
-		const shakeRv = QUAKE_SHAKE_R * falloff * speedScale * chainMult;
-		const angMag = shakeRv * targetMass * massMult * 0.1;
+	if (dist > 1e-4 && QUAKE_SPIN_GAIN > 0) {
+		const angMag = impulseMag * QUAKE_SPIN_GAIN;
 		const axisX = dz / dist;
 		const axisZ = -dx / dist;
 		_angImpulse.x = axisX * angMag;
@@ -390,12 +358,15 @@ function applyQuakeShake(
  * @param {number} collider1
  * @param {number} collider2
  * @param {import("@dimforge/rapier3d").RigidBody} weightBody
+ * @param {number} [impactImpulse]
  * @returns {void}
  */
 // 2026-06-29, Composer: quake via Rapier AABB and contactPairsWith [plqke1]
-export function quake(world, collider1, collider2, weightBody) {
-	const speed = contactApproachSpeed(world, collider1, collider2);
-	if (speed < QUAKE_SPEED_MIN) {
+export function quake(world, collider1, collider2, weightBody, impactImpulse) {
+	const impulse =
+		impactImpulse ??
+		contactImpactImpulse(world, collider1, collider2);
+	if (impulse < QUAKE_IMPULSE_MIN) {
 		return;
 	}
 
@@ -409,8 +380,13 @@ export function quake(world, collider1, collider2, weightBody) {
 		return;
 	}
 
-	const J = speed * quakerMass * QUAKE_GAIN;
-	const radius = clamp(J * QUAKE_RADIUS_SCALE, QUAKE_RADIUS_MIN, QUAKE_RADIUS_MAX);
+	// 2026-06-30, Composer: quake radius and shake from solver impulse Ns [plqke8]
+	const impactDv = impulse / quakerMass;
+	const radius = clamp(
+		impulse * QUAKE_RADIUS_SCALE,
+		QUAKE_RADIUS_MIN,
+		QUAKE_RADIUS_MAX,
+	);
 
 	collectImpactPoint(world, weightBody, surfaceBody, _impact);
 
@@ -454,7 +430,6 @@ export function quake(world, collider1, collider2, weightBody) {
 	}
 
 	const surfaceStatic = surfaceBody.isFixed();
-	const speedScale = speed / QUAKE_SPEED_MIN;
 
 	_seeds.clear();
 	for (const body of _queryBodies) {
@@ -489,21 +464,21 @@ export function quake(world, collider1, collider2, weightBody) {
 		if (falloff <= 0) {
 			continue;
 		}
-		applyQuakeShake(
-			body,
-			quakerMass,
-			falloff,
-			speedScale,
-			chainMult,
-			surfaceStatic,
-			dx,
-			dz,
-			dist,
-		);
+		const targetMass = body.mass();
+		if (targetMass <= 0) {
+			continue;
+		}
+		const massMult = quakeMassMult(quakerMass, targetMass);
+		const shakeDv = impactDv * QUAKE_GAIN * falloff * chainMult * massMult;
+		// 2026-06-30, Composer: target mass scales impulse for uniform jump [plqke9]
+		const shakeImpulse = shakeDv * targetMass;
+		applyQuakeShake(body, shakeImpulse, surfaceStatic, dx, dz, dist);
 	}
 }
 
 // 2026-06-29, Composer: quake via Rapier AABB and contactPairsWith [plqke1]
-// 2026-06-29, Composer: post-solver fallback relative speed for sfx [plqke2]
 // 2026-06-29, Composer: impact from weight-surface world contacts only [plqke3]
 // 2026-06-29, Composer: quake uses physicsRead zero-alloc getters [rphrd1]
+// 2026-06-30, Composer: max solver normal impulse from contact pair [plqke7]
+// 2026-06-30, Composer: quake shake applies solver impulse Ns [plqke8]
+// 2026-06-30, Composer: target mass scales impulse for uniform jump [plqke9]

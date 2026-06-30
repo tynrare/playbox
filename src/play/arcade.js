@@ -16,7 +16,11 @@ import ArcadeBox from "./arcade_box.js";
 import ArcadeInputs from "./arcade_inputs.js";
 import ArcadeSound from "./sound.js";
 // 2026-06-28, Composer: rename shenanigans import to arcade_quake [plrqk1]
-import { contactApproachSpeed, quake, QUAKE_SPEED_MIN } from "./arcade_quake.js";
+import {
+	contactImpactImpulse,
+	quake,
+	QUAKE_IMPULSE_MIN,
+} from "./arcade_quake.js";
 
 const COIN_A_COUNT = 100;
 const COIN_B_COUNT = 0;
@@ -256,21 +260,33 @@ class Arcade {
 			return;
 		}
 
-		const speed = contactApproachSpeed(world, payload.collider1, payload.collider2);
+		const impulse = contactImpactImpulse(
+			world,
+			payload.collider1,
+			payload.collider2,
+		);
+
+		// 2026-06-30, Composer: quake and sfx from solver contact impulse [plqke7]
 		const weightToy = this._is_quake_weight(payload.toyIndex)
 			? payload.toyIndex
 			: this._is_quake_weight(payload.otherToyIndex)
 				? payload.otherToyIndex
 				: TOY_INDEX_INVALID;
 
-		if (weightToy !== TOY_INDEX_INVALID && speed >= QUAKE_SPEED_MIN) {
+		if (weightToy !== TOY_INDEX_INVALID && impulse >= QUAKE_IMPULSE_MIN) {
 			const weightBody = this._weight_body(weightToy);
 			if (weightBody != null) {
-				quake(world, payload.collider1, payload.collider2, weightBody);
+				quake(
+					world,
+					payload.collider1,
+					payload.collider2,
+					weightBody,
+					impulse,
+				);
 			}
 		}
 
-		this._sound.play_contact(payload.toyIndex, payload.otherToyIndex, speed);
+		this._sound.play_contact(payload.toyIndex, payload.otherToyIndex, impulse);
 	}
 
 	/**
@@ -317,3 +333,4 @@ export default Arcade;
 // 2026-06-28, Composer: grab receives raycast pick world position [plgrb8]
 // 2026-06-28, Composer: pick adds grabbable without releasing prior [plgrb13]
 // 2026-06-28, Composer: arcade owns ArcadeBox camera walls [plbox3]
+// 2026-06-30, Composer: quake and sfx from solver contact impulse [plqke7]

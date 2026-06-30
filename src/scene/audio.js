@@ -15,6 +15,19 @@ function clamp_volume(v, lo, hi) {
 	return v < lo ? lo : v > hi ? hi : v;
 }
 
+const HOWLER_VOL_MAX = 0.25;
+const HOWLER_VOL_EXP = 2;
+
+/**
+ * @param {number} linear01 logical volume 0..1
+ * @returns {number}
+ */
+// 2026-06-30, Composer: perceptual curve for howler amplitude [pbxau4]
+function toHowlerVolume(linear01) {
+	const t = clamp_volume(linear01, 0, 1);
+	return HOWLER_VOL_MAX * Math.pow(t, HOWLER_VOL_EXP);
+}
+
 /**
  * @brief Minimal Howler wrapper; loads audiosprite JSON directly (no assets db).
  */
@@ -67,7 +80,7 @@ class Audio {
 	/**
 	 * @brief Play a named sprite from the loaded audiosprite.
 	 * @param {string} name sprite key from sound.json
-	 * @param {number} [volume=1] per-instance volume 0..1
+	 * @param {number} [volume=1] logical volume 0..1 (mapped perceptually for Howler)
 	 * @returns {number | null} howler play id
 	 */
 	// 2026-06-27, Composer: per-instance howler volume on play [pbxau3]
@@ -76,8 +89,8 @@ class Audio {
 			return null;
 		}
 		const id = this.howl.play(name);
-		if (id) {
-			this.howl.volume(clamp_volume(volume, 0, 1), id);
+		if (id ?? false) {
+			this.howl.volume(toHowlerVolume(volume), id);
 		}
 		return id;
 	}
@@ -113,3 +126,4 @@ export { Audio };
 // 2026-06-27, Composer: fetch audiosprite json for playbox scene [pbxau1]
 // 2026-06-27, Composer: settings sound toggle mutes howler [pbxau2]
 // 2026-06-27, Composer: per-instance howler volume on play [pbxau3]
+// 2026-06-30, Composer: perceptual curve for howler amplitude [pbxau4]
