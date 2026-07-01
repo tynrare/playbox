@@ -24,7 +24,7 @@ import {
 	QUAKE_IMPULSE_MIN,
 } from "./arcade_quake.js";
 
-const COIN_A_COUNT = 10;
+const COIN_A_COUNT = 3;
 const COIN_B_COUNT = 0;
 const COIN_C_COUNT = 0;
 const DICE_COUNT = 1;

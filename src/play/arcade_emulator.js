@@ -18,6 +18,7 @@ import Settings from "./settings.js";
  * @property {SplashFlow|null} splash
  * @property {boolean} splashAttached
  * @property {boolean} achievementsEmbedded
+ * @property {number|null} achievement_obtain_id
  * @property {boolean} disposed
  */
 
@@ -39,6 +40,8 @@ class ArcadeEmulator {
 		this._object_registered_id = null;
 		/** @type {number|null} */
 		this._object_despawned_id = null;
+		/** @type {number|null} */
+		this._achievement_progress_id = null;
 		/** @type {number[]} */
 		this._pointer_ids = [];
 		/** @type {Map<number, EmulatorInstance>} */
@@ -52,6 +55,7 @@ class ArcadeEmulator {
 	/** @returns {void} */
 	start() {
 		// 2026-07-01, GPT-5.5: emulator watches registered arcade toys [emuobj1]
+		// 2026-07-01, Codex 5.3: emulator bridges achievement bus directions [emuach2]
 		this._object_registered_id = this._core.eventsbus.on(
 			"arcade.object_registered",
 			this._on_object_registered.bind(this),
@@ -59,6 +63,10 @@ class ArcadeEmulator {
 		this._object_despawned_id = this._core.eventsbus.on(
 			"arcade.object_despawned",
 			this._on_object_despawned.bind(this),
+		);
+		this._achievement_progress_id = this._core.eventsbus.on(
+			"arcade.achievement.progress",
+			this._on_achievement_progress.bind(this),
 		);
 		this._listen_pointer_events();
 	}
@@ -84,6 +92,10 @@ class ArcadeEmulator {
 		if (this._object_despawned_id != null) {
 			this._core.eventsbus.off(this._object_despawned_id);
 			this._object_despawned_id = null;
+		}
+		if (this._achievement_progress_id != null) {
+			this._core.eventsbus.off(this._achievement_progress_id);
+			this._achievement_progress_id = null;
 		}
 		this._unlisten_pointer_events();
 		const instances = Array.from(this._instances.values());
@@ -170,6 +182,7 @@ class ArcadeEmulator {
 			splash: null,
 			splashAttached: false,
 			achievementsEmbedded: false,
+			achievement_obtain_id: null,
 			disposed: false,
 		};
 		this._instances.set(toyIndex, instance);
@@ -237,8 +250,47 @@ class ArcadeEmulator {
 		instance.settings.start(core);
 		core.flowbus.attach(instance.menu);
 		instance.achievementsEmbedded = true;
+		instance.achievement_obtain_id = core.eventsbus.on(
+			"achievement.obtain",
+			(payload) => this._on_achievement_obtain(instance, payload),
+		);
 		// 2026-07-01, Codex 5.3: achievements emulator opens achievements immediately [emuach1]
 		instance.menu.navigate("achievements");
+	}
+
+	/**
+	 * @param {{ key?: string, mode?: string, type?: string, current?: number, target?: number, state?: string }} payload
+	 * @returns {void}
+	 */
+	_on_achievement_progress(payload) {
+		this._instances.forEach((instance) => {
+			if (!instance.achievementsEmbedded) {
+				return;
+			}
+			const core = instance.subcore.core;
+			if (!core) {
+				return;
+			}
+			core.eventsbus.emit("achievement.progress", payload);
+		});
+	}
+
+	/**
+	 * @param {EmulatorInstance} instance
+	 * @param {{ key?: string, mode?: string, type?: string, current?: number, target?: number, state?: string }} payload
+	 * @returns {void}
+	 */
+	_on_achievement_obtain(instance, payload) {
+		this._core.eventsbus.emit("arcade.achievement.obtain", {
+			toyIndex: instance.toyIndex,
+			toyKey: instance.toyKey,
+			key: payload?.key,
+			mode: payload?.mode,
+			type: payload?.type,
+			current: payload?.current,
+			target: payload?.target,
+			state: payload?.state ?? "obtained",
+		});
 	}
 
 	/**
@@ -257,6 +309,10 @@ class ArcadeEmulator {
 		}
 		instance.menu?.teardown();
 		if (core && instance.achievementsEmbedded) {
+			if (instance.achievement_obtain_id != null) {
+				core.eventsbus.off(instance.achievement_obtain_id);
+				instance.achievement_obtain_id = null;
+			}
 			core.ui.delstate("ui_achievements_embedded");
 		}
 		instance.screen.dispose();
@@ -324,3 +380,4 @@ export default ArcadeEmulator;
 // 2026-07-01, GPT-5.5: emulator mirrors parent pointer to subcore [emuptr2]
 // 2026-07-01, Codex 5.3: emulator routes boot by arcade db mode [emumod1]
 // 2026-07-01, Codex 5.3: achievements emulator opens achievements immediately [emuach1]
+// 2026-07-01, Codex 5.3: emulator bridges achievement bus directions [emuach2]
