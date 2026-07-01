@@ -74,6 +74,25 @@ class Draw {
     this._tiltShiftDistance = 8;
     /** @type {UnrealBloomPass|null} */
     this._bloomPass = null;
+    /** @type {THREE.PerspectiveCamera|null} */
+    this._active_camera = null;
+  }
+
+  /**
+   * @returns {THREE.PerspectiveCamera|null}
+   */
+  get active_camera() {
+    return this._active_camera ?? this._render.camera;
+  }
+
+  /**
+   * @param {THREE.PerspectiveCamera|null} cam
+   * @returns {void}
+   */
+  set active_camera(cam) {
+    // 2026-07-01, Composer: active_camera drives scene composer passes [drwac1]
+    this._active_camera = cam;
+    this._sync_scene_pass_cameras(cam);
   }
 
   /**
@@ -234,6 +253,7 @@ class Draw {
     this.equalizer();
     // 2026-06-28, Composer: bare draw.equalizer after initial layout [drweq1]
     this._emit_equalizer();
+    this.active_camera = render.camera;
   }
 
   /**
@@ -260,6 +280,32 @@ class Draw {
     this.pixelate_ao_fused_pass = null;
     this.pixelated_pass = null;
     this.ui_pass = null;
+    this._active_camera = null;
+  }
+
+  /**
+   * @param {THREE.PerspectiveCamera|null} cam
+   * @returns {void}
+   */
+  _sync_scene_pass_cameras(cam) {
+    if (!cam) {
+      return;
+    }
+    if (this.scene_pass) {
+      this.scene_pass.camera = cam;
+    }
+    if (this.pixelated_pass) {
+      this.pixelated_pass.camera = cam;
+    }
+    if (this.pixelate_ao_fused_pass) {
+      this.pixelate_ao_fused_pass.camera = cam;
+      if (this.pixelate_ao_fused_pass._n8ao) {
+        this.pixelate_ao_fused_pass._n8ao.camera = cam;
+      }
+    }
+    if (this.n8aopass) {
+      this.n8aopass.camera = cam;
+    }
   }
 
   /**
@@ -559,4 +605,5 @@ class Draw {
 // 2026-06-28, Composer: client pointer NDC via cameraui half extents [drwptr1]
 // 2026-06-28, Composer: scale maps CSS pointer to render buffer NDC [drwptr2]
 // 2026-06-28, Composer: bare draw.equalizer on viewport change [drweq1]
+// 2026-07-01, Composer: active_camera drives scene composer passes [drwac1]
 export default Draw;

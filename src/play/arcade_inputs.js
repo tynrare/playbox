@@ -1,5 +1,5 @@
 /** @namespace ty */
-// Purpose: pointer drag → Rapier raycast pick; emit arcade.pick on target change.
+// Purpose: raycast pick on down/move; arcade.click on pointer.click only.
 
 import * as THREE from "three";
 import { RAPIER, cast_ray_and_get_normal } from "../core/physics.js";
@@ -39,6 +39,8 @@ class ArcadeInputs {
 		this._pointer_down_id = null;
 		/** @type {number|null} */
 		this._pointer_move_id = null;
+		/** @type {number|null} */
+		this._pointer_click_id = null;
 		return this;
 	}
 
@@ -52,6 +54,10 @@ class ArcadeInputs {
 			"pointer.move",
 			this._on_pointer_move.bind(this),
 		);
+		this._pointer_click_id = this._core.eventsbus.on(
+			"pointer.click",
+			this._on_pointer_click.bind(this),
+		);
 	}
 
 	/** @returns {void} */
@@ -63,6 +69,10 @@ class ArcadeInputs {
 		if (this._pointer_move_id != null) {
 			this._core.eventsbus.off(this._pointer_move_id);
 			this._pointer_move_id = null;
+		}
+		if (this._pointer_click_id != null) {
+			this._core.eventsbus.off(this._pointer_click_id);
+			this._pointer_click_id = null;
 		}
 		this._pick_item_index = null;
 	}
@@ -78,7 +88,8 @@ class ArcadeInputs {
 	 * @returns {boolean}
 	 */
 	_pointer_ray(x, y) {
-		const camera = this._core.render.camera;
+		// 2026-07-01, Composer: pick ray uses draw.active_camera [plinp3]
+		const camera = this._core.draw.active_camera;
 		if (!camera || !this._core.draw.pointer_ndc(x, y, _pointer)) {
 			return false;
 		}
@@ -162,6 +173,22 @@ class ArcadeInputs {
 		if (hit) {
 			this.pointer_floor.copy(hit);
 		}
+
+		// 2026-07-01, Composer: arcade.pick on pointer move target change [plinp4]
+		this.pick_if_changed(x, y);
+	}
+
+	/**
+	 * @param {{ x: number, y: number }} detail
+	 * @returns {void}
+	 */
+	_on_pointer_click({ x, y }) {
+		const pick = this.trace_pick(x, y);
+		if (!pick) {
+			return;
+		}
+		// 2026-07-01, Composer: arcade.click on pointer.click hit only [plinp5]
+		this._core.eventsbus.emit("arcade.click", pick);
 	}
 
 }
@@ -169,3 +196,6 @@ class ArcadeInputs {
 export default ArcadeInputs;
 // 2026-06-29, Composer: Rapier castRayAndGetNormal pick [plinp1]
 // 2026-06-30, Composer: castRay target-out via broadPhase helper [plinp2]
+// 2026-07-01, Composer: pick ray uses draw.active_camera [plinp3]
+// 2026-07-01, Composer: arcade.pick on pointer move target change [plinp4]
+// 2026-07-01, Composer: arcade.click on pointer.click hit only [plinp5]

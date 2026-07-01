@@ -9,7 +9,6 @@ import {
 } from "../scene/itembox.js";
 
 const ARCADER_A_TOY_DB_ID = 8;
-const ARCADER_A_ASSEMBLY_DB_ID = 10;
 const ARCADER_A_MODEL_KEY = "arcader_a";
 const ARCADER_A_ARCADE_KEY = "arcader_a_toy";
 
@@ -271,7 +270,7 @@ class ArcadeToyArcaderA {
 	 */
 	static matches(conf) {
 		const id = conf?.id;
-		return id === ARCADER_A_TOY_DB_ID || id === ARCADER_A_ASSEMBLY_DB_ID;
+		return id === ARCADER_A_TOY_DB_ID;
 	}
 
 	/**
@@ -904,7 +903,7 @@ class ArcadeToys {
 		/** @type {number|null} */
 		this._toy_dis_id = null;
 		/** @type {number|null} */
-		this._pick_id = null;
+		this._click_id = null;
 		/** @type {Map<number, ArcadeToyArcaderA>} */
 		this._by_root = new Map();
 		/** @type {Record<number, string>} */
@@ -923,9 +922,10 @@ class ArcadeToys {
 			"toy.dispose",
 			this._on_toy_dispose.bind(this),
 		);
-		this._pick_id = this._core.eventsbus.on(
-			"arcade.pick",
-			this._on_arcade_pick.bind(this),
+		this._click_id = this._core.eventsbus.on(
+			"arcade.click",
+			// 2026-07-01, Composer: button dispatch via arcade.click [pltoy23]
+			this._on_arcade_click.bind(this),
 		);
 	}
 
@@ -939,9 +939,9 @@ class ArcadeToys {
 			this._core.eventsbus.off(this._toy_dis_id);
 			this._toy_dis_id = null;
 		}
-		if (this._pick_id != null) {
-			this._core.eventsbus.off(this._pick_id);
-			this._pick_id = null;
+		if (this._click_id != null) {
+			this._core.eventsbus.off(this._click_id);
+			this._click_id = null;
 		}
 		this._by_root.clear();
 	}
@@ -1035,7 +1035,7 @@ class ArcadeToys {
 	 * @param {{ itemIndex: number, x: number, y: number, z: number }} payload
 	 * @returns {void}
 	 */
-	_on_arcade_pick({ itemIndex }) {
+	_on_arcade_click({ itemIndex }) {
 		const { itembox, toybox } = this._core;
 		const toyIndex = itembox.mempool.read_ui16(itemIndex, VAR_TOY_INDEX);
 		if (toyIndex === TOY_INDEX_INVALID || !toybox.has_tag(toyIndex, "button")) {
@@ -1081,3 +1081,4 @@ export { ArcadeToyArcaderA };
 // 2026-06-30, Composer: spawn matched face toys right of arcader bounds [pltoy20]
 // 2026-06-30, Composer: sequential match reward spawn with delay state [pltoy21]
 // 2026-06-30, Composer: any adjacent revolver run match impulse by mass [pltoy22]
+// 2026-07-01, Composer: button dispatch via arcade.click [pltoy23]

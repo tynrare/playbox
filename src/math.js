@@ -92,6 +92,52 @@ export function lerp(a, b, t) {
   return a + t * (b - a);
 }
 
+export function expcurve(t, k) {
+	if (k === 0) return t;
+	return (1 - Math.exp(k * t)) / (1 - Math.exp(k));
+}
+
+/**
+ * @param {import("three").Vector3} v1 changed inplace
+ * @param {import("three").Vector3Like} v2 .
+ * @param {number} decay factor (0-1)
+ * @param {number} dt delta time
+ */
+export function dlerp_vec3(v1, v2, decay, dt) {
+	v1.x = dlerp(v1.x, v2.x, decay, dt);
+	v1.y = dlerp(v1.y, v2.y, decay, dt);
+	v1.z = dlerp(v1.z, v2.z, decay, dt);
+
+	return v1;
+}
+
+/**
+ * @param {import("three").Vector3} v1 changed inplace
+ * @param {import("three").Vector3Like} v2 .
+ * @param {number} decay factor (0-1)
+ * @param {number} dt delta time
+ */
+export function dlerp_color(v1, v2, decay, dt) {
+	v1.r = dlerp(v1.r, v2.r, decay, dt);
+	v1.g = dlerp(v1.g, v2.g, decay, dt);
+	v1.b = dlerp(v1.b, v2.b, decay, dt);
+
+	return v1;
+}
+
+/**
+ * exponential decay lerp
+ *
+ * @param {number} a initial value
+ * @param {number} b target value
+ * @param {number} decay factor
+ * @param {number} dt delta time
+ */
+export function dlerp(a, b, decay, dt) {
+	const d = 1 + decay * 25;
+	return b + (a - b) * Math.exp(-d * dt);
+}
+
 // 2026-06-14, Composer: replace glmatrix with THREE math types [thmth1]
 // 2026-06-18, Composer: lerp for loop smoothed dt [lrpdt1]
 // 2026-06-26, Composer: box3 mat4 scratch for bounds bodies [thmth2]

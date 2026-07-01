@@ -13,6 +13,7 @@ import {
 } from "../scene/itembox.js";
 import ArcadeGrab from "./arcade_grab.js";
 import ArcadeBox from "./arcade_box.js";
+import ArcadeTopter from "./arcade_topter.js";
 import ArcadeToys from "./arcade_toys.js";
 import ArcadeInputs from "./arcade_inputs.js";
 import ArcadeSound from "./sound.js";
@@ -65,6 +66,8 @@ class Arcade {
 		this._grab = new ArcadeGrab(this._core, this._inputs).init();
 		// 2026-06-28, Composer: arcade owns ArcadeBox camera walls [plbox3]
 		this._box = new ArcadeBox(this._core).init();
+		// 2026-07-01, Composer: arcade owns ArcadeTopter zoom camera [plzom2]
+		this._topter = new ArcadeTopter(this._core).init();
 		// 2026-06-30, Composer: arcade owns ArcadeToys per-toy handlers [pltoy4]
 		this._toys = new ArcadeToys(this._core).init();
 		/** @type {number|null} */
@@ -106,6 +109,7 @@ class Arcade {
 		this._core.render.camera.updateMatrixWorld();
 		this._core.render.camera.updateProjectionMatrix();
 		this._box.start();
+		this._topter.start();
 
 		// 2026-06-26, Composer: arcade coin stack spawn loop [plstk1]
 		for (let i = 0; i < COIN_A_COUNT; i++) {
@@ -137,7 +141,7 @@ class Arcade {
 		}
 
 		// 2026-06-27, Composer: arcade spawn arcader_a assembly with welded button [plarc7]
-		const arcader_toy = this._core.toybox.spawn("arcader_a_assembly_toy", true);
+		const arcader_toy = this._core.toybox.spawn("arcader_a_toy", true);
 		if (arcader_toy != null) {
 			this._coin_toys.push(arcader_toy);
 			const item_index = this._core.toybox.get_item_index(arcader_toy);
@@ -154,7 +158,9 @@ class Arcade {
 	 * @param {number} _rdt
 	 * @returns {void}
 	 */
-	step(_dt, _rdt) {}
+	step(_dt, _rdt) {
+		this._topter.step(_dt);
+	}
 
 	/**
 	 * @param {number} dt
@@ -181,6 +187,7 @@ class Arcade {
 		this._toys.stop();
 		this._grab.stop();
 		this._box.stop();
+		this._topter.stop();
 		this._sound.stop();
 
 		for (const toy_index of this._coin_toys) {
@@ -293,6 +300,10 @@ class Arcade {
 	 * @returns {void}
 	 */
 	_on_arcade_pick({ itemIndex, x, y, z }) {
+		// 2026-07-01, Composer: grab only while pointer held [plgrb15]
+		if (!this._grab.grabbing) {
+			return;
+		}
 		// 2026-06-28, Composer: pick adds grabbable without releasing prior [plgrb13]
 		const { itembox, toybox } = this._core;
 
@@ -336,3 +347,5 @@ export default Arcade;
 // 2026-06-30, Composer: contact impulse from physics drain payload [plqke11]
 // 2026-06-30, Composer: arcade owns ArcadeToys per-toy handlers [pltoy4]
 // 2026-06-30, Composer: toys start before spawn for toy.initialize [pltoy5]
+// 2026-07-01, Composer: arcade owns ArcadeTopter zoom camera [plzom2]
+// 2026-07-01, Composer: grab only while pointer held [plgrb15]

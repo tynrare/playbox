@@ -41,16 +41,14 @@ db#db_pb_toys(name="toys")
       tags="[weight, grabbable]")
    //- 2026-06-27, Composer: arcader_a toy inherits weight_a_toy [toyarc1]
    //- 2026-06-28, Composer: arcader_a tags weight not grabbable [toytag4]
-   d(name="arcader_a_toy"           id="8" inherits="weight_a_toy" item="arcader_a_item"
-      tags="[weight]")
-   //- 2026-06-28, Composer: arcader_a_button welded child toy [toyarcb1]
-   d(name="arcader_a_button_toy"    id="9" inherits="coin_a_toy"
-      item="arcader_a_button_item" tags="[button, grabbable]" button="btn_a")
-   //- 2026-06-28, Composer: arcader_a_assembly welds button on init [toyasm1]
-   d(name="arcader_a_assembly_toy"  id="10" inherits="weight_a_toy"
+   d(name="arcader_a_toy"           id="8" inherits="weight_a_toy"
       item="arcader_a_item"
       welds="[arcader_a_button_toy]"
-      modules="[welds, tags]" tags="[weight]")
+      modules="[welds, tags]" tags="[weight, zoomable]")
+   //- 2026-06-28, Composer: arcader_a_button welded child toy [toyarcb1]
+   d(name="arcader_a_button_toy"    id="9" inherits="coin_a_toy"
+      item="arcader_a_button_item" tags="[button]" button="btn_a")
+   //- 2026-06-28, Composer: arcader_a_assembly welds button on init [toyasm1]
 //- 2026-06-14, Composer: mesh-less floor collision item [flit1]
 //- 2026-06-26, Composer: coin_b item inherits coin_a_item [itcnb1]
 //- 2026-06-26, Composer: coin_b toy inherits coin_a_toy [toycnb1]

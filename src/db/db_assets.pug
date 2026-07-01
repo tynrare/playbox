@@ -20,6 +20,7 @@ db#db_pb_materials(name="materials")
    d(name="material_proto" id="0")
    d(name="scenematerial" type="standard" color="0xffffff" glow="0" opacity="1")
    d(name="coin_a" type="phong" shininess="10" emissive="0xffffff" glow="1")
+   d(name="button_a" type="phong" shininess="5" emissive="0xffffff" glow="2")
 
 //- 2026-06-18, Composer: collapse models_instanced into models [mdcol1]
 db#db_pb_models(name="models")
@@ -39,7 +40,7 @@ db#db_pb_models(name="models")
    d(name="arcader_a"              source="props" object="arcader_a"
       parts="[arcader_a, arcader_a_revolver_0, arcader_a_revolver_1, arcader_a_revolver_2]")
    //- 2026-06-28, Composer: arcader_a_button single mesh model [mdarcb1]
-   d(name="arcader_a_button"        source="props" object="arcader_a_button")
+   d(name="arcader_a_button"        source="props" object="arcader_a_button" material="button_a")
 
 //- 2026-06-17, Composer: coinmania and gameicons sprite registry from a_legacy [sprpt1]
 include db_sprites.pug

@@ -149,11 +149,17 @@ class ArcadeGrab {
 		this.stop();
 	}
 
+	/** @returns {boolean} */
+	get grabbing() {
+		return this._grabbing;
+	}
+
 	/**
 	 * @returns {boolean}
 	 */
 	_trace_grab_target() {
-		const camera = this._core.render.camera;
+		// 2026-07-01, Composer: grab ray uses draw.active_camera [plgrb14]
+		const camera = this._core.draw.active_camera;
 		if (
 			!camera
 			|| !this._core.draw.pointer_ndc(this._pointer_x, this._pointer_y, _pointer)
@@ -279,10 +285,6 @@ class ArcadeGrab {
 	_on_pointer_move({ x, y }) {
 		this._pointer_x = x;
 		this._pointer_y = y;
-		if (!this._grabbing) {
-			return;
-		}
-		this._inputs.pick_if_changed(x, y);
 	}
 
 	/**
@@ -298,3 +300,5 @@ class ArcadeGrab {
 export default ArcadeGrab;
 // 2026-06-29, Composer: addForce once per frame before physics.step [plgrb1]
 // 2026-06-29, Composer: grab uses physics.read zero-alloc getters [rphrd1]
+// 2026-07-01, Composer: grab ray uses draw.active_camera [plgrb14]
+// 2026-07-01, Composer: grab only while pointer held [plgrb15]
