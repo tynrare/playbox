@@ -20,8 +20,14 @@ db#db_pb_bodies(name="bodies")
    //- 2026-06-30, Composer: arcader_a revolver slots 0-2 in body parts [bdarc3]
    d(name="arcader_a" inherits="weight_a" source="arcader_a"
       parts="[arcader_a, arcader_a_revolver_0, arcader_a_revolver_1, arcader_a_revolver_2]")
+   //- 2026-07-01, GPT-5.5: arcader_b body uses all model parts [dbbcb1]
+   d(name="arcader_b" inherits="weight_a" source="arcader_b" parts="*")
    //- 2026-06-28, Composer: arcader_a_button bounds body [bdarcb1]
    d(name="arcader_a_button" inherits="coin_a" source="arcader_a_button" density="2")
+   //- 2026-07-01, GPT-5.5: fishbones bounds box body [dbfsh2]
+   d(name="fishbones" inherits="dice_a" source="fishbones" shape="box" density="1")
+   //- 2026-07-01, GPT-5.5: banana bounds box body [dbban2]
+   d(name="banana" inherits="dice_a" source="banana" shape="box" density="1")
 //- 2026-06-14, Composer: physics bodies db for toybox spawn [bdb1]
 //- 2026-06-14, Composer: static floor body for floor_toy spawn [flbd1]
 //- 2026-06-26, Composer: coin_b body inherits coin_a bounds [bdcnb1]
@@ -32,3 +38,6 @@ db#db_pb_bodies(name="bodies")
 //- 2026-06-28, Composer: arcader_a body parts exclude button [bdarc2]
 //- 2026-06-28, Composer: arcader_a_button bounds body [bdarcb1]
 //- 2026-06-30, Composer: arcader_a revolver slots 0-2 in body parts [bdarc3]
+//- 2026-07-01, GPT-5.5: fishbones bounds box body [dbfsh2]
+//- 2026-07-01, GPT-5.5: banana bounds box body [dbban2]
+//- 2026-07-01, GPT-5.5: arcader_b body uses all model parts [dbbcb1]

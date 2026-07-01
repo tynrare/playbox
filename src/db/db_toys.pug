@@ -16,6 +16,15 @@ db#db_pb_items(name="items")
    //- 2026-06-28, Composer: arcader_a_button welded child item [itarcb1]
    d(name="arcader_a_button_item"    id="14" inherits="coin_a_item"
       body="arcader_a_button" mesh="arcader_a_button")
+   //- 2026-07-01, GPT-5.5: fishbones item body mesh [dbfsh3]
+   d(name="fishbones_item"           id="16" inherits="coin_a_item"
+      body="fishbones" mesh="fishbones")
+   //- 2026-07-01, GPT-5.5: banana item body mesh [dbban3]
+   d(name="banana_item"              id="18" inherits="coin_a_item"
+      body="banana" mesh="banana")
+   //- 2026-07-01, GPT-5.5: arcader_b item body mesh [dbacb3]
+   d(name="arcader_b_item"           id="20" inherits="weight_a_item"
+      body="arcader_b" mesh="arcader_b")
 
 db#db_pb_toys(name="toys")
    d(name="box_test_toy"            id="1" item="box_test_item"
@@ -48,6 +57,16 @@ db#db_pb_toys(name="toys")
    //- 2026-06-28, Composer: arcader_a_button welded child toy [toyarcb1]
    d(name="arcader_a_button_toy"    id="9" inherits="coin_a_toy"
       item="arcader_a_button_item" tags="[button]" button="btn_a")
+   //- 2026-07-01, GPT-5.5: fishbones toy tags grabbable bones [dbfsh4]
+   d(name="fishbones_toy"           id="10" inherits="coin_a_toy"
+      item="fishbones_item" tags="[grabbable, bones]")
+   //- 2026-07-01, GPT-5.5: banana toy same as fishbones [dbban4]
+   d(name="banana_toy"              id="11" inherits="coin_a_toy"
+      item="banana_item" tags="[grabbable, food]")
+   //- 2026-07-01, GPT-5.5: arcader_b toy mirrors arcader_a tags [dbacb4]
+   d(name="arcader_b_toy"           id="12" inherits="weight_a_toy"
+      item="arcader_b_item"
+      modules="[tags]" tags="[weight, zoomable]")
    //- 2026-06-28, Composer: arcader_a_assembly welds button on init [toyasm1]
 //- 2026-06-14, Composer: mesh-less floor collision item [flit1]
 //- 2026-06-26, Composer: coin_b item inherits coin_a_item [itcnb1]
@@ -69,3 +88,9 @@ db#db_pb_toys(name="toys")
 //- 2026-06-28, Composer: arcader_a_button welded child toy [toyarcb1]
 //- 2026-06-28, Composer: arcader_a_assembly welds button on init [toyasm1]
 //- 2026-06-28, Composer: arcader_a_button welded child item [itarcb1]
+//- 2026-07-01, GPT-5.5: fishbones item body mesh [dbfsh3]
+//- 2026-07-01, GPT-5.5: fishbones toy tags grabbable bones [dbfsh4]
+//- 2026-07-01, GPT-5.5: banana item body mesh [dbban3]
+//- 2026-07-01, GPT-5.5: banana toy same as fishbones [dbban4]
+//- 2026-07-01, GPT-5.5: arcader_b item body mesh [dbacb3]
+//- 2026-07-01, GPT-5.5: arcader_b toy mirrors arcader_a tags [dbacb4]

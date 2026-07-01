@@ -5,12 +5,15 @@ import { TOY_INDEX_INVALID } from "../scene/itembox.js";
 
 /** @type {Readonly<Record<string, string>>} */
 const CONTACT_SFX_BY_KIND = {
+	// 2026-07-01, GPT-5.5: bones contact impact sound [plsfx6]
+	bones: "impactTin_medium_004",
+	food: "impactTin_medium_004",
 	coin: "coindrop",
 	dice: "impactWood_light_000",
 	weight: "impactPunch_heavy_000",
 };
 /** @type {Readonly<string[]>} */
-const CONTACT_KIND_PRIORITY = ["dice", "coin", "weight"];
+const CONTACT_KIND_PRIORITY = ["bones", "dice", "coin", "weight"];
 // 2026-06-27, Composer: contact impulse to sfx volume [plimp1]
 // 2026-06-30, Composer: sfx dv range from impulse over mass [plimp4]
 const CONTACT_DV_MIN = 0.4;
@@ -161,3 +164,4 @@ export default ArcadeSound;
 // 2026-06-30, Composer: contact impulse to sfx volume [plimp2]
 // 2026-06-30, Composer: sfx impulse range matches solver Ns [plimp3]
 // 2026-06-30, Composer: sfx dv range from impulse over mass [plimp4]
+// 2026-07-01, GPT-5.5: bones contact impact sound [plsfx6]

@@ -92,6 +92,17 @@ export function lerp(a, b, t) {
   return a + t * (b - a);
 }
 
+/**
+ * @param {number} min
+ * @param {number} max
+ * @param {number} v
+ * @returns {number}
+ */
+export function nmap(min, max, v) {
+  // 2026-07-01, GPT-5.5: normalized clamped range map [mthnm1]
+  return (clamp(min, max, v) - min) / (max - min);
+}
+
 export function expcurve(t, k) {
 	if (k === 0) return t;
 	return (1 - Math.exp(k * t)) / (1 - Math.exp(k));
@@ -142,3 +153,4 @@ export function dlerp(a, b, decay, dt) {
 // 2026-06-18, Composer: lerp for loop smoothed dt [lrpdt1]
 // 2026-06-26, Composer: box3 mat4 scratch for bounds bodies [thmth2]
 // 2026-06-26, Composer: second color scratch for _get_material [thmth3]
+// 2026-07-01, GPT-5.5: normalized clamped range map [mthnm1]

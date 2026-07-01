@@ -15,6 +15,7 @@ import ArcadeGrab from "./arcade_grab.js";
 import ArcadeBox from "./arcade_box.js";
 import ArcadeTopter from "./arcade_topter.js";
 import ArcadeToys from "./arcade_toys.js";
+import ArcadeVfx from "./arcade_vfx.js";
 import ArcadeInputs from "./arcade_inputs.js";
 import ArcadeSound from "./sound.js";
 // 2026-06-28, Composer: rename shenanigans import to arcade_quake [plrqk1]
@@ -68,12 +69,18 @@ class Arcade {
 		this._box = new ArcadeBox(this._core).init();
 		// 2026-07-01, Composer: arcade owns ArcadeTopter zoom camera [plzom2]
 		this._topter = new ArcadeTopter(this._core).init();
+		// 2026-07-01, GPT-5.5: arcade owns reward flick vfx [plvfx2]
+		this._vfx = new ArcadeVfx(this._core).init();
 		// 2026-06-30, Composer: arcade owns ArcadeToys per-toy handlers [pltoy4]
 		this._toys = new ArcadeToys(this._core).init();
 		/** @type {number|null} */
 		this._scene_contact_id = null;
 		/** @type {number|null} */
 		this._pick_id = null;
+		/** @type {number|null} */
+		this._reward_spawn_id = null;
+		/** @type {number|null} */
+		this._object_dispose_id = null;
 		return this;
 	}
 
@@ -88,6 +95,16 @@ class Arcade {
 		this._pick_id = this._core.eventsbus.on(
 			"arcade.pick",
 			this._on_arcade_pick.bind(this),
+		);
+		this._reward_spawn_id = this._core.eventsbus.on(
+			"arcade.reward_spawn",
+			// 2026-07-01, GPT-5.5: track reward toys for arcade stop cleanup [plcln1]
+			this._on_reward_spawn.bind(this),
+		);
+		// 2026-07-01, GPT-5.5: arcade registered objects emit despawn events [plach2]
+		this._object_dispose_id = this._core.eventsbus.on(
+			"toy.dispose",
+			this._on_toy_dispose.bind(this),
 		);
 		// 2026-06-30, Composer: toys start before spawn for toy.initialize [pltoy5]
 		this._toys.start();
@@ -110,6 +127,7 @@ class Arcade {
 		this._core.render.camera.updateProjectionMatrix();
 		this._box.start();
 		this._topter.start();
+		this._vfx.start();
 
 		// 2026-06-26, Composer: arcade coin stack spawn loop [plstk1]
 		for (let i = 0; i < COIN_A_COUNT; i++) {
@@ -135,7 +153,7 @@ class Arcade {
 		// 2026-06-27, Composer: arcade spawn weight_a at center [plwgt1]
 		const weight_toy = this._core.toybox.spawn("weight_a_toy", true);
 		if (weight_toy != null) {
-			this._coin_toys.push(weight_toy);
+			this.register_object(weight_toy);
 			const item_index = this._core.toybox.get_item_index(weight_toy);
 			this._core.scene.set_itemposition(item_index, 4, WEIGHT_Y, 3);
 		}
@@ -143,7 +161,7 @@ class Arcade {
 		// 2026-06-27, Composer: arcade spawn arcader_a assembly with welded button [plarc7]
 		const arcader_toy = this._core.toybox.spawn("arcader_a_toy", true);
 		if (arcader_toy != null) {
-			this._coin_toys.push(arcader_toy);
+			this.register_object(arcader_toy);
 			const item_index = this._core.toybox.get_item_index(arcader_toy);
 			this._core.scene.set_itemposition(item_index, -2, ARCADER_Y, 0);
 		}
@@ -160,6 +178,7 @@ class Arcade {
 	 */
 	step(_dt, _rdt) {
 		this._topter.step(_dt);
+		this._vfx.step(_dt);
 	}
 
 	/**
@@ -183,17 +202,27 @@ class Arcade {
 			this._core.eventsbus.off(this._pick_id);
 			this._pick_id = null;
 		}
+		if (this._reward_spawn_id != null) {
+			this._core.eventsbus.off(this._reward_spawn_id);
+			this._reward_spawn_id = null;
+		}
 		this._inputs.stop();
 		this._toys.stop();
 		this._grab.stop();
 		this._box.stop();
 		this._topter.stop();
+		this._vfx.stop();
 		this._sound.stop();
 
-		for (const toy_index of this._coin_toys) {
+		const toys = this._coin_toys.slice();
+		for (const toy_index of toys) {
 			this._core.toybox.despawn(toy_index, true);
 		}
 		this._coin_toys = [];
+		if (this._object_dispose_id != null) {
+			this._core.eventsbus.off(this._object_dispose_id);
+			this._object_dispose_id = null;
+		}
 
 		if (this._floor_index != null) {
 			this._core.itembox.despawn(this._floor_index, true);
@@ -210,6 +239,19 @@ class Arcade {
 
 	/**
 	 * @param {number|null} toyIndex
+	 * @returns {void}
+	 */
+	register_object(toyIndex) {
+		// 2026-07-01, GPT-5.5: arcade registered objects emit count events [plach1]
+		if (toyIndex == null || this._coin_toys.includes(toyIndex)) {
+			return;
+		}
+		this._coin_toys.push(toyIndex);
+		this._core.eventsbus.emit("arcade.object_registered", toyIndex);
+	}
+
+	/**
+	 * @param {number|null} toyIndex
 	 * @param {number} stackIndex
 	 * @param {number} x
 	 * @param {number} y
@@ -222,7 +264,7 @@ class Arcade {
 		if (toyIndex == null) {
 			return;
 		}
-		this._coin_toys.push(toyIndex);
+		this.register_object(toyIndex);
 		const bb = this._core.toybox.blackboard;
 		bb.write(toyIndex, BB_KEY_PLAY, VAR_PLAY_STACK_INDEX, stackIndex);
 		bb.write_i16(toyIndex, BB_KEY_PLAY, VAR_PLAY_BASE_X, x);
@@ -314,6 +356,30 @@ class Arcade {
 
 		this._grab.grab(toyIndex, x, y, z);
 	}
+
+	/**
+	 * @param {{ toyIndex?: number }} payload
+	 * @returns {void}
+	 */
+	_on_reward_spawn({ toyIndex }) {
+		if (toyIndex == null) {
+			return;
+		}
+		this.register_object(toyIndex);
+	}
+
+	/**
+	 * @param {number} toyIndex
+	 * @returns {void}
+	 */
+	_on_toy_dispose(toyIndex) {
+		const index = this._coin_toys.indexOf(toyIndex);
+		if (index < 0) {
+			return;
+		}
+		this._coin_toys.splice(index, 1);
+		this._core.eventsbus.emit("arcade.object_despawned", toyIndex);
+	}
 }
 
 export default Arcade;
@@ -349,3 +415,7 @@ export default Arcade;
 // 2026-06-30, Composer: toys start before spawn for toy.initialize [pltoy5]
 // 2026-07-01, Composer: arcade owns ArcadeTopter zoom camera [plzom2]
 // 2026-07-01, Composer: grab only while pointer held [plgrb15]
+// 2026-07-01, GPT-5.5: arcade owns reward flick vfx [plvfx2]
+// 2026-07-01, GPT-5.5: track reward toys for arcade stop cleanup [plcln1]
+// 2026-07-01, GPT-5.5: arcade registered objects emit count events [plach1]
+// 2026-07-01, GPT-5.5: arcade registered objects emit despawn events [plach2]

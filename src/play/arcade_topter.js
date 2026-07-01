@@ -13,22 +13,6 @@ const ZOOM_DECAY = 0.2;
 const SETTLE_EPS = 0.02;
 const LOOK_AHEAD = 100;
 
-const _bbox = new THREE.Box3();
-const _union = new THREE.Box3();
-const _center = new THREE.Vector3();
-const _size = new THREE.Vector3();
-const _target_pos = new THREE.Vector3();
-const _target_look = new THREE.Vector3();
-const _home_pos = new THREE.Vector3();
-const _home_look = new THREE.Vector3();
-const _cam_look = new THREE.Vector3();
-const _dir = new THREE.Vector3();
-const _local_pos = new THREE.Vector3();
-const _corner = new THREE.Vector3();
-const _quat = new THREE.Quaternion();
-const _collider_t = { x: 0, y: 0, z: 0 };
-const _collider_r = { x: 0, y: 0, z: 0, w: 1 };
-
 /** @type {readonly [number, number, number][]} */
 const _CUBOID_CORNERS = [
 	[-1, -1, -1],
@@ -44,11 +28,12 @@ const _CUBOID_CORNERS = [
 /**
  * @param {import("three").PerspectiveCamera} camera
  * @param {THREE.Vector3} out
+ * @param {THREE.Vector3} dir
  * @returns {THREE.Vector3}
  */
-function _camera_look_point(camera, out) {
-	camera.getWorldDirection(_dir);
-	out.copy(camera.position).addScaledVector(_dir, LOOK_AHEAD);
+function _camera_look_point(camera, out, dir) {
+	camera.getWorldDirection(dir);
+	out.copy(camera.position).addScaledVector(dir, LOOK_AHEAD);
 	return out;
 }
 
@@ -71,26 +56,27 @@ function _copy_camera_pose(from, to) {
 /**
  * @param {import("@dimforge/rapier3d").Collider} collider
  * @param {THREE.Box3} box
+ * @param {{ corner: THREE.Vector3, quat: THREE.Quaternion, colliderT: { x: number, y: number, z: number }, colliderR: { x: number, y: number, z: number, w: number } }} scratch
  * @returns {boolean}
  */
-function _expand_collider_aabb(collider, box) {
+function _expand_collider_aabb(collider, box, scratch) {
 	const he = collider.halfExtents();
 	if (!he) {
 		return false;
 	}
 
-	const t = collider.translation(_collider_t);
-	const r = collider.rotation(_collider_r);
-	_quat.set(r.x, r.y, r.z, r.w);
+	const t = collider.translation(scratch.colliderT);
+	const r = collider.rotation(scratch.colliderR);
+	scratch.quat.set(r.x, r.y, r.z, r.w);
 
 	for (let i = 0; i < 8; i++) {
 		const c = _CUBOID_CORNERS[i];
-		_corner.set(c[0] * he.x, c[1] * he.y, c[2] * he.z);
-		_corner.applyQuaternion(_quat);
-		_corner.x += t.x;
-		_corner.y += t.y;
-		_corner.z += t.z;
-		box.expandByPoint(_corner);
+		scratch.corner.set(c[0] * he.x, c[1] * he.y, c[2] * he.z);
+		scratch.corner.applyQuaternion(scratch.quat);
+		scratch.corner.x += t.x;
+		scratch.corner.y += t.y;
+		scratch.corner.z += t.z;
+		box.expandByPoint(scratch.corner);
 	}
 	return true;
 }
@@ -98,13 +84,14 @@ function _expand_collider_aabb(collider, box) {
 /**
  * @param {import("@dimforge/rapier3d").RigidBody} body
  * @param {THREE.Box3} box
+ * @param {{ corner: THREE.Vector3, quat: THREE.Quaternion, colliderT: { x: number, y: number, z: number }, colliderR: { x: number, y: number, z: number, w: number } }} scratch
  * @returns {boolean}
  */
-function _body_world_aabb(body, box) {
+function _body_world_aabb(body, box, scratch) {
 	box.makeEmpty();
 	const n = body.numColliders();
 	for (let i = 0; i < n; i++) {
-		_expand_collider_aabb(body.collider(i), box);
+		_expand_collider_aabb(body.collider(i), box, scratch);
 	}
 	return !box.isEmpty();
 }
@@ -135,6 +122,22 @@ class ArcadeTopter {
 		this._zoom_root = null;
 		/** @type {boolean} */
 		this._unzooming = false;
+		// 2026-07-01, GPT-5.5: topter mutable scratch is instance scoped [plzom9]
+		this._bbox = new THREE.Box3();
+		this._union = new THREE.Box3();
+		this._center = new THREE.Vector3();
+		this._size = new THREE.Vector3();
+		this._target_pos = new THREE.Vector3();
+		this._target_look = new THREE.Vector3();
+		this._home_pos = new THREE.Vector3();
+		this._home_look = new THREE.Vector3();
+		this._cam_look = new THREE.Vector3();
+		this._dir = new THREE.Vector3();
+		this._local_pos = new THREE.Vector3();
+		this._corner = new THREE.Vector3();
+		this._quat = new THREE.Quaternion();
+		this._collider_t = { x: 0, y: 0, z: 0 };
+		this._collider_r = { x: 0, y: 0, z: 0, w: 1 };
 		return this;
 	}
 
@@ -148,7 +151,7 @@ class ArcadeTopter {
 		// 2026-07-01, Composer: topter camera cloned from main on start [plzom1]
 		this._camera = main.clone();
 		_copy_camera_pose(main, this._camera);
-		_camera_look_point(this._camera, _cam_look);
+		_camera_look_point(this._camera, this._cam_look, this._dir);
 
 		this._equalizer_id = this._core.eventsbus.on(
 			"draw.equalizer",
@@ -197,14 +200,14 @@ class ArcadeTopter {
 
 		if (this._zoom_root != null) {
 			this._compute_zoom_targets(cam);
-			this._dlerp_camera(dt, _target_pos, _target_look);
+			this._dlerp_camera(dt, this._target_pos, this._target_look);
 			return;
 		}
 
 		if (this._unzooming) {
 			this._refresh_home_from_main(main);
-			this._dlerp_camera(dt, _home_pos, _home_look);
-			if (this._is_settled(_home_pos, _home_look)) {
+			this._dlerp_camera(dt, this._home_pos, this._home_look);
+			if (this._is_settled(this._home_pos, this._home_look)) {
 				this._unzooming = false;
 				this._core.draw.active_camera = main;
 			}
@@ -284,7 +287,7 @@ class ArcadeTopter {
 
 		if (!this._unzooming && this._zoom_root == null) {
 			_copy_camera_pose(main, cam);
-			_camera_look_point(cam, _cam_look);
+			_camera_look_point(cam, this._cam_look, this._dir);
 		}
 
 		this._zoom_root = rootIndex;
@@ -303,8 +306,8 @@ class ArcadeTopter {
 	 * @returns {void}
 	 */
 	_refresh_home_from_main(main) {
-		_home_pos.copy(main.position);
-		_camera_look_point(main, _home_look);
+		this._home_pos.copy(main.position);
+		_camera_look_point(main, this._home_look, this._dir);
 	}
 
 	/**
@@ -322,7 +325,7 @@ class ArcadeTopter {
 	 */
 	_compute_zoom_targets(cam) {
 		const root = this._zoom_root;
-		if (root == null || !this._toy_bounds(root, _bbox)) {
+		if (root == null || !this._toy_bounds(root, this._bbox)) {
 			return;
 		}
 
@@ -331,11 +334,11 @@ class ArcadeTopter {
 			return;
 		}
 
-		_bbox.getCenter(_center);
-		_bbox.getSize(_size);
+		this._bbox.getCenter(this._center);
+		this._bbox.getSize(this._size);
 
 		const margin = 1 + ZOOM_MARGIN;
-		const maxDim = Math.max(_size.x, _size.y, _size.z) * margin;
+		const maxDim = Math.max(this._size.x, this._size.y, this._size.z) * margin;
 		const vfov = THREE.MathUtils.degToRad(cam.fov);
 		const hfov = 2 * Math.atan(Math.tan(vfov * 0.5) * cam.aspect);
 		const distV = (maxDim * 0.5) / Math.tan(vfov * 0.5);
@@ -343,12 +346,12 @@ class ArcadeTopter {
 		const dist = Math.max(distV, distH);
 
 		// 2026-07-01, Composer: zoom cam local y above plus z=1 body rotation [plzom6]
-		const r = body.rotation(_collider_r);
-		_quat.set(r.x, r.y, r.z, r.w);
-		_local_pos.set(0, dist, 1);
-		_local_pos.applyQuaternion(_quat);
-		_target_pos.copy(_center).add(_local_pos);
-		_target_look.copy(_center);
+		const r = body.rotation(this._collider_r);
+		this._quat.set(r.x, r.y, r.z, r.w);
+		this._local_pos.set(0, dist, 0.1);
+		this._local_pos.applyQuaternion(this._quat);
+		this._target_pos.copy(this._center).add(this._local_pos);
+		this._target_look.copy(this._center);
 	}
 
 	/**
@@ -359,6 +362,12 @@ class ArcadeTopter {
 	_toy_bounds(rootIndex, out) {
 		const { scene, toybox } = this._core;
 		const welds = toybox.modulebox.welds;
+		const scratch = {
+			corner: this._corner,
+			quat: this._quat,
+			colliderT: this._collider_t,
+			colliderR: this._collider_r,
+		};
 		out.makeEmpty();
 
 		const toys = [rootIndex];
@@ -376,10 +385,10 @@ class ArcadeTopter {
 		for (let i = 0; i < toys.length; i++) {
 			const itemIndex = toybox.get_item_index(toys[i]);
 			const body = scene.get_itembody(itemIndex);
-			if (body == null || !_body_world_aabb(body, _union)) {
+			if (body == null || !_body_world_aabb(body, this._union, scratch)) {
 				continue;
 			}
-			out.union(_union);
+			out.union(this._union);
 			any = true;
 		}
 		return any;
@@ -398,8 +407,8 @@ class ArcadeTopter {
 		}
 
 		dlerp_vec3(cam.position, pos, ZOOM_DECAY, dt);
-		dlerp_vec3(_cam_look, look, ZOOM_DECAY, dt);
-		cam.lookAt(_cam_look);
+		dlerp_vec3(this._cam_look, look, ZOOM_DECAY, dt);
+		cam.lookAt(this._cam_look);
 		cam.updateMatrixWorld();
 	}
 
@@ -415,7 +424,7 @@ class ArcadeTopter {
 		}
 		return (
 			cam.position.distanceToSquared(pos) <= SETTLE_EPS * SETTLE_EPS
-			&& _cam_look.distanceToSquared(look) <= SETTLE_EPS * SETTLE_EPS
+			&& this._cam_look.distanceToSquared(look) <= SETTLE_EPS * SETTLE_EPS
 		);
 	}
 }
@@ -426,3 +435,4 @@ export default ArcadeTopter;
 // 2026-07-01, Composer: re-zoom during unzoom from current cam [plzom4]
 // 2026-07-01, Composer: zoom cam local y above plus z=1 body rotation [plzom6]
 // 2026-07-01, Composer: zoom and unzoom via arcade.click [plzom7]
+// 2026-07-01, GPT-5.5: topter mutable scratch is instance scoped [plzom9]

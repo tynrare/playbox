@@ -19,8 +19,9 @@ db#db_pb_fonts(name="fonts")
 db#db_pb_materials(name="materials")
    d(name="material_proto" id="0")
    d(name="scenematerial" type="standard" color="0xffffff" glow="0" opacity="1")
-   d(name="coin_a" type="phong" shininess="10" emissive="0xffffff" glow="1")
-   d(name="button_a" type="phong" shininess="5" emissive="0xffffff" glow="2")
+   d(name="prop_a" type="phong" shininess="5" emissive="0xffffff" glow="1")
+   d(name="coin_a" inherits="prop_a" shininess="10")
+   d(name="button_a" inherits="prop_a" shininess="5" glow="2")
 
 //- 2026-06-18, Composer: collapse models_instanced into models [mdcol1]
 db#db_pb_models(name="models")
@@ -38,9 +39,15 @@ db#db_pb_models(name="models")
    //- 2026-06-28, Composer: arcader_a parts exclude welded button [mdarc2]
    //- 2026-06-30, Composer: arcader_a revolver slots 0-2 in RigidModel [mdarc3]
    d(name="arcader_a"              source="props" object="arcader_a"
-      parts="[arcader_a, arcader_a_revolver_0, arcader_a_revolver_1, arcader_a_revolver_2]")
+      parts="[arcader_a, arcader_a_revolver_0, arcader_a_revolver_1, arcader_a_revolver_2,arcader_a_dispenser]")
+   //- 2026-07-01, GPT-5.5: arcader_b rigid model excludes screen overlay [dbacb1]
+   d(name="arcader_b"              source="props" object="arcader_b" parts="[arcader_b]")
    //- 2026-06-28, Composer: arcader_a_button single mesh model [mdarcb1]
    d(name="arcader_a_button"        source="props" object="arcader_a_button" material="button_a")
+   //- 2026-07-01, GPT-5.5: fishbones model from props fish-bones [dbfsh1]
+   d(name="fishbones"               source="props" object="fish-bones" material="prop_a")
+   //- 2026-07-01, GPT-5.5: banana model from props banana [dbban1]
+   d(name="banana"                  source="props" object="banana" material="prop_a")
 
 //- 2026-06-17, Composer: coinmania and gameicons sprite registry from a_legacy [sprpt1]
 include db_sprites.pug
@@ -59,3 +66,7 @@ include db_sprites.pug
 //- 2026-06-28, Composer: arcader_a parts exclude welded button [mdarc2]
 //- 2026-06-28, Composer: arcader_a_button single mesh model [mdarcb1]
 //- 2026-06-30, Composer: arcader_a revolver slots 0-2 in RigidModel [mdarc3]
+//- 2026-07-01, GPT-5.5: fishbones model from props fish-bones [dbfsh1]
+//- 2026-07-01, GPT-5.5: banana model from props banana [dbban1]
+//- 2026-07-01, GPT-5.5: arcader_b rigid model excludes screen overlay [dbacb1]
+//- 2026-07-01, GPT-5.5: arcader_b screen model [dbacb2]

@@ -19,13 +19,21 @@ import FlowBus from "./flowbus.js";
  * @memberof pb.core
  */
 class Core {
-  constructor() {
+  /**
+   * @param {{ render?: Render, db?: DbList, assets?: Assets, bindInputs?: boolean, ownRender?: boolean }} [opts]
+   */
+  constructor(opts = {}) {
     this.active = false;
-    this.render = new Render();
+    // 2026-07-01, GPT-5.5: core accepts injected render services [crinj1]
+    this._owns_render = opts.ownRender ?? true;
+    this._owns_db = opts.db == null;
+    this._owns_assets = opts.assets == null;
+    this._bind_inputs = opts.bindInputs ?? true;
+    this.render = opts.render ?? new Render();
     // 2026-06-14, Composer: rename pp abbreviation to pb [m4k8n1]
     // 2026-06-17, Composer: defer db DOM bind to init [dblbind1]
-    this.db = new DbList();
-    this.assets = new Assets(this.db, this.render);
+    this.db = opts.db ?? new DbList();
+    this.assets = opts.assets ?? new Assets(this.db, this.render);
     // 2026-06-14, Composer: eventsbus hub for inputs and ui [evbs1]
     this.eventsbus = new EventsBus();
     // 2026-06-14, Composer: unwrap draw ctor args [drwarg1]
@@ -60,11 +68,15 @@ class Core {
 
   init() {
     this.render.init();
-    this.db.bind(document.getElementById("app"), "#db_pb");
-    // 2026-06-17, Composer: rename db start to init phase [dbinit1]
-    this.db.init();
+    if (this._owns_db) {
+      this.db.bind(document.getElementById("app"), "#db_pb");
+      // 2026-06-17, Composer: rename db start to init phase [dbinit1]
+      this.db.init();
+    }
     this.draw.init();
-    this.assets.init();
+    if (this._owns_assets) {
+      this.assets.init();
+    }
     // 2026-06-14, Composer: cache db lang strings by locale key [lng1]
     this.lang.init();
     // 2026-06-17, Composer: core init drives all children [crcyc5]
@@ -74,8 +86,11 @@ class Core {
     this.physics.init();
     this.ui.init();
     // 2026-06-14, Composer: defer canvas binding to init [inpdev3]
-    this.inputs.init(document.getElementById("canvas_pb"));
-    this.eventsbus.register("inputs", this.inputs.events, INPUTS_BRIDGE_MAP);
+    // 2026-07-01, GPT-5.5: sub-cores can skip DOM input binding [crinj2]
+    this.inputs.init(this._bind_inputs ? document.getElementById("canvas_pb") : null);
+    if (this._bind_inputs) {
+      this.eventsbus.register("inputs", this.inputs.events, INPUTS_BRIDGE_MAP);
+    }
     // 2026-06-17, Composer: flowbus has no init phase [flwatt1]
     return this;
   }
@@ -95,10 +110,16 @@ class Core {
     this.toybox.dispose();
     this.itembox.dispose();
     this.draw.dispose();
-    this.assets.dispose();
+    if (this._owns_assets) {
+      this.assets.dispose();
+    }
     this.lang.dispose();
-    this.db.stop();
-    this.render.dispose();
+    if (this._owns_db) {
+      this.db.stop();
+    }
+    if (this._owns_render) {
+      this.render.dispose();
+    }
   }
 
   /**
@@ -106,7 +127,9 @@ class Core {
    */
   start() {
     this.render.start();
-    this.assets.start();
+    if (this._owns_assets) {
+      this.assets.start();
+    }
     this.draw.start();
     // 2026-06-14, Composer: scene environment floor lights csm [scnenv1]
     this.scene.start();
@@ -136,8 +159,12 @@ class Core {
     this.physics.stop();
     this.scene.stop();
     this.draw.stop();
-    this.assets.stop();
-    this.render.stop();
+    if (this._owns_assets) {
+      this.assets.stop();
+    }
+    if (this._owns_render) {
+      this.render.stop();
+    }
   }
 
   step(dt, _rdt) {
@@ -207,3 +234,5 @@ export default Core;
 // 2026-06-28, Composer: core wires toybox.on_toyupdate to flowbus [crtoy1]
 // 2026-06-28, Composer: draw ctor receives eventsbus [drweq1]
 // 2026-06-29, Composer: await Rapier init in physics.start [rphinit1]
+// 2026-07-01, GPT-5.5: core accepts injected render services [crinj1]
+// 2026-07-01, GPT-5.5: sub-cores can skip DOM input binding [crinj2]

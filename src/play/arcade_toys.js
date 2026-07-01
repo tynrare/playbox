@@ -19,9 +19,12 @@ const SNAP_RATE = 12;
 const SNAP_DONE_EPS = 1e-3;
 const VAR_PLAY_ARCADER_DONE = 6;
 const MATCH_SPAWN_IMPULSE = 4.0;
-const MATCH_SPAWN_MARGIN = 0.15;
 const MATCH_SPAWN_SPREAD = 0.22;
 const MATCH_SPAWN_DELAY = 0.1;
+// 2026-07-01, GPT-5.5: arcader revolver and reward sfx [plsfx5]
+const SFX_REVOLVER_PASS = "switch12";
+const SFX_REVOLVER_STOP = "click4";
+const SFX_REWARD_SPAWN = "confirmation_001";
 
 const _yUp = new THREE.Vector3(0, 1, 0);
 const _unitScale = new THREE.Vector3(1, 1, 1);
@@ -39,12 +42,14 @@ const _pivotQuat = new THREE.Quaternion();
 const _pivotScale = new THREE.Vector3();
 const _pivotWorld = new THREE.Matrix4();
 const _coinScale = new THREE.Vector3(1, 1, 1);
-const _spawnRight = new THREE.Vector3();
+const _spawnUp = new THREE.Vector3();
 const _spawnPos = new THREE.Vector3();
+const _spawnQuat = new THREE.Quaternion();
+const _spawnImpulseVec = new THREE.Vector3();
 const _spawnImpulse = { x: 0, y: 0, z: 0 };
 
 /**
- * @returns {{ phase: string, angle: number, spin_speed: number, snap_target: number }}
+ * @returns {{ phase: string, angle: number, spin_speed: number, snap_target: number, snap_mark: number }}
  */
 function _make_revolver_state() {
 	return {
@@ -52,6 +57,7 @@ function _make_revolver_state() {
 		angle: 0,
 		spin_speed: 0,
 		snap_target: 0,
+		snap_mark: 0,
 	};
 }
 
@@ -240,6 +246,15 @@ function _match_spawn_count(matchCount) {
 }
 
 /**
+ * @param {number} angle
+ * @param {number} segment
+ * @returns {number}
+ */
+function _snap_mark_from_angle(angle, segment) {
+	return Math.floor(angle / segment);
+}
+
+/**
  * @returns {{ toyIndex: number, toyKey: string, total: number, spawned: number, timer: number }}
  */
 function _make_reward_spawn_state() {
@@ -303,6 +318,7 @@ class ArcadeToyArcaderA {
 		this._face_count = 0;
 		this._coin_scale = 1;
 		this._face_toys = [];
+		this._dispenser_slot = null;
 		this._reward_spawn = _make_reward_spawn_state();
 		this._toy_db_key = toyDbKey;
 		this._setup_from_arcade_db(toyIndex, toyDbKey);
@@ -358,6 +374,7 @@ class ArcadeToyArcaderA {
 		}
 
 		const arcadeConf = this._get_arcade_conf(toyDbKey);
+		this._dispenser_slot = arcadeConf?.dispenser_slot ?? null;
 		const prefix = _parse_revolver_pattern(arcadeConf?.revolvers);
 		this._revolver_pivots = this._match_revolver_pivots(rigid, prefix);
 		if (!this._revolver_pivots.length) {
@@ -374,10 +391,6 @@ class ArcadeToyArcaderA {
 		}
 
 		const drumPivot = this._revolver_pivots[0];
-		const firstMesh = _resolve_toy_mesh_key(this._core, faceToys[0]);
-		const coinBounds = firstMesh
-			? _resolve_model_bounds(this._core, firstMesh)
-			: null;
 		const drumBounds = _resolve_model_bounds(
 			this._core,
 			ARCADER_A_MODEL_KEY,
@@ -412,7 +425,6 @@ class ArcadeToyArcaderA {
 			this._face_toys,
 			drumRadius,
 			drumBounds,
-			coinBounds,
 		);
 	}
 
@@ -421,21 +433,20 @@ class ArcadeToyArcaderA {
 	 * @param {string[]} faceToys
 	 * @param {number} drumRadius
 	 * @param {{ sizeX: number, sizeY: number, sizeZ: number }} drumBounds
-	 * @param {{ sizeX: number, sizeY: number, sizeZ: number }|null} refCoinBounds
 	 * @returns {void}
 	 */
-	_attach_revolver_coins(rigid, faceToys, drumRadius, drumBounds, refCoinBounds) {
+	_attach_revolver_coins(rigid, faceToys, drumRadius, drumBounds) {
 		// 2026-06-30, Composer: visual coin instances driven via setMatrixAt [pltoy17]
-		const coinThickness = (refCoinBounds?.sizeY ?? 0.1) * this._coin_scale;
 		const drumDepth = Math.min(drumBounds.sizeY, drumBounds.sizeZ);
+		// 2026-07-01, GPT-5.5: revolver face models use center radius [pltoy24]
 		const placeRadius = Math.max(
-			drumRadius - coinThickness * 0.5,
+			drumRadius,
 			drumDepth * 0.25,
 		);
 
 		this._coins.length = 0;
 		for (let r = 0; r < this._revolver_pivots.length; r++) {
-			/** @type {{ entity: import("@three.ez/instanced-mesh").InstancedEntity, faceIndex: number, radius: number }[]} */
+			/** @type {{ entity: import("@three.ez/instanced-mesh").InstancedEntity, faceIndex: number, radius: number, inset: number }[]} */
 			const layer = [];
 			for (let f = 0; f < this._face_count; f++) {
 				const toyKey = faceToys[f];
@@ -447,10 +458,14 @@ class ArcadeToyArcaderA {
 				if (!entity) {
 					continue;
 				}
+				const bounds = _resolve_model_bounds(this._core, meshKey);
+				// 2026-07-01, GPT-5.5: revolver face models inset by half height [pltoy25]
+				const inset = ((bounds?.sizeY ?? 0) * this._coin_scale) * 0.5;
 				layer.push({
 					entity,
 					faceIndex: f,
 					radius: placeRadius,
+					inset,
 				});
 			}
 			this._coins.push(layer);
@@ -484,6 +499,7 @@ class ArcadeToyArcaderA {
 		this._revolvers.length = 0;
 		this._revolver_pivots.length = 0;
 		this._face_toys = [];
+		this._dispenser_slot = null;
 		this._reward_spawn = _make_reward_spawn_state();
 		this._toy_db_key = null;
 	}
@@ -552,10 +568,11 @@ class ArcadeToyArcaderA {
 				}
 
 				const theta = coin.faceIndex * this._segment;
+				const radius = Math.max(0, coin.radius - coin.inset);
 				_facePos.set(
 					0,
-					coin.radius * Math.cos(theta),
-					coin.radius * Math.sin(theta),
+					radius * Math.cos(theta),
+					radius * Math.sin(theta),
 				);
 				_radial.copy(_facePos).normalize();
 				_faceQuat.setFromUnitVectors(_yUp, _radial);
@@ -639,17 +656,18 @@ class ArcadeToyArcaderA {
 	}
 
 	/**
-	 * @param {{ phase: string, angle: number, spin_speed: number, snap_target: number }} state
+	 * @param {{ phase: string, angle: number, spin_speed: number, snap_target: number, snap_mark: number }} state
 	 * @param {number} spinSpeed
 	 * @returns {void}
 	 */
 	_start_spin(state, spinSpeed) {
 		state.phase = "spin";
 		state.spin_speed = spinSpeed;
+		state.snap_mark = _snap_mark_from_angle(state.angle, this._segment);
 	}
 
 	/**
-	 * @param {{ phase: string, angle: number, spin_speed: number, snap_target: number }} state
+	 * @param {{ phase: string, angle: number, spin_speed: number, snap_target: number, snap_mark: number }} state
 	 * @returns {void}
 	 */
 	_request_stop(state) {
@@ -664,7 +682,7 @@ class ArcadeToyArcaderA {
 	/**
 	 * @param {number} dt
 	 * @param {import("../scene/rigid_model.js").default} rigid
-	 * @param {{ phase: string, angle: number, spin_speed: number, snap_target: number }} state
+	 * @param {{ phase: string, angle: number, spin_speed: number, snap_target: number, snap_mark: number }} state
 	 * @param {number} index
 	 * @returns {boolean}
 	 */
@@ -676,6 +694,11 @@ class ArcadeToyArcaderA {
 
 		if (state.phase === "spin") {
 			state.angle += state.spin_speed * dt;
+			const snapMark = _snap_mark_from_angle(state.angle, this._segment);
+			if (snapMark !== state.snap_mark) {
+				state.snap_mark = snapMark;
+				this._core.scene.audio.play(SFX_REVOLVER_PASS);
+			}
 			// 2026-06-30, Composer: revolver spin on local x axis [pltoy10]
 			pivot.rotation.x = state.angle;
 			return true;
@@ -687,6 +710,7 @@ class ArcadeToyArcaderA {
 				state.angle = state.snap_target;
 				pivot.rotation.x = state.angle;
 				state.phase = "idle";
+				this._core.scene.audio.play(SFX_REVOLVER_STOP);
 				return false;
 			}
 			const step = Math.sign(delta) * Math.min(Math.abs(delta), SNAP_RATE * dt);
@@ -709,7 +733,6 @@ class ArcadeToyArcaderA {
 			VAR_PLAY_ARCADER_DONE,
 			1,
 		);
-		console.log("arcader_a", "revolvers_stopped", this._root_name);
 		// 2026-06-30, Composer: sequential match reward spawn with delay state [pltoy21]
 // 2026-06-30, Composer: any adjacent revolver run match impulse by mass [pltoy22]
 		const reward = this._evaluate_match_reward();
@@ -842,28 +865,40 @@ class ArcadeToyArcaderA {
 			return;
 		}
 
-		const bounds = _resolve_model_bounds(this._core, ARCADER_A_MODEL_KEY);
-		const halfX = bounds ? bounds.sizeX * 0.5 : 0.5;
-		const offset = halfX + MATCH_SPAWN_MARGIN;
-
+		// 2026-07-01, GPT-5.5: reward spawn uses dispenser slot transform [plvfx8]
 		rigid.root.updateMatrixWorld(true);
-		_spawnRight.set(1, 0, 0).transformDirection(rigid.root.matrixWorld);
-
-		const t = body.translation();
-		_spawnPos.set(t.x, t.y, t.z);
+		const dispenser = this._dispenser_slot
+			? rigid.getSlot(this._dispenser_slot)
+			: null;
+		const spawnSlot = dispenser ?? rigid.root;
+		spawnSlot.getWorldPosition(_spawnPos);
+		spawnSlot.getWorldQuaternion(_spawnQuat);
+		_spawnUp.set(0, 1, 0).applyQuaternion(_spawnQuat);
 
 		const spawned = this._core.toybox.spawn(toyKey, true);
 		if (spawned == null) {
 			return;
 		}
+		this._core.scene.audio.play(SFX_REWARD_SPAWN);
 		const spawnedItem = this._core.toybox.get_item_index(spawned);
 		const spread = (index - (count - 1) * 0.5) * MATCH_SPAWN_SPREAD;
+		const x = _spawnPos.x + _spawnUp.x * spread;
+		const y = _spawnPos.y + _spawnUp.y * spread;
+		const z = _spawnPos.z + _spawnUp.z * spread;
 		this._core.scene.set_itemposition(
 			spawnedItem,
-			_spawnPos.x + _spawnRight.x * offset,
-			_spawnPos.y + spread,
-			_spawnPos.z + _spawnRight.z * offset,
+			x,
+			y,
+			z,
 		);
+		// 2026-07-01, GPT-5.5: reward spawn position event for flick vfx [plvfx3]
+		// 2026-07-01, GPT-5.5: reward event includes toy for arcade cleanup [plcln2]
+		this._core.eventsbus.emit("arcade.reward_spawn", {
+			toyIndex: spawned,
+			x,
+			y,
+			z,
+		});
 
 		const spawnBody = this._core.scene.get_itembody(spawnedItem);
 		if (!spawnBody) {
@@ -873,11 +908,17 @@ class ArcadeToyArcaderA {
 		const mass = Math.max(spawnBody.mass(), 0.01);
 		// 2026-06-30, Composer: match spawn impulse scales with body mass [pltoy22]
 		const impulseMag = MATCH_SPAWN_IMPULSE * mass;
-		_spawnImpulse.x =
-			_spawnRight.x * impulseMag + (Math.random() - 0.5) * 0.08;
-		_spawnImpulse.y = impulseMag * 0.25;
-		_spawnImpulse.z =
-			_spawnRight.z * impulseMag + (Math.random() - 0.5) * 0.08;
+		// 2026-07-01, GPT-5.5: dispenser impulse uses local Y+ [plvfx9]
+		_spawnImpulseVec
+			.set(
+				(Math.random() - 0.5) * 0.08,
+				impulseMag,
+				impulseMag * 0.25,
+			)
+			.applyQuaternion(_spawnQuat);
+		_spawnImpulse.x = _spawnImpulseVec.x;
+		_spawnImpulse.y = _spawnImpulseVec.y;
+		_spawnImpulse.z = _spawnImpulseVec.z;
 		spawnBody.applyImpulse(_spawnImpulse, true);
 	}
 }
@@ -943,6 +984,10 @@ class ArcadeToys {
 			this._core.eventsbus.off(this._click_id);
 			this._click_id = null;
 		}
+		// 2026-07-01, GPT-5.5: dispose toy handlers on arcade stop [plcln3]
+		this._by_root.forEach((inst, toyIndex) => {
+			inst.dispose(toyIndex);
+		});
 		this._by_root.clear();
 	}
 
@@ -1082,3 +1127,11 @@ export { ArcadeToyArcaderA };
 // 2026-06-30, Composer: sequential match reward spawn with delay state [pltoy21]
 // 2026-06-30, Composer: any adjacent revolver run match impulse by mass [pltoy22]
 // 2026-07-01, Composer: button dispatch via arcade.click [pltoy23]
+// 2026-07-01, GPT-5.5: arcader revolver and reward sfx [plsfx5]
+// 2026-07-01, GPT-5.5: reward spawn position event for flick vfx [plvfx3]
+// 2026-07-01, GPT-5.5: reward spawn uses dispenser slot transform [plvfx8]
+// 2026-07-01, GPT-5.5: dispenser impulse uses local Y+ [plvfx9]
+// 2026-07-01, GPT-5.5: reward event includes toy for arcade cleanup [plcln2]
+// 2026-07-01, GPT-5.5: dispose toy handlers on arcade stop [plcln3]
+// 2026-07-01, GPT-5.5: revolver face models use center radius [pltoy24]
+// 2026-07-01, GPT-5.5: revolver face models inset by half height [pltoy25]

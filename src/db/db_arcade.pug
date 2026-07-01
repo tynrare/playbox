@@ -2,7 +2,12 @@ db#db_pb_arcade(name="arcade")
     //- 2026-06-30, Composer: arcader revolver face toys and pivot pattern [dbarc2]
     d(name="arcader_a_toy"
         revolvers="[arcader_a_revolver_*]" revolver_size="5"
-        revolver_slots="[coin_a_toy,coin_a_toy,coin_a_toy,coin_b_toy,coin_c_toy]")
-    d(name="arcader_a_toy" inherits="arcader_a_toy")
+        revolver_slots="[fishbones_toy,fishbones_toy,coin_a_toy,coin_b_toy,fishbones_toy]"
+        dispenser_slot="arcader_a_dispenser")
+    //- 2026-07-01, GPT-5.5: arcader_b screen slot config [dbarcb1]
+    d(name="arcader_b_toy"
+        screen="arcader_b_screen"
+        emulator="arcade_a")
 //- 2026-06-30, Composer: arcade logic db for play handlers [dbarc1]
 //- 2026-06-30, Composer: arcader revolver face toys and pivot pattern [dbarc2]
+//- 2026-07-01, GPT-5.5: arcader_b screen slot config [dbarcb1]

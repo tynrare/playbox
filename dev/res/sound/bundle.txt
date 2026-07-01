@@ -4,3 +4,4 @@ impactMetal_light_002 boost=0.5
 impactWood_light_000 boost=0.5
 impactPunch_heavy_000 boost=2
 coindrop crop=0.04,0.1
+switch12 boost=0.2

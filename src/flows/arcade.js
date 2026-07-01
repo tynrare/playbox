@@ -2,6 +2,8 @@
 // 2026-06-26, Composer: arcade flow close btn returns root [flwarc1]
 import FlowBase from "../core/flowbase.js";
 import Arcade from "../play/arcade.js";
+import ArcadeAchievements from "../play/arcade_achievements.js";
+import ArcadeEmulator from "../play/arcade_emulator.js";
 
 /**
  * @class ArcadeFlow
@@ -20,6 +22,10 @@ class ArcadeFlow extends FlowBase {
 	 */
 	init() {
 		this._play = new Arcade(this._core).init();
+		// 2026-07-01, GPT-5.5: arcade flow owns achievements manager [flwach1]
+		this._achievements = new ArcadeAchievements(this._core, this._play).init();
+		// 2026-07-01, GPT-5.5: arcade flow owns emulator manager [flwemu1]
+		this._emulator = new ArcadeEmulator(this._core).init();
 		/** @type {number|null} */
 		this._ui_click_id = null;
 		return this;
@@ -27,6 +33,8 @@ class ArcadeFlow extends FlowBase {
 
 	/** @returns {void} */
 	start() {
+		this._achievements.start();
+		this._emulator.start();
 		this._play.start();
 		this._core.ui.setstate("ui_arcade_vis");
 		// 2026-06-26, Composer: arcade flow close btn returns root [flwarc1]
@@ -44,6 +52,9 @@ class ArcadeFlow extends FlowBase {
 	 */
 	step(dt, rdt) {
 		this._play.step(dt, rdt);
+		this._achievements.step(dt, rdt);
+		// 2026-07-01, GPT-5.5: arcade flow steps emulator subcores [flwemu2]
+		this._emulator.step(dt, rdt);
 	}
 
 	/**
@@ -63,11 +74,15 @@ class ArcadeFlow extends FlowBase {
 			this._ui_click_id = null;
 		}
 		this._core.ui.delstate("ui_arcade_vis");
+		this._emulator.stop();
+		this._achievements.stop();
 		this._play.stop();
 	}
 
 	/** @returns {void} */
 	dispose() {
+		this._emulator.dispose();
+		this._achievements.dispose();
 		this._play.dispose();
 	}
 }
@@ -75,3 +90,6 @@ class ArcadeFlow extends FlowBase {
 export default ArcadeFlow;
 // 2026-06-26, Composer: arcade flow close btn returns root [flwarc1]
 // 2026-06-28, Composer: arcade flow delegates toyupdate to play [flwtoy2]
+// 2026-07-01, GPT-5.5: arcade flow owns achievements manager [flwach1]
+// 2026-07-01, GPT-5.5: arcade flow owns emulator manager [flwemu1]
+// 2026-07-01, GPT-5.5: arcade flow steps emulator subcores [flwemu2]

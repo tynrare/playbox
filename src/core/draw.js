@@ -19,6 +19,8 @@ const PIXELATE_SIZE = 4;
 // 2026-06-26, Composer: reference vertical FOV at landscape aspect [drwfov1]
 const CAMERA_BASE_FOV = 42;
 const CAMERA_REF_ASPECT = 16 / 9;
+const _targetPrevViewport = new THREE.Vector4();
+const _targetPrevScissor = new THREE.Vector4();
 
 // 2026-06-14, Composer: port Rendera_legacySandsphere into Draw [drwprt1]
 /**
@@ -148,8 +150,16 @@ class Draw {
     render.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     render.renderer.toneMappingExposure = 0.7;
 
-    // 2026-06-18, Composer: equalizer before composer sizing [drwao1]
-    this.equalizer();
+    if (render.target) {
+      // 2026-07-01, GPT-5.5: target UI equalizer uses texture dimensions before build [drwrt4]
+      this._window_w = render.width ?? render.target.width ?? 1;
+      this._window_h = render.height ?? render.target.height ?? 1;
+    }
+
+    if (!render.target) {
+      // 2026-06-18, Composer: equalizer before composer sizing [drwao1]
+      this.equalizer();
+    }
 
     this.pivot = new THREE.Object3D();
     render.scene.add(this.pivot);
@@ -164,6 +174,15 @@ class Draw {
     this.core.setRenderer(render.renderer);
     this.core.init();
     this.pivot.add(this.core.pivot);
+
+    if (render.target) {
+      // 2026-07-01, GPT-5.5: target-backed draw bypasses screen composer [drwrt1]
+      // 2026-07-01, GPT-5.5: target equalizer runs after UI camera exists [drwrt5]
+      this.equalizer();
+      this._emit_equalizer();
+      this.active_camera = render.camera;
+      return;
+    }
 
     const composer = new EffectComposer(render.renderer);
     composer.renderToScreen = true;
@@ -372,6 +391,23 @@ class Draw {
       return;
     }
 
+    if (render.target) {
+      const w = render.width ?? render.target.width ?? 1;
+      const h = render.height ?? render.target.height ?? 1;
+      if (this._window_w === w && this._window_h === h) {
+        return;
+      }
+      this._window_w = w;
+      this._window_h = h;
+      if (render.camera) {
+        render.camera.aspect = w / h;
+        render.camera.fov = this._get_camera_vfov(w, h);
+        render.camera.updateProjectionMatrix();
+      }
+      this._emit_equalizer();
+      return;
+    }
+
     // 2026-06-18, Composer: a_legacy render equalizer scaled buffer [drwsc3]
     const w = window.innerWidth * this.scale;
     const h = window.innerHeight * this.scale;
@@ -457,12 +493,21 @@ class Draw {
    * @returns {void}
    */
   step(dt, _rdt) {
-    if (!this.active || !this.composer) {
+    if (!this.active) {
       return;
     }
 
     this._equalizer_render();
     this._sync_composer_ui();
+
+    if (this._render.target) {
+      this._render_target();
+      return;
+    }
+
+    if (!this.composer) {
+      return;
+    }
 
     if (
       this.ui_pass &&
@@ -493,6 +538,41 @@ class Draw {
 
     this._attach_composer_depth_textures();
     this.composer.render(dt);
+  }
+
+  /** @returns {void} */
+  _render_target() {
+    const render = this._render;
+    const renderer = render.renderer;
+    const target = render.target;
+    const scene = render.scene;
+    const camera = this.active_camera ?? render.camera;
+    if (!renderer || !target || !scene || !camera) {
+      return;
+    }
+
+    const prevTarget = renderer.getRenderTarget();
+    const prevAutoClear = renderer.autoClear;
+    const prevScissorTest = renderer.getScissorTest();
+    renderer.getViewport(_targetPrevViewport);
+    renderer.getScissor(_targetPrevScissor);
+    // 2026-07-01, GPT-5.5: target render manual clear preserves UI overlay [drwrt3]
+    renderer.autoClear = false;
+    renderer.setRenderTarget(target);
+    // 2026-07-01, GPT-5.5: render target draw owns viewport state [drwrt2]
+    renderer.setViewport(0, 0, target.width, target.height);
+    renderer.setScissorTest(false);
+    renderer.clear(true, true, true);
+    renderer.render(scene, camera);
+    if (this.sceneui && this.cameraui) {
+      renderer.clearDepth();
+      renderer.render(this.sceneui, this.cameraui);
+    }
+    renderer.setRenderTarget(prevTarget);
+    renderer.setViewport(_targetPrevViewport);
+    renderer.setScissor(_targetPrevScissor);
+    renderer.setScissorTest(prevScissorTest);
+    renderer.autoClear = prevAutoClear;
   }
 
   /**
@@ -607,3 +687,8 @@ class Draw {
 // 2026-06-28, Composer: bare draw.equalizer on viewport change [drweq1]
 // 2026-07-01, Composer: active_camera drives scene composer passes [drwac1]
 export default Draw;
+// 2026-07-01, GPT-5.5: target-backed draw bypasses screen composer [drwrt1]
+// 2026-07-01, GPT-5.5: render target draw owns viewport state [drwrt2]
+// 2026-07-01, GPT-5.5: target render manual clear preserves UI overlay [drwrt3]
+// 2026-07-01, GPT-5.5: target UI equalizer uses texture dimensions before build [drwrt4]
+// 2026-07-01, GPT-5.5: target equalizer runs after UI camera exists [drwrt5]
