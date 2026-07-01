@@ -483,7 +483,8 @@ class Draw {
     if (hw <= 0 || hh <= 0) {
       return false;
     }
-    const s = this.scale;
+    // 2026-07-01, GPT-5.5: render-target pointer coords are already pixels [drwptr3]
+    const s = this._render.target ? 1 : this.scale;
     out.set((clientX * s) / hw - 1, -((clientY * s) / hh - 1));
     return true;
   }
@@ -597,6 +598,11 @@ class Draw {
    */
   set_render_scale(scale) {
     // 2026-06-18, Composer: a_legacy render equalizer scaled buffer [drwsc3]
+    if (this._render.target) {
+      // 2026-07-01, GPT-5.5: render-target pointer coords are already pixels [drwptr3]
+      this.scale = 1;
+      return;
+    }
     const next = Number(scale);
     if (!Number.isFinite(next) || next <= 0) {
       return;
@@ -692,3 +698,4 @@ export default Draw;
 // 2026-07-01, GPT-5.5: target render manual clear preserves UI overlay [drwrt3]
 // 2026-07-01, GPT-5.5: target UI equalizer uses texture dimensions before build [drwrt4]
 // 2026-07-01, GPT-5.5: target equalizer runs after UI camera exists [drwrt5]
+// 2026-07-01, GPT-5.5: render-target pointer coords are already pixels [drwptr3]
