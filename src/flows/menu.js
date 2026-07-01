@@ -27,13 +27,14 @@
 // 2026-06-26, Composer: menu router event nav no parent ctors [flwmn5]
 // 2026-06-26, Composer: flow.navigate flow.state generic nav names [flwmn6]
 import FlowBase from "../core/flowbase.js";
+import AchievementsFlow from "./achievements.js";
 import ArcadeFlow from "./arcade.js";
 import DevMenuFlow from "./dev_menu.js";
 import ReadySplashFlow from "./readysplash.js";
 import SettingsMenuFlow from "./settings_menu.js";
 import TestFlow from "./test.js";
 
-/** @typedef {"root"|"dev"|"settings"|"test"|"arcade"|"readysplash"} FlowKey */
+/** @typedef {"root"|"dev"|"settings"|"test"|"arcade"|"achievements"|"readysplash"} FlowKey */
 
 /**
  * @class MenuFlow
@@ -43,10 +44,12 @@ class MenuFlow extends FlowBase {
 	/**
 	 * @param {import("../core/core.js").default} core
 	 * @param {import("../play/settings.js").default} settings
+	 * @param {{ achievementsEmbedded?: boolean }} [options]
 	 */
-	constructor(core, settings) {
+	constructor(core, settings, options = {}) {
 		super(core);
 		this._settings = settings;
+		this._achievements_embedded = options.achievementsEmbedded === true;
 	}
 
 	/**
@@ -61,6 +64,7 @@ class MenuFlow extends FlowBase {
 			settings: null,
 			test: null,
 			arcade: null,
+			achievements: null,
 			readysplash: null,
 		};
 		this._boot_opened = false;
@@ -98,6 +102,11 @@ class MenuFlow extends FlowBase {
 			// 2026-06-26, Composer: root menu arcade button nav [flwmn7]
 			if (event === "root_btn_1") {
 				this._core.eventsbus.emit("flow.navigate", { to: "arcade" });
+				return;
+			}
+			// 2026-07-01, Codex 5.3: root button routes achievements flow [achmenu1]
+			if (event === "root_btn_2") {
+				this._core.eventsbus.emit("flow.navigate", { to: "achievements" });
 			}
 		});
 		if (!this._boot_opened) {
@@ -137,7 +146,7 @@ class MenuFlow extends FlowBase {
 			this._debug_click_id = null;
 		}
 		this._core.ui.delstate("ui_dev");
-		const keys = ["dev", "settings", "test", "arcade", "readysplash"];
+		const keys = ["dev", "settings", "test", "arcade", "achievements", "readysplash"];
 		for (let i = 0; i < keys.length; i++) {
 			const key = keys[i];
 			this._flows[key]?.dispose();
@@ -179,6 +188,12 @@ class MenuFlow extends FlowBase {
 				this._flows.test = new TestFlow(this._core).init();
 			} else if (key === "arcade") {
 				this._flows.arcade = new ArcadeFlow(this._core).init();
+			} else if (key === "achievements") {
+				// 2026-07-01, Codex 5.3: menu forwards achievements embedded mode [achmenu2]
+				this._flows.achievements = new AchievementsFlow(
+					this._core,
+					{ embedded: this._achievements_embedded },
+				).init();
 			} else if (key === "readysplash") {
 				// 2026-06-26, Composer: readysplash lazy pane factory [flwrsp2]
 				this._flows.readysplash = new ReadySplashFlow(this._core).init();
@@ -193,3 +208,5 @@ export default MenuFlow;
 // 2026-06-26, Composer: flow.navigate flow.state generic nav names [flwmn6]
 // 2026-06-26, Composer: menu router event nav no parent ctors [flwmn5]
 // 2026-06-26, Composer: readysplash lazy pane factory [flwrsp2]
+// 2026-07-01, Codex 5.3: root button routes achievements flow [achmenu1]
+// 2026-07-01, Codex 5.3: menu forwards achievements embedded mode [achmenu2]

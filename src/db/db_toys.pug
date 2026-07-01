@@ -4,26 +4,26 @@ db#db_pb_items(name="items")
    d(name="box_test_item"            id="1" body="box" mesh="box_timber")
    d(name="coin_a_item"              id="2" body="coin_a" mesh="coin_a")
    //- 2026-06-26, Composer: coin_b item inherits coin_a_item [itcnb1]
-   d(name="coin_b_item"              id="4" inherits="coin_a_item" body="coin_b" mesh="coin_b")
+   d(name="coin_b_item"              id="3" inherits="coin_a_item" body="coin_b" mesh="coin_b")
    //- 2026-06-26, Composer: coin_c item inherits coin_a_item [itcnc1]
-   d(name="coin_c_item"              id="6" inherits="coin_a_item" body="coin_c" mesh="coin_c")
+   d(name="coin_c_item"              id="4" inherits="coin_a_item" body="coin_c" mesh="coin_c")
    //- 2026-06-26, Composer: dice_a item inherits coin_a_item [itdca1]
-   d(name="dice_a_item"              id="8" inherits="coin_a_item" body="dice_a" mesh="dice_a")
+   d(name="dice_a_item"              id="5" inherits="coin_a_item" body="dice_a" mesh="dice_a")
    //- 2026-06-27, Composer: weight_a item inherits coin_a_item [itwta1]
-   d(name="weight_a_item"            id="10" inherits="coin_a_item" body="weight_a" mesh="weight_a")
+   d(name="weight_a_item"            id="6" inherits="coin_a_item" body="weight_a" mesh="weight_a")
    //- 2026-06-27, Composer: arcader_a item inherits weight_a_item [itarc1]
-   d(name="arcader_a_item"           id="12" inherits="weight_a_item" body="arcader_a" mesh="arcader_a")
+   d(name="arcader_a_item"           id="7" inherits="weight_a_item" body="arcader_a" mesh="arcader_a")
    //- 2026-06-28, Composer: arcader_a_button welded child item [itarcb1]
-   d(name="arcader_a_button_item"    id="14" inherits="coin_a_item"
+   d(name="arcader_a_button_item"    id="8" inherits="coin_a_item"
       body="arcader_a_button" mesh="arcader_a_button")
    //- 2026-07-01, GPT-5.5: fishbones item body mesh [dbfsh3]
-   d(name="fishbones_item"           id="16" inherits="coin_a_item"
+   d(name="fishbones_item"           id="9" inherits="coin_a_item"
       body="fishbones" mesh="fishbones")
    //- 2026-07-01, GPT-5.5: banana item body mesh [dbban3]
-   d(name="banana_item"              id="18" inherits="coin_a_item"
+   d(name="banana_item"              id="10" inherits="coin_a_item"
       body="banana" mesh="banana")
    //- 2026-07-01, GPT-5.5: arcader_b item body mesh [dbacb3]
-   d(name="arcader_b_item"           id="20" inherits="weight_a_item"
+   d(name="arcader_b_item"           id="11" inherits="weight_a_item"
       body="arcader_b" mesh="arcader_b")
 
 db#db_pb_toys(name="toys")
@@ -67,6 +67,8 @@ db#db_pb_toys(name="toys")
    d(name="arcader_b_toy"           id="12" inherits="weight_a_toy"
       item="arcader_b_item"
       modules="[tags]" tags="[weight, zoomable]")
+   d(name="arcader_c_toy"           id="13" inherits="arcader_b_toy"
+      item="arcader_b_item")
    //- 2026-06-28, Composer: arcader_a_assembly welds button on init [toyasm1]
 //- 2026-06-14, Composer: mesh-less floor collision item [flit1]
 //- 2026-06-26, Composer: coin_b item inherits coin_a_item [itcnb1]

@@ -30,7 +30,8 @@ db#db_pb_ui_root_elements(name="ui_root_elements" scope="ui_elements")
         - var label_name = "root_btn_" + val + "_label"
         - var btn_y = 84 - val * 8
         //- 2026-06-26, Composer: root menu arcade button label [uinav18]
-        - var btn_label = val === 0 ? "Dev" : val === 1 ? "Arcade" : "-"
+        //- 2026-07-01, Codex 5.3: root menu achievements button label [achui1]
+        - var btn_label = val === 0 ? "Dev" : val === 1 ? "Arcade" : val === 2 ? "Achievements" : "-"
         d(name=btn_name type="panel" interactive="true" event=btn_name
             x=50 y=btn_y w=40 h=7 scale=1
             color="0x0" colorb="0xffffff" glow="1" opacity="1" corner="0.3")
@@ -91,6 +92,31 @@ db#db_pb_ui_arcade_elements(name="ui_arcade_elements" scope="ui_elements")
         pivot="arcade_close"
         z=1 anchorx=0.5 anchory=0.5
         size="4" opacity="1" colorb="0xffffff" glow="1")
+
+db#db_pb_ui_achievements_elements(name="ui_achievements_elements" scope="ui_elements")
+    d(name="achievements_close" type="panel" interactive="true" event="achievements_close"
+        x=100 y=100 rx=-4 ry=-4 w=6 h=6 scale=1
+        color="0xff0000" colorb="0xff0000" glow="1" opacity="1" corner="0.3")
+    d(name="achievements_close_icon" type="sprite" sprite="cross"
+        pivot="achievements_close"
+        z=1 anchorx=0.5 anchory=0.5
+        size="4" opacity="1" colorb="0xffffff" glow="1")
+    d(name="achievements_tpl_panel" type="panel"
+        x=50 y=84 w=98 h=12 scale=1
+        color="0x0" colorb="0xffffff" glow="1" opacity="1" corner="0.2")
+    d(name="achievements_tpl_sprite" type="sprite" sprite="cm_hand_token"
+        pivot="achievements_tpl_panel"
+        rx=-47 z=1 anchorx=0.0 anchory=0.5
+        size="7" opacity="1" colorb="0xffffff" glow="1")
+    d(name="achievements_tpl_title" type="text" font="afont" pivot="achievements_tpl_panel"
+        rx=-24 ry=3 z=1 anchorx=0 anchory=0.5
+        text="achievement_a_title" fontsize="3.5" color="0xffffff" colorb="0xffffff" glow="1" opacity="1")
+    d(name="achievements_tpl_description" type="text" font="afont" pivot="achievements_tpl_panel"
+        rx=-24 ry=0 z=1 anchorx=0 anchory=0.5
+        text="achievement_a_desc" fontsize="1.8" color="0xffffff" colorb="0xffffff" glow="1" opacity="1")
+    d(name="achievements_tpl_progress" type="text" font="afont" pivot="achievements_tpl_panel"
+        rx=47 ry=-3 z=1 anchorx=1 anchory=0.5
+        text="0/1" fontsize="3" color="0xffffff" colorb="0xffffff" glow="1" opacity="1")
 
 db#db_pb_ui_readysplash_elements(name="ui_readysplash_elements" scope="ui_elements")
     //- 2026-06-28, Composer: readysplash square play sprite button [uinav22]
@@ -178,6 +204,14 @@ db#db_pb_ui_dev_menu_vis(name="ui_dev_menu_vis" scope="ui_states")
 db#db_pb_ui_arcade_vis(name="ui_arcade_vis" scope="ui_states")
     d(name="arcade_close_elements" element="[arcade_close, arcade_close_icon]")
 
+db#db_pb_ui_achievements_vis(name="ui_achievements_vis" scope="ui_states")
+    d(name="achievements_close_elements" element="[achievements_close, achievements_close_icon]")
+
+db#db_pb_ui_achievements_embedded(name="ui_achievements_embedded" scope="ui_states")
+    //- 2026-07-01, Codex 5.3: embedded achievements state hides close cross [achemb2]
+    d(name="achievements_close" opacity="0")
+    d(name="achievements_close_icon" opacity="0")
+
 db#db_pb_ui_readysplash_vis(name="ui_readysplash_vis" scope="ui_states")
     d(name="readysplash_elements" element="[readysplash_start, readysplash_start_icon]")
 
@@ -230,3 +264,5 @@ db#db_pb_ui_debug_enabled(name="ui_debug_enabled" scope="ui_states")
 //- 2026-06-18, Composer: label rx/ry centers on anchor-1 panel [uinav16]
 //- 2026-06-28, Composer: readysplash square play sprite button [uinav22]
 //- 2026-06-28, Composer: loading hourglass sprite not text [uinav23]
+//- 2026-07-01, Codex 5.3: root menu achievements button label [achui1]
+//- 2026-07-01, Codex 5.3: embedded achievements state hides close cross [achemb2]

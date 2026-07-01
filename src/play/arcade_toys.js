@@ -1081,6 +1081,10 @@ class ArcadeToys {
 	 * @returns {void}
 	 */
 	_on_arcade_click({ itemIndex }) {
+		// 2026-07-01, Codex 5.3: ignore synthetic miss clicks with invalid item index [pltoy26]
+		if (itemIndex == null || itemIndex < 0) {
+			return;
+		}
 		const { itembox, toybox } = this._core;
 		const toyIndex = itembox.mempool.read_ui16(itemIndex, VAR_TOY_INDEX);
 		if (toyIndex === TOY_INDEX_INVALID || !toybox.has_tag(toyIndex, "button")) {
@@ -1135,3 +1139,4 @@ export { ArcadeToyArcaderA };
 // 2026-07-01, GPT-5.5: dispose toy handlers on arcade stop [plcln3]
 // 2026-07-01, GPT-5.5: revolver face models use center radius [pltoy24]
 // 2026-07-01, GPT-5.5: revolver face models inset by half height [pltoy25]
+// 2026-07-01, Codex 5.3: ignore synthetic miss clicks with invalid item index [pltoy26]

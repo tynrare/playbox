@@ -17,6 +17,7 @@ import Settings from "./settings.js";
  * @property {MenuFlow|null} menu
  * @property {SplashFlow|null} splash
  * @property {boolean} splashAttached
+ * @property {boolean} achievementsEmbedded
  * @property {boolean} disposed
  */
 
@@ -145,7 +146,8 @@ class ArcadeEmulator {
 		}
 		const toyKey = this._toy_db_key(toyIndex);
 		const arcadeConf = this._arcade_conf(toyIndex);
-		if (!toyKey || !arcadeConf?.screen || arcadeConf.emulator !== "arcade_a") {
+		const emulatorMode = arcadeConf?.emulator;
+		if (!toyKey || !arcadeConf?.screen || !emulatorMode) {
 			return;
 		}
 		// 2026-07-01, GPT-5.5: emulator boots arcade_a from db flag [emuboot1]
@@ -167,10 +169,18 @@ class ArcadeEmulator {
 			menu: null,
 			splash: null,
 			splashAttached: false,
+			achievementsEmbedded: false,
 			disposed: false,
 		};
 		this._instances.set(toyIndex, instance);
-		this._boot_arcade_a(instance);
+		// 2026-07-01, Codex 5.3: emulator routes boot by arcade db mode [emumod1]
+		if (emulatorMode === "arcade_a") {
+			this._boot_arcade_a(instance);
+			return;
+		}
+		if (emulatorMode === "achievements") {
+			this._boot_achievements(instance);
+		}
 	}
 
 	/**
@@ -212,6 +222,29 @@ class ArcadeEmulator {
 	 * @param {EmulatorInstance} instance
 	 * @returns {void}
 	 */
+	_boot_achievements(instance) {
+		const core = instance.subcore.core;
+		if (!core) {
+			return;
+		}
+		core.draw._render.scene.background.set(0x000000);
+		instance.settings = new Settings(core.datawork);
+		instance.menu = new MenuFlow(
+			core,
+			instance.settings,
+			{ achievementsEmbedded: true },
+		).init();
+		instance.settings.start(core);
+		core.flowbus.attach(instance.menu);
+		instance.achievementsEmbedded = true;
+		// 2026-07-01, Codex 5.3: achievements emulator opens achievements immediately [emuach1]
+		instance.menu.navigate("achievements");
+	}
+
+	/**
+	 * @param {EmulatorInstance} instance
+	 * @returns {void}
+	 */
 	_dispose_instance(instance) {
 		if (instance.disposed) {
 			return;
@@ -223,6 +256,9 @@ class ArcadeEmulator {
 			instance.splashAttached = false;
 		}
 		instance.menu?.teardown();
+		if (core && instance.achievementsEmbedded) {
+			core.ui.delstate("ui_achievements_embedded");
+		}
 		instance.screen.dispose();
 		instance.subcore.dispose();
 		instance.settings = null;
@@ -286,3 +322,5 @@ export default ArcadeEmulator;
 // 2026-07-01, GPT-5.5: emulator starts nested readysplash [emuflw1]
 // 2026-07-01, GPT-5.5: emulator forwards parent pointer to screen [emuptr1]
 // 2026-07-01, GPT-5.5: emulator mirrors parent pointer to subcore [emuptr2]
+// 2026-07-01, Codex 5.3: emulator routes boot by arcade db mode [emumod1]
+// 2026-07-01, Codex 5.3: achievements emulator opens achievements immediately [emuach1]

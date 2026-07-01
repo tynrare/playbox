@@ -240,6 +240,13 @@ class ArcadeTopter {
 	 * @returns {void}
 	 */
 	_on_arcade_click({ itemIndex }) {
+		if (itemIndex == null || itemIndex < 0) {
+			// 2026-07-01, Codex 5.3: invalid click payload is treated as floor unzoom [plzom10]
+			if (this._zoom_root != null || this._unzooming) {
+				this._begin_unzoom();
+			}
+			return;
+		}
 		const toyIndex = this._core.itembox.mempool.read_ui16(itemIndex, VAR_TOY_INDEX);
 		if (toyIndex === TOY_INDEX_INVALID) {
 			// 2026-07-01, Composer: floor click unzooms when zoomed [plzom3]
@@ -436,3 +443,4 @@ export default ArcadeTopter;
 // 2026-07-01, Composer: zoom cam local y above plus z=1 body rotation [plzom6]
 // 2026-07-01, Composer: zoom and unzoom via arcade.click [plzom7]
 // 2026-07-01, GPT-5.5: topter mutable scratch is instance scoped [plzom9]
+// 2026-07-01, Codex 5.3: invalid click payload is treated as floor unzoom [plzom10]

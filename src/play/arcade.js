@@ -30,6 +30,10 @@ const COIN_C_COUNT = 0;
 const DICE_COUNT = 1;
 const WEIGHT_Y = 4;
 const ARCADER_Y = 3;
+const ARCADER_B_TOY_KEY = "arcader_b_toy";
+const ARCADER_B_X = -4;
+const ARCADER_B_Y = ARCADER_Y;
+const ARCADER_B_Z = 0;
 const FLOOR_ITEM_DB_ID = 0;
 // 2026-06-26, Composer: arcade per-type spawn counts [plcnt2]
 const COIN_STEP = 1;
@@ -164,6 +168,18 @@ class Arcade {
 			this.register_object(arcader_toy);
 			const item_index = this._core.toybox.get_item_index(arcader_toy);
 			this._core.scene.set_itemposition(item_index, -2, ARCADER_Y, 0);
+		}
+		// 2026-07-01, Codex 5.3: arcade owns arcader_b spawn point [arcbmv1]
+		const arcader_b_toy = this._core.toybox.spawn(ARCADER_B_TOY_KEY, true);
+		if (arcader_b_toy != null) {
+			this.register_object(arcader_b_toy);
+			const item_index = this._core.toybox.get_item_index(arcader_b_toy);
+			this._core.scene.set_itemposition(
+				item_index,
+				ARCADER_B_X,
+				ARCADER_B_Y,
+				ARCADER_B_Z,
+			);
 		}
 
 		this._grab.start();
@@ -419,3 +435,4 @@ export default Arcade;
 // 2026-07-01, GPT-5.5: track reward toys for arcade stop cleanup [plcln1]
 // 2026-07-01, GPT-5.5: arcade registered objects emit count events [plach1]
 // 2026-07-01, GPT-5.5: arcade registered objects emit despawn events [plach2]
+// 2026-07-01, Codex 5.3: arcade owns arcader_b spawn point [arcbmv1]

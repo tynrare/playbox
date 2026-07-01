@@ -184,11 +184,19 @@ class ArcadeInputs {
 	 */
 	_on_pointer_click({ x, y }) {
 		const pick = this.trace_pick(x, y);
-		if (!pick) {
-			return;
+		if (!pick && this._pointer_ray(x, y)) {
+			const hit = _raycaster.ray.intersectPlane(_floorPlane, _floorHit);
+			if (hit) {
+				this.pointer_floor.copy(hit);
+			}
 		}
-		// 2026-07-01, Composer: arcade.click on pointer.click hit only [plinp5]
-		this._core.eventsbus.emit("arcade.click", pick);
+		// 2026-07-01, Codex 5.3: always emit arcade.click with invalid miss index [plinp6]
+		this._core.eventsbus.emit("arcade.click", pick ?? {
+			itemIndex: -1,
+			x: this.pointer_floor.x,
+			y: this.pointer_floor.y,
+			z: this.pointer_floor.z,
+		});
 	}
 
 }
@@ -199,3 +207,4 @@ export default ArcadeInputs;
 // 2026-07-01, Composer: pick ray uses draw.active_camera [plinp3]
 // 2026-07-01, Composer: arcade.pick on pointer move target change [plinp4]
 // 2026-07-01, Composer: arcade.click on pointer.click hit only [plinp5]
+// 2026-07-01, Codex 5.3: always emit arcade.click with invalid miss index [plinp6]

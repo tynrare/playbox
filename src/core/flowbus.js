@@ -121,10 +121,11 @@ class FlowBus {
 	/**
 	 * @brief Emit attached-flow open/close for router subscribers.
 	 * @param {"open"|"close"} action
-	 * @param {"root"|"dev"|"settings"|"test"|"arcade"|"readysplash"} key
+	 * @param {"root"|"dev"|"settings"|"test"|"arcade"|"achievements"|"readysplash"} key
 	 * @returns {void}
 	 */
 	emitFlowState(action, key) {
+		// 2026-07-01, Codex 5.3: flow state key supports achievements pane [achflow2]
 		// 2026-06-26, Composer: flowbus readysplash flow.state key [flwflw3]
 		this._eventsbus.emit("flow.state", { action, key });
 	}
@@ -216,5 +217,6 @@ export default FlowBus;
 // 2026-06-17, Composer: flowbus attach detach running flag [flwatt1]
 // 2026-06-17, Composer: flowbus start idempotent guard [flwidp1]
 // 2026-06-28, Composer: flowbus fan-out toyupdate to attached flows [flwtoy1]
+// 2026-07-01, Codex 5.3: flow state key supports achievements pane [achflow2]
 
 
